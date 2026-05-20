@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Ussyverse // Interactive 3D Cybernetic Index</title>
+  
+  <!-- SEO Tags -->
+  <meta name="description" content="Explore The Ussyverse: an interactive 3D index of AI tooling, developer platforms, creative emulators, and weird-web projects built in public by Kyle Durepos.">
+  <meta property="og:title" content="The Ussyverse // Interactive 3D Cybernetic Index">
+  <meta property="og:description" content="Stateless planning agents, instant microVMs, collaborative live DAWs, and retro emulators orbiting a glowing holographic core.">
+  <meta name="theme-color" content="#03060f">
+
+  <!-- Style Sheets -->
+  <link rel="stylesheet" href="index.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Screen overlays -->
+  <div class="scanlines"></div>
+  <div class="cyber-bg-grid"></div>
+  <div class="cyber-bg-gradient"></div>
+
+  <!-- Custom neon interactive cursor -->
+  <div class="custom-cursor" id="custom-cursor"></div>
+
+  <!-- Three.js 3D Viewport container -->
+  <div id="canvas-container"></div>
+
+  <!-- Scroll-Snap Navigation Indicator Dots -->
+  <div id="hero-scroll-nav" class="hero-scroll-nav">
+    <div class="nav-dot active" data-index="0"><span>WELCOME</span></div>
+    <div class="nav-dot" data-index="1"><span>PHILOSOPHY</span></div>
+    <div class="nav-dot" data-index="2"><span>SECTORS</span></div>
+    <div class="nav-dot" data-index="3"><span>PORTAL</span></div>
+  </div>
+
+  <!-- ==================== HERO SCROLLING OVERLAY ==================== -->
+  <div id="hero-container" class="hero-scrollable">
+    
+    <!-- SECTION 1: WELCOME SCREEN -->
+    <section class="hero-snap-section" id="hero-sec-welcome">
+      <div class="hero-content">
+        <div class="hero-logo-section">
+          <div class="cyber-badge-glow">SYS_STATUS: ONLINE // ADDR: USSY.HOST</div>
+          <div class="hero-brand">[ THE USSYVERSE ]</div>
+          <p class="hero-subtitle">A cybernetic constellation of multi-agent plans, Firecracker developer microVMs, collaborative live DAWs, and nostalgic retro emulators.</p>
+          <p class="hero-subtext">Designed and engineered in public by <span>Kyle Durepos (@mojomast)</span>.</p>
+        </div>
+
+        <div class="terminal-ticker-bar">
+          <span class="ticker-signal">SIGNAL: ACTIVE</span>
+          <span class="ticker-text">// ORBITAL STABILITY: NOMINAL // SPECTRUM: CYAN-MAGENTA-GREEN // CONSOLE: READY</span>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL DOWN TO COMMENCE ORBITAL EXPLORATION</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: SYSTEM PHILOSOPHY -->
+    <section class="hero-snap-section" id="hero-sec-philosophy">
+      <div class="hero-content">
+        <div class="hero-section-title">01 // CONSTELLATION PHILOSOPHY</div>
+        <p class="hero-section-paragraph">
+          The Ussyverse is an independent digital playground built with strict architectural discipline. No sponsorships, no pitch decks, no committee approvals. We build software for the pure love of the craft—integrating multi-agent state machines, container microVMs, and browser audio engines to see just how far native web capabilities can stretch.
+        </p>
+
+        <!-- Stats Grid -->
+        <div class="hero-stats-grid">
+          <div class="hero-stat-card">
+            <div class="stat-num color-green" id="stat-projects-count">23</div>
+            <div class="stat-lbl">[ORBITING_NODES]</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="stat-num color-yellow">9</div>
+            <div class="stat-lbl">[PRODUCTION_RUNTIMES]</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="stat-num color-cyan">12</div>
+            <div class="stat-lbl">[VERIFIED_REPOS]</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="stat-num color-pink">MIT</div>
+            <div class="stat-lbl">[SOFTWARE_LICENSE]</div>
+          </div>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL TO PREVIEW SECTOR MAPS</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: SYSTEM SECTORS -->
+    <section class="hero-snap-section" id="hero-sec-sectors">
+      <div class="hero-content">
+        <div class="hero-section-title">02 // SYSTEM SECTORS</div>
+        <p class="hero-section-paragraph" style="margin-bottom: 30px;">
+          The ecosystem is structured into four core operational categories, mapped in real-time orbits around our central holographic logic array.
+        </p>
+        
+        <div class="hero-philosophy-grid">
+          <div class="philosophy-card border-green" data-category="core">
+            <div class="phil-header">
+              <h3>[ PLANNING & CORE ]</h3>
+              <span class="phil-status green">CYBER_GREEN</span>
+            </div>
+            <p class="phil-quote">"Stateless planning pipelines, multi-agent code execution swarms, and interview-driven Cobra orchestrators designed to guide automated software workflows."</p>
+            <div class="phil-tags">Devussy • Swarmussy • Geoffrussy • Ralphussy • nexussy</div>
+          </div>
+
+          <div class="philosophy-card border-cyan" data-category="infra">
+            <div class="phil-header">
+              <h3>[ SYSTEMS & INFRA ]</h3>
+              <span class="phil-status cyan">CYBER_CYAN</span>
+            </div>
+            <p class="phil-quote">"High-performance Firecracker microVM hosting controllers, decentralized visual webring scripts, and reliable SQLite database tables."</p>
+            <div class="phil-tags">ussycode • fireslice • ussyring</div>
+          </div>
+
+          <div class="philosophy-card border-purple" data-category="ai">
+            <div class="phil-header">
+              <h3>[ AUTONOMOUS AI ]</h3>
+              <span class="phil-status purple">CYBER_PURPLE</span>
+            </div>
+            <p class="phil-quote">"Multi-user translated WebSocket routers, competitive agent cyber-ranges, and vector-embedded Markdown search engines."</p>
+            <div class="phil-tags">Openclawssy • Battlebussy • Tchaikovskussy • RAGussy</div>
+          </div>
+
+          <div class="philosophy-card border-pink" data-category="creative">
+            <div class="phil-header">
+              <h3>[ GAMES & CREATIVE ]</h3>
+              <span class="phil-status pink">CYBER_PINK</span>
+            </div>
+            <p class="phil-quote">"WASM synthesis digital audio workstations, browser-native operating system boots, genetic horse breeding grids, and improv score trackers."</p>
+            <div class="phil-tags">Strudelussy • Fruity Boofs • TempleOSsy • iMaCoMpUtERussy • RPG DM Bot</div>
+          </div>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL TO CONSOLE PORTAL ENTRY</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: PORTAL ACCESS -->
+    <section class="hero-snap-section" id="hero-sec-portal">
+      <div class="hero-content">
+        <div class="hero-section-title">03 // GATEWAY INITIALIZATION</div>
+        
+        <p class="hero-section-paragraph" style="max-width: 650px; text-align: center; margin-bottom: 40px;">
+          Unlock the direct interface to Kyle's project network. Click below to boot up the telemetry viewport, search orbital nodes, and inspect individual blueprints.
+        </p>
+
+        <!-- CTA Button to enter console -->
+        <button class="hero-cta-btn" id="enter-console-btn" style="margin-bottom: 50px;">
+          <i data-lucide="terminal"></i> INITIALIZE GRAPH CONSOLE
+        </button>
+
+        <!-- DISCORD CARD DIRECT EMBED FOR HIGH ACCESSIBILITY -->
+        <div class="portal-discord-card hud-interactive">
+          <div class="discord-card-glow"></div>
+          <div class="discord-header">
+            <i data-lucide="message-square"></i> JOIN THE USSYVERSE DOCK
+          </div>
+          <p class="discord-desc">
+            Discuss multi-stage planning pipelines, Docker-plus-host Firecracker microVM setups, and developer orchestrators with other builders in Kyle's community.
+          </p>
+          <a href="https://discord.gg/6b2Ej3rS3q" target="_blank" class="discord-btn">
+            <i data-lucide="users"></i> Connect to Discord Server
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ==================== HUD INTERFACE OVERLAY ==================== -->
+  <div class="hud-layout" id="hud-layout-console">
+    
+    <!-- HEADER -->
+    <header class="hud-header hud-panel hud-interactive">
+      <div class="brand-section">
+        <div class="brand-title" id="hud-header-title" style="cursor: pointer;"><span>[</span>USSYVERSE<span>]</span></div>
+        <div class="system-status">
+          <div class="status-indicator"></div>
+          <span>SYS_SIGNAL: ACTIVE_CONSOLE</span>
+        </div>
+      </div>
+      <div class="system-status">
+        <button class="back-to-hero-btn hud-interactive" id="back-to-hero-btn">
+          <i data-lucide="arrow-left"></i> Home Info
+        </button>
+        <span id="telemetry-timer" style="margin-left: 15px;">TELEMETRY_LOAD: 0.00ms</span>
+      </div>
+    </header>
+
+    <!-- LEFT PANEL: PROJECT SELECTOR -->
+    <aside class="hud-left hud-panel hud-interactive">
+      <h3 class="panel-title">System Nodes</h3>
+      
+      <!-- Categories Filter -->
+      <div class="categories-container">
+        <div class="category-card active" data-category="all">
+          <h4 style="--accent-color: var(--cyber-cyan)">ALL_NODES</h4>
+          <p>Complete Ussyverse orbital map</p>
+        </div>
+        <div class="category-card" data-category="core" style="--accent-color: var(--cyber-green)">
+          <h4>PLANNING_&_CORE</h4>
+          <p>Devussy, Swarmussy, Geoffrussy orchestrators</p>
+        </div>
+        <div class="category-card" data-category="infra" style="--accent-color: var(--cyber-cyan)">
+          <h4>SYSTEMS_&_INFRA</h4>
+          <p>MicroVM platforms & webring hubs</p>
+        </div>
+        <div class="category-card" data-category="ai" style="--accent-color: var(--cyber-purple)">
+          <h4>AUTONOMOUS_AI</h4>
+          <p>Bilingual WebSocket translation & cyber-ranges</p>
+        </div>
+        <div class="category-card" data-category="creative" style="--accent-color: var(--cyber-pink)">
+          <h4>GAMES_&_CREATIVE</h4>
+          <p>DAWs, browser OS emulators & casino simulators</p>
+        </div>
+      </div>
+
+      <!-- Quick Node List -->
+      <h3 class="panel-title" style="margin-top: 10px;">Select Node</h3>
+      <div class="projects-scroll-container" id="projects-scroll-list">
+        <!-- JS populated projects list -->
+      </div>
+    </aside>
+
+    <!-- CENTER AREA: VIEWPORT INSTRUCTIONS -->
+    <div class="hud-center">
+      <div class="instructions-panel hud-interactive">
+        <span><i data-lucide="rotate-3d"></i> Left-Click + Drag: Rotate Orbit</span>
+        <span><i data-lucide="zoom-in"></i> Scroll: Zoom Scope</span>
+        <span><i data-lucide="mouse-pointer"></i> Click Node: Inspect Blueprint</span>
+      </div>
+      <div></div> <!-- Spacer -->
+    </div>
+
+    <!-- RIGHT PANEL: INSPECTOR READOUT -->
+    <aside class="hud-right hud-interactive">
+      
+      <!-- INSPECTOR PANEL -->
+      <div class="hud-panel inspector-panel">
+        <h3 class="panel-title">Blueprint Inspector</h3>
+        
+        <div class="inspector-scroll-content">
+          <div class="inspector-header">
+            <div class="inspector-title" id="inspect-title">DEVUSSY</div>
+            <span class="inspector-category" id="inspect-category">Ussyverse Core</span>
+          </div>
+
+          <div class="inspector-body" id="inspect-desc">
+            Stateless multi-stage planning pipeline for human and AI handoffs. Seamlessly orchestrates task descriptions, coding specs, and code executions across environments.
+          </div>
+
+          <!-- Spec Grid -->
+          <div class="inspector-section-lbl">[TECHNICAL_SPECIFICATIONS]</div>
+          <div class="inspector-spec-grid" id="inspect-specs">
+            <!-- JS populated specifications -->
+          </div>
+
+          <!-- Features List -->
+          <div class="inspector-section-lbl">[CORE_CAPABILITIES]</div>
+          <ul class="inspector-features-list" id="inspect-features">
+            <!-- JS populated bullet features -->
+          </ul>
+
+          <!-- Telemetry Readout -->
+          <div class="inspector-section-lbl">[SYSTEM_TELEMETRY]</div>
+          <div class="inspector-telemetry-readout" id="inspect-telemetry">
+            <!-- JS populated diagnostic signals -->
+          </div>
+
+          <div class="inspector-tags" id="inspect-tags">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <div class="inspector-actions">
+          <a href="#" target="_blank" class="action-btn" id="btn-github">
+            <i data-lucide="github"></i> View Source
+          </a>
+          <a href="#" target="_blank" class="action-btn secondary" id="btn-demo">
+            <i data-lucide="external-link"></i> Launch Runtime
+          </a>
+        </div>
+      </div>
+
+      <!-- DISCORD PANEL (VERY EASY TO FIND) -->
+      <div class="hud-panel discord-promo-panel">
+        <div class="discord-promo-header">
+          <i data-lucide="users"></i> JOIN THE OPERATOR RING
+        </div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; font-family: var(--font-sans);">
+          Discuss agent orchestration, deep-online experiments, and building weird things seriously with developers in the Ussyverse community.
+        </div>
+        <a href="https://discord.gg/6b2Ej3rS3q" target="_blank" class="discord-btn">
+          <i data-lucide="message-square"></i> Connect on Discord
+        </a>
+      </div>
+
+    </aside>
+
+    <!-- FOOTER -->
+    <footer class="hud-footer hud-panel hud-interactive">
+      <div>
+        <span>COORDINATES: <span id="telemetry-coord">X: 0.00 Y: 0.00 Z: 0.00</span></span>
+      </div>
+      <div class="footer-nav">
+        <a href="https://github.com/mojomast" target="_blank">GitHub Profile</a>
+        <a href="https://ussyco.de/hub" target="_blank">Ussy ring</a>
+      </div>
+      <div>
+        <span>OPERATOR: Kyle Durepos © 2026</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Dynamic floating HTML labels for 3D scene overlays -->
+  <div id="labels-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: hidden;"></div>
+
+  <!-- Include ThreeJS via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <!-- App JavaScript files -->
+  <script src="projects.js"></script>
+  <script src="app.js"></script>
+
+  <!-- Lucide Icon Renderer -->
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
