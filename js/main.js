@@ -180,6 +180,9 @@ const maxEnemyBullets = 28;
 const maxPlayerMissiles = 8;
 const maxPlayerAmmo = 240;
 const maxPlayerMissilesStored = 8;
+const playerLaserStreakLength = 5.4;
+const playerLaserTrailPoints = 14;
+const playerLaserMaxDistanceSq = 320 * 320;
 const constellationScale = 2.25;
 const flightUniverseScale = 10;
 const nodeBaseScale = 1;
@@ -1571,14 +1574,14 @@ function createFlightGameObjects() {
     enemies.push(enemy);
   }
 
-  const playerBulletGeo = new THREE.CylinderGeometry(0.025, 0.025, 1.8, 6);
-  const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0x66ff44, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending });
-  const tracerMat = new THREE.LineBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+  const playerBulletGeo = new THREE.CylinderGeometry(0.026, 0.026, playerLaserStreakLength, 6);
+  const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0x66ff44, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false });
+  const tracerMat = new THREE.LineBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false });
   for (let i = 0; i < maxPlayerBullets; i++) {
     const bullet = new THREE.Mesh(playerBulletGeo, playerBulletMat.clone());
     bullet.visible = false;
     const trailGeometry = new THREE.BufferGeometry();
-    trailGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(8 * 3), 3));
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(playerLaserTrailPoints * 3), 3));
     const trail = new THREE.Line(trailGeometry, tracerMat.clone());
     trail.visible = false;
     bullet.userData = {
@@ -1586,8 +1589,9 @@ function createFlightGameObjects() {
       velocity: new THREE.Vector3(),
       life: 0,
       radius: 0.22,
+      maxDistanceSq: playerLaserMaxDistanceSq,
       trail,
-      trailPositions: Array.from({ length: 8 }, () => new THREE.Vector3()),
+      trailPositions: Array.from({ length: playerLaserTrailPoints }, () => new THREE.Vector3()),
       trailCursor: 0,
       trailPrimed: false
     };
@@ -3934,9 +3938,12 @@ function fireBullet(pool, origin, direction, speed, life, options = {}) {
   bullet.userData.velocity.copy(direction).multiplyScalar(speed);
   bullet.userData.life = life;
   bullet.userData.damage = options.damage ?? 12;
+  bullet.userData.maxDistanceSq = options.maxDistanceSq ?? (pool === playerBullets ? playerLaserMaxDistanceSq : 3600);
   bullet.userData.active = true;
   if (bullet.userData.trailPositions) {
-    bullet.userData.trailPositions.forEach(point => point.copy(origin));
+    bullet.userData.trailPositions.forEach((point, idx) => {
+      point.copy(origin).addScaledVector(direction, -idx * 2.2);
+    });
     bullet.userData.trailCursor = 0;
     bullet.userData.trailPrimed = true;
     bullet.userData.trail.visible = pool === playerBullets;
@@ -4884,7 +4891,7 @@ function updateBullet(bullet, dt) {
   bullet.position.addScaledVector(bullet.userData.velocity, dt);
   updateBulletTrail(bullet);
   bullet.userData.life -= dt;
-  if (bullet.userData.life <= 0 || bullet.position.distanceToSquared(flightState.pos) > 3600) {
+  if (bullet.userData.life <= 0 || bullet.position.distanceToSquared(flightState.pos) > (bullet.userData.maxDistanceSq ?? 3600)) {
     deactivateCombatObject(bullet);
   }
 }
