@@ -8,7 +8,53 @@ let hoveredNode = null;
 let selectedNode = null;
 let activeCategory = 'all';
 let isConsoleActive = false; // Hero state by default
+let heroTouchStartY = 0;
 let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
+let starField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+const projectHitTargets = [];
+const projectNodeById = new Map();
+const relationshipEdges = [];
+const selectedEdgeLimit = 8;
+const labelTempVec = new THREE.Vector3();
+const ignoredRelationTags = new Set(['Featured', 'Active', 'Stable', 'Historical', 'Ecosystem']);
+const manualRelationHints = [
+  ['devussy', 'swarmussy'],
+  ['devussy', 'nexussy'],
+  ['devussy', 'geoffrussy'],
+  ['openclawssy', 'hermes-dashboard'],
+  ['openclawssy', 'battlebussy'],
+  ['swarmussy', 'nexussy'],
+  ['swarmussy', 'ralphussy'],
+  ['ussycode', 'fireslice'],
+  ['ussycode', 'templeossy'],
+  ['fruityboofs', 'strudelussy'],
+  ['fruityboofs', 'mediageckussy'],
+  ['imacomputerussy', 'templeossy'],
+  ['stallionussy', 'scoreboardussy'],
+  ['rpg-dm-bot', 'tchaikovskussy'],
+  ['ragussy', 'tchaikovskussy'],
+  ['stenographussy', 'battlebussy'],
+  ['ghstatsussy', 'hermes-dashboard'],
+  ['ussyring', 'mediageckussy']
+];
+const orbitState = {
+  dragging: false,
+  moved: false,
+  pointerId: null,
+  lastX: 0,
+  lastY: 0,
+  captureTarget: null,
+  theta: 0,
+  phi: Math.PI * 0.35,
+  distance: 18,
+  minDistance: 7,
+  maxDistance: 30,
+  rotateSpeed: 0.005,
+  zoomSpeed: 0.0015
+};
 
 // Animation state
 const camTarget = {
@@ -25,6 +71,8 @@ const sectionCamPositions = [
   new THREE.Vector3(0, 6, 22),   // Welcome
   new THREE.Vector3(5, 4, 15),   // Philosophy
   new THREE.Vector3(-6, 8, 18),  // Sectors
+  new THREE.Vector3(8, 5, 16),   // Method
+  new THREE.Vector3(-4, 3, 12),  // Graph
   new THREE.Vector3(0, 3, 14)    // Portal
 ];
 
@@ -32,8 +80,36 @@ const sectionColors = [
   { light1: new THREE.Color(0x00f0ff), light2: new THREE.Color(0xff0055) }, // Welcome: Cyan / Pink
   { light1: new THREE.Color(0x00ff66), light2: new THREE.Color(0x00f0ff) }, // Philosophy: Green / Cyan
   { light1: new THREE.Color(0xb026ff), light2: new THREE.Color(0xff0055) }, // Sectors: Purple / Pink
+  { light1: new THREE.Color(0xffcc00), light2: new THREE.Color(0x00ff66) }, // Method: Yellow / Green
+  { light1: new THREE.Color(0x00f0ff), light2: new THREE.Color(0xb026ff) }, // Graph: Cyan / Purple
   { light1: new THREE.Color(0xff0055), light2: new THREE.Color(0x00f0ff) }  // Portal: Pink / Cyan
 ];
+
+const PROJECT_HOW_COPY = {
+  devussy: 'Devussy works by converting a request into structured DevPlan files that describe intent, tasks, implementation notes, and verification expectations. The useful part is the artifact trail: another human or agent can pick up the work without relying on hidden conversation state.',
+  openclawssy: 'Openclawssy wraps agent execution in an operator shell. Commands pass through policy gates, sessions can be inspected, and external control surfaces such as Discord become supervised entry points rather than unrestricted remote control.',
+  swarmussy: 'Swarmussy decomposes repository work into coordinated agent roles inside a terminal UI. The swarm can search, edit, and review in parallel, but the workflow is built around live supervision and local verification rather than blind parallel mutation.',
+  tchaikovskussy: 'Tchaikovskussy keeps a shared WebSocket room while translating messages per participant. Instead of one translated transcript, the server brokers live conversation state and delivers language-specific views back to connected clients.',
+  ussycode: 'Ussycode provisions Firecracker-backed development spaces with SSH access, persistent storage, and routing from browser-friendly URLs to active workspace ports. It is a small operator-managed alternative to heavyweight hosted dev environments.',
+  'hermes-dashboard': 'Hermes Dashboard reads local runtime state, logs, context, and configuration into a standalone web console. It exists so agent systems have an observable cockpit: what context is loaded, what memory exists, and what the process is doing now.',
+  imacomputerussy: 'iMaCoMpUtERussy builds a fictional desktop in plain browser technology. The custom assembly layer, drawing tools, windows, and steganography features share the same toy-computer metaphor so experiments feel like programs inside one tiny machine.',
+  stallionussy: 'StallionUSSY models horses as persistent game assets with genetics, races, trades, and event ticks. The humor sits on top of normal multiplayer backend concerns: state, economy, scheduled simulations, and interfaces that make the absurd system playable.',
+  templeossy: 'TempleOSsy runs a WebAssembly QEMU build in the browser, mounts local persistence through browser storage, and exposes the emulated machine through a web UI. The project is about making a full OS boot feel immediate without hiding the emulator underneath.',
+  fruityboofs: 'Fruity Boofs wires browser UI state into WebAudio and WASM DSP components so vocal synthesis and sequencing happen directly in the page. Collaboration and export features turn short experiments into shareable audio artifacts.',
+  mediageckussy: 'Mediageckussy acts like a compact media lab: import media, apply nostalgic transformations, transcode with browser/server tooling, then export a static package that can be shared without depending on the editor staying online.',
+  strudelussy: 'Strudelussy builds on the live-coding music pattern: code is the score, the browser is the instrument, and helper tools can suggest rhythmic or melodic mutations while the audio engine keeps feedback immediate.',
+  scoreboardussy: 'Scoreboardussy keeps host controls, audience voting, and live score displays synchronized through a small realtime backend. It is designed for stage pressure, where the operator needs clear state and fast updates more than decorative complexity.',
+  geoffrussy: 'Geoffrussy starts by interviewing the operator, stores the answers, and turns them into a project plan that can drive later work. It is a command-line planning engine, useful historically because it shaped the later DevPlan-style systems.',
+  battlebussy: 'Battlebussy launches isolated challenge environments and records what autonomous agents do inside them. Containers provide boundaries, telemetry captures behavior, and the arena turns security experiments into observable matches.',
+  ussyring: 'Ussyring uses static participant data and portable client-side widgets to link independent sites together. The system is intentionally simple so the webring remains inspectable, forkable, and usable without a central application server.',
+  ghstatsussy: 'ghstatsussy scans repository activity and renders the results as designed SVG/HTML output. It turns contribution data into a visual artifact that can be regenerated, customized, and shared like a badge with more personality.',
+  stenographussy: 'Stenographussy scans source text for Unicode tricks that can slip past normal review. By focusing on homoglyphs and invisible characters, it gives reviewers a narrow tool for a narrow but real class of supply-chain and code-review attacks.',
+  fireslice: 'Fireslice exposes Firecracker VM management through a small API layer. Users, SSH keys, VM profiles, network devices, and launch operations stay close to the metal so an operator can understand exactly what will start and why.',
+  ralphussy: 'Ralphussy is an early CLI agent experiment with terminal UI, simple planning, and rough swarm concepts. Its value now is historical: it shows the experiments that led to stricter handoffs, better supervision, and more explicit artifacts.',
+  ragussy: 'RAGussy ingests markdown/documentation folders, embeds chunks locally, and serves a configurable web chat over the indexed material. The management UI makes ingestion and retrieval settings visible so answers can be debugged instead of merely trusted.',
+  nexussy: 'Nexussy stages software delivery as a pipeline: interview, design, validate, plan, review, then develop with worker isolation. Each stage produces traces and handoff documents so the result can be audited after multiple workers touch it.',
+  'rpg-dm-bot': 'RPG DM Bot treats a Discord campaign like a persistent application. Characters, inventory, combat, NPCs, quests, and generated narration are backed by database state and dashboard endpoints so the bot can remember a campaign between sessions.'
+};
 
 // Node object maps
 const projectNodes = [];
@@ -63,6 +139,7 @@ const btnDemo = document.getElementById('btn-demo');
 const inspectSpecs = document.getElementById('inspect-specs');
 const inspectFeatures = document.getElementById('inspect-features');
 const inspectTelemetry = document.getElementById('inspect-telemetry');
+let inspectHowLabel, inspectHowBody;
 
 // Init application
 function init() {
@@ -75,9 +152,11 @@ function init() {
   
   // Renderer Setup
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isCoarsePointer ? 1.35 : 1.75));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
   canvasContainer.appendChild(renderer.domElement);
+  renderer.domElement.className = 'webgl-viewport';
 
   // Groups
   coreGroup = new THREE.Group();
@@ -94,7 +173,10 @@ function init() {
   // Create Scene Elements
   createHolographicCore();
   buildProjectNodes();
+  buildRelatedProjectEdges();
+  createDeepSpaceEffects();
   createAmbientLighting();
+  syncOrbitFromCamera();
   
   // Populate UI Lists
   populateProjectsUI();
@@ -108,10 +190,17 @@ function init() {
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('click', onSceneClick);
   document.addEventListener('touchstart', onTouchStart, { passive: true });
+  document.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('wheel', onSceneWheel, { passive: false });
 
   // Scroll Parallax Listener for Hero
   if (heroContainer) {
     heroContainer.addEventListener('scroll', onHeroScroll, { passive: true });
+    heroContainer.addEventListener('wheel', onHeroWheel, { passive: false });
+    heroContainer.addEventListener('touchstart', onHeroTouchStart, { passive: true });
+    heroContainer.addEventListener('touchend', onHeroTouchEnd, { passive: true });
   }
 
   // Start Engine Loop
@@ -176,6 +265,70 @@ function createHolographicCore() {
 
   coreOuterParticles = new THREE.Points(particleGeo, particleMat);
   coreGroup.add(coreOuterParticles);
+
+  const ringGeo = new THREE.TorusGeometry(1.05, 0.018, 8, 96);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xff0055,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  selectionRing = new THREE.Mesh(ringGeo, ringMat);
+  selectionRing.visible = false;
+  scene.add(selectionRing);
+}
+
+function createDeepSpaceEffects() {
+  const starCount = prefersReducedMotion || isCoarsePointer ? 220 : 520;
+  const starGeo = new THREE.BufferGeometry();
+  const positions = new Float32Array(starCount * 3);
+
+  for (let i = 0; i < starCount; i++) {
+    const radius = 24 + Math.random() * 55;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = radius * Math.cos(phi);
+  }
+
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  starField = new THREE.Points(
+    starGeo,
+    new THREE.PointsMaterial({
+      color: 0x7dfcff,
+      size: 0.045,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  scene.add(starField);
+
+  dataRibbonGroup = new THREE.Group();
+  const ribbonCount = prefersReducedMotion || isCoarsePointer ? 2 : 5;
+  for (let i = 0; i < ribbonCount; i++) {
+    const points = [];
+    const radius = 4.5 + i * 2.2;
+    for (let step = 0; step <= 180; step++) {
+      const angle = step * 0.08 + i;
+      points.push(new THREE.Vector3(
+        Math.cos(angle) * radius,
+        Math.sin(step * 0.12 + i) * 0.7,
+        Math.sin(angle) * radius
+      ));
+    }
+    const ribbonGeo = new THREE.BufferGeometry().setFromPoints(points);
+    const ribbonMat = new THREE.LineBasicMaterial({
+      color: i % 2 ? 0xff0055 : 0x00f0ff,
+      transparent: true,
+      opacity: 0.08
+    });
+    dataRibbonGroup.add(new THREE.Line(ribbonGeo, ribbonMat));
+  }
+  scene.add(dataRibbonGroup);
 }
 
 // 2. Procedural Nodes Graph
@@ -235,9 +388,21 @@ function buildProjectNodes() {
     const nodeMesh = new THREE.Mesh(nodeGeo, nodeMat);
     nodeMesh.position.set(posX, yHeight, posZ);
     nodeMesh.userData = { project: proj };
+
+    const hitGeo = new THREE.SphereGeometry(isCoarsePointer ? 0.95 : 0.7, 12, 12);
+    const hitMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    });
+    const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    hitMesh.userData = { project: proj, node: nodeMesh };
+    nodeMesh.add(hitMesh);
+    projectHitTargets.push(hitMesh);
     
     nodesGroup.add(nodeMesh);
     projectNodes.push(nodeMesh);
+    projectNodeById.set(proj.id, nodeMesh);
     
     // Add dynamic connection lines to core
     const lineMat = new THREE.LineBasicMaterial({
@@ -261,6 +426,170 @@ function buildProjectNodes() {
     labelsContainer.appendChild(label);
     projectLabels.push({ element: label, object3d: nodeMesh });
   });
+}
+
+function buildRelatedProjectEdges() {
+  const scoredPairs = new Map();
+  const degree = new Map();
+  const maxEdgesPerNode = isCoarsePointer ? 2 : 3;
+  const maxEdges = isCoarsePointer ? 24 : 36;
+
+  manualRelationHints.forEach(([from, to]) => {
+    scoredPairs.set(getEdgeKey(from, to), { from, to, score: 10 });
+  });
+
+  for (let i = 0; i < USSY_PROJECTS.length; i++) {
+    for (let j = i + 1; j < USSY_PROJECTS.length; j++) {
+      const a = USSY_PROJECTS[i];
+      const b = USSY_PROJECTS[j];
+      const sharedTags = a.tags.filter(tag => b.tags.includes(tag) && !ignoredRelationTags.has(tag));
+      let score = sharedTags.length * 2;
+      if (a.category === b.category) score += 1.5;
+      if (a.status === b.status) score += 0.4;
+      if (score < 3) continue;
+
+      const key = getEdgeKey(a.id, b.id);
+      const existing = scoredPairs.get(key);
+      if (!existing || existing.score < score) {
+        scoredPairs.set(key, { from: a.id, to: b.id, score });
+      }
+    }
+  }
+
+  Array.from(scoredPairs.values())
+    .sort((a, b) => b.score - a.score)
+    .forEach(edge => {
+      if (relationshipEdges.length >= maxEdges) return;
+      if ((degree.get(edge.from) || 0) >= maxEdgesPerNode) return;
+      if ((degree.get(edge.to) || 0) >= maxEdgesPerNode) return;
+
+      const fromNode = projectNodeById.get(edge.from);
+      const toNode = projectNodeById.get(edge.to);
+      if (!fromNode || !toNode) return;
+
+      relationshipEdges.push({ ...edge, fromNode, toNode });
+      degree.set(edge.from, (degree.get(edge.from) || 0) + 1);
+      degree.set(edge.to, (degree.get(edge.to) || 0) + 1);
+    });
+
+  const positions = new Float32Array(relationshipEdges.length * 6);
+  const colors = new Float32Array(relationshipEdges.length * 6);
+  relationshipEdges.forEach((edge, idx) => {
+    const colorA = getCategoryColor(edge.fromNode.userData.project.category);
+    const colorB = getCategoryColor(edge.toNode.userData.project.category);
+    colorA.toArray(colors, idx * 6);
+    colorB.toArray(colors, idx * 6 + 3);
+  });
+
+  const edgeGeo = new THREE.BufferGeometry();
+  edgeGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  edgeGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  relationshipEdgesMesh = new THREE.LineSegments(
+    edgeGeo,
+    new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.11,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  connectionsGroup.add(relationshipEdgesMesh);
+
+  const selectedGeo = new THREE.BufferGeometry();
+  selectedGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(selectedEdgeLimit * 6), 3));
+  selectedEdgesMesh = new THREE.LineSegments(
+    selectedGeo,
+    new THREE.LineBasicMaterial({
+      color: 0xffcc00,
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  selectedEdgesMesh.geometry.setDrawRange(0, 0);
+  connectionsGroup.add(selectedEdgesMesh);
+}
+
+function getEdgeKey(from, to) {
+  return from < to ? `${from}:${to}` : `${to}:${from}`;
+}
+
+function getCategoryColor(categoryId) {
+  const category = USSY_CATEGORIES[categoryId];
+  return new THREE.Color(category ? category.color : '#00f0ff');
+}
+
+function updateRelationshipEdges() {
+  if (!relationshipEdgesMesh) return;
+
+  const positions = relationshipEdgesMesh.geometry.attributes.position.array;
+  relationshipEdges.forEach((edge, idx) => {
+    const offset = idx * 6;
+    if (!edge.fromNode.visible || !edge.toNode.visible) {
+      positions.fill(0, offset, offset + 6);
+      return;
+    }
+    positions[offset] = edge.fromNode.position.x;
+    positions[offset + 1] = edge.fromNode.position.y;
+    positions[offset + 2] = edge.fromNode.position.z;
+    positions[offset + 3] = edge.toNode.position.x;
+    positions[offset + 4] = edge.toNode.position.y;
+    positions[offset + 5] = edge.toNode.position.z;
+  });
+  relationshipEdgesMesh.geometry.attributes.position.needsUpdate = true;
+  updateSelectedRelationEdges();
+}
+
+function updateSelectedRelationEdges() {
+  if (!selectedEdgesMesh || !selectedNode) {
+    if (selectedEdgesMesh) selectedEdgesMesh.geometry.setDrawRange(0, 0);
+    return;
+  }
+
+  const selectedEdges = getRelatedEdgesForProject(selectedNode.userData.project.id)
+    .filter(edge => edge.fromNode.visible && edge.toNode.visible)
+    .slice(0, selectedEdgeLimit);
+  const positions = selectedEdgesMesh.geometry.attributes.position.array;
+  positions.fill(0);
+
+  selectedEdges.forEach((edge, idx) => {
+    const offset = idx * 6;
+    positions[offset] = edge.fromNode.position.x;
+    positions[offset + 1] = edge.fromNode.position.y;
+    positions[offset + 2] = edge.fromNode.position.z;
+    positions[offset + 3] = edge.toNode.position.x;
+    positions[offset + 4] = edge.toNode.position.y;
+    positions[offset + 5] = edge.toNode.position.z;
+  });
+  selectedEdgesMesh.geometry.setDrawRange(0, selectedEdges.length * 2);
+  selectedEdgesMesh.geometry.attributes.position.needsUpdate = true;
+}
+
+function getRelatedEdgesForProject(projectId) {
+  return relationshipEdges.filter(edge => edge.from === projectId || edge.to === projectId);
+}
+
+function ensureProjectHowSection() {
+  if (inspectHowBody || !inspectDesc) return;
+
+  inspectHowLabel = document.createElement('div');
+  inspectHowLabel.className = 'inspector-section-lbl';
+  inspectHowLabel.innerText = '[HOW_IT_WORKS]';
+
+  inspectHowBody = document.createElement('div');
+  inspectHowBody.className = 'inspector-how-body';
+
+  inspectDesc.insertAdjacentElement('afterend', inspectHowBody);
+  inspectDesc.insertAdjacentElement('afterend', inspectHowLabel);
+}
+
+function getProjectHowCopy(proj) {
+  if (PROJECT_HOW_COPY[proj.id]) return PROJECT_HOW_COPY[proj.id];
+  const specs = proj.specs ? Object.entries(proj.specs).slice(0, 2).map(([key, value]) => `${key}: ${value}`).join('; ') : 'project-specific runtime details';
+  const features = proj.features ? proj.features.slice(0, 2).join(', ') : 'the core workflow';
+  return `${proj.name} combines ${specs} with ${features}. The project is mapped here as a ${USSY_CATEGORIES[proj.category]?.title || 'Ussyverse'} node so its implementation details, related systems, and source links can be inspected together.`;
 }
 
 // Lighting Setup
@@ -287,17 +616,30 @@ function populateProjectsUI() {
     const item = document.createElement('div');
     item.className = 'project-item';
     item.dataset.id = proj.id;
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.setAttribute('aria-label', `Inspect ${proj.name}`);
     
     const isStable = proj.status === 'Stable';
     const statusClass = isStable ? 'stable' : 'active-state';
     
-    item.innerHTML = `
-      <span>${proj.name}</span>
-      <div class="status-dot ${statusClass}"></div>
-    `;
+      const cat = USSY_CATEGORIES[proj.category];
+      item.innerHTML = `
+        <div class="project-item-main">
+          <span class="project-name">${proj.name}</span>
+          <span class="project-meta">${cat ? cat.title : 'Ussyverse'} // ${proj.status}</span>
+        </div>
+        <div class="status-dot ${statusClass}"></div>
+      `;
     
     item.addEventListener('click', () => {
       selectProject(proj.id, true);
+    });
+    item.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectProject(proj.id, true);
+      }
     });
     
     projectsScrollList.appendChild(item);
@@ -308,9 +650,14 @@ function setupUIEventListeners() {
   // Category Filtering
   const cards = document.querySelectorAll('.category-card');
   cards.forEach(card => {
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-pressed', card.classList.contains('active') ? 'true' : 'false');
     card.addEventListener('click', () => {
       cards.forEach(c => c.classList.remove('active'));
+      cards.forEach(c => c.setAttribute('aria-pressed', 'false'));
       card.classList.add('active');
+      card.setAttribute('aria-pressed', 'true');
       activeCategory = card.dataset.category;
       
       populateProjectsUI();
@@ -322,11 +669,18 @@ function setupUIEventListeners() {
         node.visible = matches;
         node.userData.connectionLine.visible = matches;
       });
+      updateRelationshipEdges();
       
       projectLabels.forEach(label => {
         const matches = activeCategory === 'all' || label.object3d.userData.project.category === activeCategory;
         label.element.style.display = matches ? 'block' : 'none';
       });
+    });
+    card.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        card.click();
+      }
     });
   });
 
@@ -344,6 +698,9 @@ function setupUIEventListeners() {
   // Scroll Snap Nav Dot Clicks
   const navDots = document.querySelectorAll('.nav-dot');
   navDots.forEach(dot => {
+    dot.tabIndex = 0;
+    dot.setAttribute('role', 'button');
+    dot.setAttribute('aria-label', `Scroll to ${dot.innerText || 'section'}`);
     dot.addEventListener('click', () => {
       const idx = parseInt(dot.dataset.index);
       if (heroContainer) {
@@ -352,6 +709,12 @@ function setupUIEventListeners() {
           top: idx * clientHeight,
           behavior: 'smooth'
         });
+      }
+    });
+    dot.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        dot.click();
       }
     });
   });
@@ -366,6 +729,7 @@ function selectProject(projId, triggerFly = true) {
   
   document.querySelectorAll('.project-item').forEach(item => {
     item.classList.toggle('active', item.dataset.id === projId);
+    item.setAttribute('aria-current', item.dataset.id === projId ? 'true' : 'false');
   });
   
   projectLabels.forEach(l => {
@@ -374,19 +738,23 @@ function selectProject(projId, triggerFly = true) {
 
   projectNodes.forEach(node => {
     const isSelected = node.userData.project.id === projId;
+    const isRelated = getRelatedEdgesForProject(projId).some(edge => edge.fromNode === node || edge.toNode === node);
     node.scale.setScalar(isSelected ? 1.5 : 1);
-    node.material.opacity = isSelected ? 1.0 : 0.6;
+    node.material.opacity = isSelected ? 1.0 : (isRelated ? 0.82 : 0.5);
     node.userData.connectionLine.material.opacity = isSelected ? 0.6 : 0.15;
   });
+  updateSelectedRelationEdges();
 
   inspectTitle.innerText = proj.name.toUpperCase();
   
   const cat = USSY_CATEGORIES[proj.category];
   inspectCategory.innerText = cat ? cat.title.toUpperCase() : "USSYVERSE CORE";
-  inspectCategory.style.borderColor = cat ? cat.color : "var(--cyber-cyan)";
-  inspectCategory.style.color = cat ? cat.color : "var(--cyber-cyan)";
+  inspectCategory.style.borderColor = "rgba(148, 163, 184, 0.24)";
+  inspectCategory.style.color = "rgba(203, 213, 225, 0.78)";
   
   inspectDesc.innerText = proj.description;
+  ensureProjectHowSection();
+  inspectHowBody.innerText = getProjectHowCopy(proj);
   
   inspectTags.innerHTML = '';
   proj.tags.forEach(t => {
@@ -394,6 +762,13 @@ function selectProject(projId, triggerFly = true) {
     const badge = document.createElement('span');
     badge.className = `tag-badge ${isSpecial ? 'special' : ''}`;
     badge.innerText = t;
+    inspectTags.appendChild(badge);
+  });
+  getRelatedEdgesForProject(proj.id).slice(0, 4).forEach(edge => {
+    const relatedProj = edge.from === proj.id ? edge.toNode.userData.project : edge.fromNode.userData.project;
+    const badge = document.createElement('span');
+    badge.className = 'tag-badge orbit-link-badge';
+    badge.innerText = `ORBIT: ${relatedProj.name}`;
     inspectTags.appendChild(badge);
   });
 
@@ -446,6 +821,7 @@ function selectProject(projId, triggerFly = true) {
     const dir = new THREE.Vector3().copy(pos).normalize();
     camTarget.pos.copy(pos).add(dir.multiplyScalar(3.2)).add(new THREE.Vector3(0, 1.2, 0));
     camTarget.lookAt.copy(pos);
+    syncOrbitFromCamera();
   }
 }
 
@@ -457,6 +833,7 @@ function activateConsoleMode() {
   // Set camera to initial focus view
   camTarget.pos.set(0, 4, 18);
   camTarget.lookAt.set(0, 0, 0);
+  syncOrbitFromCamera();
   
   if (selectedNode) {
     selectProject(selectedNode.userData.project.id, true);
@@ -473,6 +850,7 @@ function deactivateConsoleMode() {
     node.material.opacity = 0.85;
     node.userData.connectionLine.material.opacity = 0.15;
   });
+  updateSelectedRelationEdges();
   
   document.querySelectorAll('.project-item').forEach(item => item.classList.remove('active'));
   document.querySelectorAll('.floating-node-label').forEach(lbl => lbl.classList.remove('active'));
@@ -493,19 +871,46 @@ function onHeroScroll() {
   const scrollRatio = Math.min(scrollTop / maxScroll, 1);
   
   // Compute active section index
-  const sectionIdx = Math.round(scrollTop / clientHeight);
+  const lastSectionIdx = sectionCamPositions.length - 1;
+  const sectionIdx = Math.min(Math.round(scrollTop / clientHeight), lastSectionIdx);
   
   // Update nav dot active class
   const navDots = document.querySelectorAll('.nav-dot');
   navDots.forEach((dot, idx) => {
     dot.classList.toggle('active', idx === sectionIdx);
+    dot.setAttribute('aria-current', idx === sectionIdx ? 'step' : 'false');
   });
   
   // Increase particle speed on rapid scrolls
   coreOuterParticles.rotation.y -= scrollRatio * 0.005;
   
-  // Auto-activate console if user scrolls all the way down
-  if (scrollRatio > 0.98 && !isConsoleActive) {
+}
+
+function isOnFinalHeroCard() {
+  if (!heroContainer) return false;
+  const clientHeight = heroContainer.clientHeight || window.innerHeight;
+  const finalCardTop = (sectionCamPositions.length - 1) * clientHeight;
+  return heroContainer.scrollTop >= finalCardTop - 8;
+}
+
+function onHeroWheel(event) {
+  if (isConsoleActive) return;
+  if (event.deltaY > 18 && isOnFinalHeroCard()) {
+    event.preventDefault();
+    activateConsoleMode();
+  }
+}
+
+function onHeroTouchStart(event) {
+  if (event.touches.length > 0) {
+    heroTouchStartY = event.touches[0].clientY;
+  }
+}
+
+function onHeroTouchEnd(event) {
+  if (isConsoleActive || !isOnFinalHeroCard() || event.changedTouches.length === 0) return;
+  const deltaY = heroTouchStartY - event.changedTouches[0].clientY;
+  if (deltaY > 32) {
     activateConsoleMode();
   }
 }
@@ -514,6 +919,7 @@ function resetCameraView() {
   if (!isConsoleActive) return;
   camTarget.pos.set(0, 4, 18);
   camTarget.lookAt.set(0, 0, 0);
+  syncOrbitFromCamera();
   selectedNode = null;
   
   projectNodes.forEach(node => {
@@ -521,6 +927,7 @@ function resetCameraView() {
     node.material.opacity = 0.85;
     node.userData.connectionLine.material.opacity = 0.15;
   });
+  updateSelectedRelationEdges();
   
   document.querySelectorAll('.project-item').forEach(item => item.classList.remove('active'));
   document.querySelectorAll('.floating-node-label').forEach(lbl => lbl.classList.remove('active'));
@@ -529,20 +936,92 @@ function resetCameraView() {
 canvasContainer.addEventListener('dblclick', resetCameraView);
 
 // 4. Input Events
+function updatePointerFromClient(clientX, clientY) {
+  mouse.x = (clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+  telemetryCoord.innerText = `X: ${mouse.x.toFixed(2)} Y: ${mouse.y.toFixed(2)} Z: 0.00`;
+}
+
+function getInteractiveHits() {
+  raycaster.setFromCamera(mouse, camera);
+  const visibleTargets = projectHitTargets.filter(h => h.parent && h.parent.visible);
+  return raycaster.intersectObjects(visibleTargets, true);
+}
+
+function syncOrbitFromCamera() {
+  const offset = new THREE.Vector3().copy(camTarget.pos).sub(camTarget.lookAt);
+  orbitState.distance = THREE.MathUtils.clamp(offset.length(), orbitState.minDistance, orbitState.maxDistance);
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+  orbitState.theta = spherical.theta;
+  orbitState.phi = THREE.MathUtils.clamp(spherical.phi, Math.PI * 0.12, Math.PI * 0.82);
+}
+
+function applyOrbitToCamera() {
+  orbitState.phi = THREE.MathUtils.clamp(orbitState.phi, Math.PI * 0.12, Math.PI * 0.82);
+  orbitState.distance = THREE.MathUtils.clamp(orbitState.distance, orbitState.minDistance, orbitState.maxDistance);
+  const offset = new THREE.Vector3().setFromSpherical(new THREE.Spherical(
+    orbitState.distance,
+    orbitState.phi,
+    orbitState.theta
+  ));
+  camTarget.pos.copy(camTarget.lookAt).add(offset);
+}
+
+function onPointerDown(event) {
+  if (!isConsoleActive || event.button !== 0) return;
+  if (event.target.closest && (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive'))) return;
+
+  orbitState.dragging = true;
+  orbitState.moved = false;
+  orbitState.pointerId = event.pointerId;
+  orbitState.lastX = event.clientX;
+  orbitState.lastY = event.clientY;
+  orbitState.captureTarget = event.target;
+  if (orbitState.captureTarget.setPointerCapture) {
+    orbitState.captureTarget.setPointerCapture(event.pointerId);
+  }
+  document.body.classList.add('scene-dragging');
+}
+
+function onPointerMove(event) {
+  if (!orbitState.dragging || orbitState.pointerId !== event.pointerId) return;
+
+  const dx = event.clientX - orbitState.lastX;
+  const dy = event.clientY - orbitState.lastY;
+  orbitState.lastX = event.clientX;
+  orbitState.lastY = event.clientY;
+
+  if (Math.abs(dx) + Math.abs(dy) > 3) orbitState.moved = true;
+  orbitState.theta -= dx * orbitState.rotateSpeed;
+  orbitState.phi -= dy * orbitState.rotateSpeed;
+  applyOrbitToCamera();
+}
+
+function onPointerUp(event) {
+  if (orbitState.pointerId !== event.pointerId) return;
+  orbitState.dragging = false;
+  orbitState.pointerId = null;
+  orbitState.captureTarget = null;
+  document.body.classList.remove('scene-dragging');
+}
+
+function onSceneWheel(event) {
+  if (!isConsoleActive || isCoarsePointer) return;
+  if (event.target.closest && (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive'))) return;
+  event.preventDefault();
+  orbitState.distance += event.deltaY * orbitState.zoomSpeed * orbitState.distance;
+  applyOrbitToCamera();
+}
+
 function onMouseMove(event) {
   customCursor.style.left = event.clientX + 'px';
   customCursor.style.top = event.clientY + 'px';
-  
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-  
-  telemetryCoord.innerText = `X: ${mouse.x.toFixed(2)} Y: ${mouse.y.toFixed(2)} Z: 0.00`;
+  updatePointerFromClient(event.clientX, event.clientY);
 }
 
 function onTouchStart(event) {
   if (event.touches.length > 0) {
-    mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+    updatePointerFromClient(event.touches[0].clientX, event.touches[0].clientY);
   }
 }
 
@@ -550,13 +1029,16 @@ function onSceneClick(event) {
   // Disable clicks while simply reading/scrolling hero overlay
   if (!isConsoleActive) return;
   if (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive')) return;
+  if (orbitState.moved) {
+    orbitState.moved = false;
+    return;
+  }
   
-  raycaster.setFromCamera(mouse, camera);
-  const visibleNodes = projectNodes.filter(n => n.visible);
-  const intersects = raycaster.intersectObjects(visibleNodes);
+  updatePointerFromClient(event.clientX, event.clientY);
+  const intersects = getInteractiveHits();
   
   if (intersects.length > 0) {
-    const hitNode = intersects[0].object;
+    const hitNode = intersects[0].object.userData.node || intersects[0].object;
     selectProject(hitNode.userData.project.id, true);
   }
 }
@@ -564,6 +1046,7 @@ function onSceneClick(event) {
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isCoarsePointer ? 1.35 : 1.75));
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
@@ -574,19 +1057,27 @@ function animate(time) {
   const startTime = performance.now();
   
   // Slow background rotation for holographic core
-  coreMesh.rotation.y += 0.002;
-  coreMesh.rotation.x += 0.0008;
+  if (!prefersReducedMotion) {
+    coreMesh.rotation.y += 0.002;
+    coreMesh.rotation.x += 0.0008;
+    coreOuterParticles.rotation.y -= 0.0006;
+    coreOuterParticles.rotation.x -= 0.0003;
+  }
+  if (starField && !prefersReducedMotion) {
+    starField.rotation.y += 0.00008;
+    starField.rotation.x += 0.00003;
+  }
+  if (dataRibbonGroup && !prefersReducedMotion) {
+    dataRibbonGroup.rotation.y -= 0.00018;
+  }
   
-  coreOuterParticles.rotation.y -= 0.0006;
-  coreOuterParticles.rotation.x -= 0.0003;
-  
-  const pulseScale = 1 + Math.sin(time * 0.0015) * 0.04;
+  const pulseScale = prefersReducedMotion ? 1 : 1 + Math.sin(time * 0.0015) * 0.04;
   coreMesh.scale.setScalar(pulseScale);
 
   // Floating nodes orbits (slow drift)
   const orbitSpeed = 0.0003;
   projectNodes.forEach(node => {
-    if (selectedNode !== node) {
+    if (!prefersReducedMotion && selectedNode !== node) {
       const pos = node.position;
       const x = pos.x * Math.cos(orbitSpeed) - pos.z * Math.sin(orbitSpeed);
       const z = pos.x * Math.sin(orbitSpeed) + pos.z * Math.cos(orbitSpeed);
@@ -599,14 +1090,16 @@ function animate(time) {
       node.userData.connectionLine.geometry.attributes.position.needsUpdate = true;
     }
   });
+  updateRelationshipEdges();
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (!isConsoleActive && heroContainer) {
     const scrollTop = heroContainer.scrollTop;
     const clientHeight = heroContainer.clientHeight || window.innerHeight;
     const sectionFloat = scrollTop / clientHeight;
-    const sectionIdx = Math.min(Math.floor(sectionFloat), 2);
-    const nextSectionIdx = Math.min(sectionIdx + 1, 3);
+    const lastSectionIdx = sectionCamPositions.length - 1;
+    const sectionIdx = Math.min(Math.floor(sectionFloat), lastSectionIdx);
+    const nextSectionIdx = Math.min(sectionIdx + 1, lastSectionIdx);
     const t = sectionFloat - sectionIdx;
     
     const posA = sectionCamPositions[sectionIdx];
@@ -657,12 +1150,10 @@ function animate(time) {
 
   // Raycasting hover highlight (only active in Console mode)
   if (isConsoleActive) {
-    raycaster.setFromCamera(mouse, camera);
-    const visibleNodes = projectNodes.filter(n => n.visible);
-    const intersects = raycaster.intersectObjects(visibleNodes);
+    const intersects = getInteractiveHits();
     
     if (intersects.length > 0) {
-      const node = intersects[0].object;
+      const node = intersects[0].object.userData.node || intersects[0].object;
       if (hoveredNode !== node) {
         if (hoveredNode && hoveredNode !== selectedNode) {
           hoveredNode.scale.setScalar(1);
@@ -689,6 +1180,19 @@ function animate(time) {
     }
   }
 
+  if (selectionRing) {
+    if (isConsoleActive && selectedNode) {
+      selectionRing.visible = true;
+      selectionRing.position.lerp(selectedNode.position, 0.18);
+      selectionRing.lookAt(camera.position);
+      selectionRing.scale.setScalar(1 + Math.sin(time * 0.004) * 0.08);
+      selectionRing.material.opacity = THREE.MathUtils.lerp(selectionRing.material.opacity, 0.75, 0.12);
+    } else {
+      selectionRing.material.opacity = THREE.MathUtils.lerp(selectionRing.material.opacity, 0, 0.12);
+      if (selectionRing.material.opacity < 0.02) selectionRing.visible = false;
+    }
+  }
+
   // Smooth LERP camera movement
   const lerpFactor = isConsoleActive ? 0.06 : 0.02; // Slower, more cinematic drift in Hero mode
   camCurrent.pos.lerp(camTarget.pos, lerpFactor);
@@ -708,20 +1212,18 @@ function animate(time) {
       return;
     }
     
-    const tempV = new THREE.Vector3();
-    label.object3d.getWorldPosition(tempV);
-    tempV.project(camera);
+    label.object3d.getWorldPosition(labelTempVec);
+    labelTempVec.project(camera);
     
-    if (tempV.z > 1) {
+    if (labelTempVec.z > 1 || labelTempVec.z < -1) {
       label.element.style.opacity = 0;
       return;
     }
     
-    const x = (tempV.x *  .5 + .5) * window.innerWidth;
-    const y = (tempV.y * -.5 + .5) * window.innerHeight;
+    const x = (labelTempVec.x *  .5 + .5) * window.innerWidth;
+    const y = (labelTempVec.y * -.5 + .5) * window.innerHeight;
     
-    label.element.style.left = `${x}px`;
-    label.element.style.top = `${y}px`;
+    label.element.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -130%)`;
     
     const dist = camera.position.distanceTo(label.object3d.position);
     if (dist < 2.0 && label.object3d !== selectedNode) {
@@ -733,7 +1235,7 @@ function animate(time) {
 
   // Telemetry framerate diagnostics
   const endTime = performance.now();
-  telemetryTimer.innerText = `TELEMETRY_LOAD: ${(endTime - startTime).toFixed(2)}ms`;
+  telemetryTimer.innerText = `TELEMETRY_LOAD: ${(endTime - startTime).toFixed(2)}ms // DRAW_CALLS: ${renderer.info.render.calls}`;
 }
 
 // Start Application

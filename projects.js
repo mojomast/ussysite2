@@ -2,7 +2,7 @@ const USSY_PROJECTS = [
   {
     "id": "devussy",
     "name": "Devussy",
-    "description": "Stateless multi-stage planning pipeline for human and AI handoffs. Seamlessly orchestrates task descriptions, coding specs, and code executions across environments.",
+    "description": "Devussy turns rough software intent into explicit DevPlan artifacts: tasks, specs, checkpoints, and handoff files that both humans and coding agents can inspect. The point is not a mysterious autonomous run; it is a visible planning spine for work that needs to survive review.",
     "category": "core",
     "tags": ["Featured", "Ussyverse Core", "Stable", "Python", "FastAPI", "Next.js"],
     "github": "https://github.com/mojomast/devussy",
@@ -24,7 +24,7 @@ const USSY_PROJECTS = [
   {
     "id": "openclawssy",
     "name": "Openclawssy",
-    "description": "Operator-first agent runtime featuring fully auditable execution paths and customizable policy gates. Designed for robust production deployment of AI operations.",
+    "description": "Openclawssy is an operator-first agent runtime where permissions, audit trails, Discord control surfaces, and session visibility are part of the core architecture. It is built for supervised AI operations: every action should have a path, a policy, and a human-readable reason.",
     "category": "core",
     "tags": ["Featured", "Ussyverse Core", "Active", "Go", "Dashboard", "Discord"],
     "github": "https://github.com/mojomast/openclawssy",
@@ -46,7 +46,7 @@ const USSY_PROJECTS = [
   {
     "id": "swarmussy",
     "name": "Swarmussy",
-    "description": "Autonomous multi-agent coding swarm integrated with a live, real-time DevPlan orchestration dashboard to coordinate complex repository operations.",
+    "description": "Swarmussy is a terminal-native coding swarm for splitting repository work across specialist agents while keeping the operator in the loop. It explores the practical question behind multi-agent coding: how do you coordinate parallel help without losing traceability, review, or local verification?",
     "category": "core",
     "tags": ["Featured", "Ussyverse Core", "Stable", "Python", "TUI", "LLMs"],
     "github": "https://github.com/mojomast/swarmussy",
@@ -68,7 +68,7 @@ const USSY_PROJECTS = [
   {
     "id": "tchaikovskussy",
     "name": "Tchaikovskussy",
-    "description": "Holographic BabelFish-style chat system enabling real-time, per-user translated multilingual conversation over native WebSockets.",
+    "description": "Tchaikovskussy is a BabelFish-style chat room where language translation is built into the live conversation instead of bolted on afterward. Each participant can read the room in their own language while WebSockets keep the shared session moving in real time.",
     "category": "ai",
     "tags": ["Featured", "AI Tools", "Active", "Python", "React", "WebSocket"],
     "github": "https://github.com/mojomast/Tchaikovskussy",
@@ -90,7 +90,7 @@ const USSY_PROJECTS = [
   {
     "id": "ussycode",
     "name": "ussycode",
-    "description": "SSH-first developer microVM orchestration platform built on Firecracker, providing instant web-based development sandboxes over HTTPS.",
+    "description": "Ussycode is an SSH-first developer sandbox platform backed by Firecracker microVMs, persistent disks, and HTTPS routing. It asks how small a serious dev environment can be when the primitives are plain VMs, keys, ports, and workspaces rather than a giant orchestration stack.",
     "category": "infra",
     "tags": ["Featured", "Infrastructure", "Active", "Go", "Firecracker", "SQLite"],
     "github": "https://github.com/mojomast/ussycode",
@@ -112,7 +112,7 @@ const USSY_PROJECTS = [
   {
     "id": "hermes-dashboard",
     "name": "Hermes Dashboard",
-    "description": "Operator-grade standalone runtime dashboard built to supervise agent conversations, active context, long-term memory, and system configurations.",
+    "description": "Hermes Dashboard is a supervision console for the usually invisible parts of agent work: conversations, context windows, memory, config, and runtime logs. It is deliberately utilitarian - a glowing operator panel for debugging what an agent thinks it is doing.",
     "category": "core",
     "tags": ["Featured", "DevTools", "Active", "Python", "HTML", "JavaScript"],
     "github": "https://github.com/mojomast/hermesdashboard",
@@ -134,7 +134,7 @@ const USSY_PROJECTS = [
   {
     "id": "imacomputerussy",
     "name": "iMaCoMpUtERussy",
-    "description": "A beautiful retro browser desktop computer emulator fully equipped with its own virtual assembly language compiler, drawing applications, and steganographic features.",
+    "description": "iMaCoMpUtERussy is a tiny fictional computer living in the browser, complete with windows, drawing tools, a custom assembly language, and steganography experiments. It is part emulator, part art toy, and part argument that web interfaces can still feel handmade and surprising.",
     "category": "creative",
     "tags": ["Featured", "Games & Creative", "Stable", "JavaScript", "Emulator", "Assembly"],
     "github": "https://github.com/mojomast/iMaCoMpUtERussy",
@@ -156,7 +156,7 @@ const USSY_PROJECTS = [
   {
     "id": "stallionussy",
     "name": "StallionUSSY",
-    "description": "A comedic multiplayer horse breeding and genetic simulation game incorporating real-time racing grids, asset trading, and high-stakes casino mini-games.",
+    "description": "StallionUSSY is a loud, comedic horse breeding and racing economy with genetics, auctions, grids, and casino-adjacent side games. Under the joke is a real stateful multiplayer system: persistent assets, live events, trades, and enough simulation machinery to make the absurdity durable.",
     "category": "creative",
     "tags": ["Featured", "Games & Creative", "Active", "Go", "PostgreSQL", "SPA"],
     "github": "https://github.com/mojomast/stallionussy",
@@ -178,7 +178,7 @@ const USSY_PROJECTS = [
   {
     "id": "templeossy",
     "name": "TempleOSsy",
-    "description": "A browser-native recreation of Terry A. Davis's TempleOS, running in a WebAssembly-compiled QEMU environment with writable local disk persistence.",
+    "description": "TempleOSsy boots TempleOS/ShrineOS inside the browser through a WebAssembly QEMU stack. The goal is a respectful, approachable emulation surface: one-click boot, local writable persistence, and the strange feeling of a whole machine contained in a tab.",
     "category": "creative",
     "tags": ["Featured", "Games & Creative", "Active", "JavaScript", "WASM", "QEMU"],
     "github": "https://github.com/mojomast/templeossy",
@@ -200,7 +200,7 @@ const USSY_PROJECTS = [
   {
     "id": "fruityboofs",
     "name": "Fruity Boofs",
-    "description": "A collaborative in-browser vocal synthesis digital audio workstation (DAW) utilizing optimized Paul Batchelor WASM sound synthesis engines.",
+    "description": "Fruity Boofs is a collaborative browser DAW for playful vocal synthesis, sequencing, and quick audio sketches. It leans on WebAudio and WebAssembly DSP so music creation can happen in a page without losing the tactility of a real instrument panel.",
     "category": "creative",
     "tags": ["Featured", "Music & Media", "Active", "JavaScript", "WebAudio", "WASM"],
     "github": "https://github.com/mojomast/fruityboofs",
@@ -222,7 +222,7 @@ const USSY_PROJECTS = [
   {
     "id": "mediageckussy",
     "name": "Mediageckussy",
-    "description": "A nostalgic studio platform built for managing, transcoding, and exporting vintage media formats and instant share playback loops.",
+    "description": "Mediageckussy is a nostalgic media workbench for preparing, filtering, transcoding, packaging, and sharing small audio/video loops. It treats exportable artifacts as the product: make the thing, package it, send it, let it live without a heavy hosted backend.",
     "category": "creative",
     "tags": ["Featured", "Music & Media", "Active", "Node.js", "Studio", "Static Export"],
     "github": "https://github.com/mojomast/mediageckussy",
@@ -244,7 +244,7 @@ const USSY_PROJECTS = [
   {
     "id": "strudelussy",
     "name": "Strudelussy",
-    "description": "An AI-enhanced fork of the Strudel live-coding music platform, enabling real-time musical composition via code in a collaborative sandbox.",
+    "description": "Strudelussy experiments around the Strudel live-coding music ecosystem, pushing code-driven composition toward collaboration and AI-assisted variation. The loop is immediate: type patterns, hear structure, mutate ideas, and keep the creative surface close to the sound.",
     "category": "creative",
     "tags": ["Featured", "Music & Media", "Active", "React", "Vite", "Workers"],
     "github": "https://github.com/mojomast/strudelussy",
@@ -266,7 +266,7 @@ const USSY_PROJECTS = [
   {
     "id": "scoreboardussy",
     "name": "Scoreboardussy",
-    "description": "A fast real-time scoreboard designed for comedy/improv shows, complete with interactive audience voting systems and bilingual host controls.",
+    "description": "Scoreboardussy is a stage-friendly realtime scoreboard for comedy, improv, and live events where hosts need fast controls and audiences may join in. It combines score templates, bilingual host surfaces, QR voting, and WebSocket updates without making the operator fight the UI mid-show.",
     "category": "creative",
     "tags": ["Featured", "Games & Creative", "Stable", "React", "TypeScript", "Express"],
     "github": "https://github.com/mojomast/scoreboardussy",
@@ -288,7 +288,7 @@ const USSY_PROJECTS = [
   {
     "id": "geoffrussy",
     "name": "Geoffrussy",
-    "description": "An efficient Go-based delivery orchestrator executing automated project plans initiated from a structured interview pipeline.",
+    "description": "Geoffrussy is a Go-based delivery orchestrator that starts with a structured interview and turns answers into implementation plans. It is an older ecosystem node, but an important one: it made planning feel like an executable command-line workflow rather than a static document.",
     "category": "core",
     "tags": ["Ussyverse Core", "Stable", "Go", "SQLite", "Cobra"],
     "github": "https://github.com/mojomast/geoffrussy",
@@ -310,7 +310,7 @@ const USSY_PROJECTS = [
   {
     "id": "battlebussy",
     "name": "Battlebussy",
-    "description": "A competitive, heavily instrumented cyber-range sandbox designed for autonomous AI agents to engage in adversarial security challenges.",
+    "description": "Battlebussy is a containerized cyber-range for watching autonomous agents behave under adversarial pressure. The interesting signal is not just win or lose; it is what the agent tries, what it touches, which guardrails hold, and how clearly the arena records the attempt.",
     "category": "core",
     "tags": ["AI Tools", "Active", "Go", "Docker", "Cyber Range"],
     "github": "https://github.com/mojomast/battlebussy",
@@ -332,7 +332,7 @@ const USSY_PROJECTS = [
   {
     "id": "ussyring",
     "name": "Ussyring Webring",
-    "description": "The custom-built decentralized webring system that connects Kyle's weird web projects with neighbors across the independent internet.",
+    "description": "Ussyring is a small decentralized webring for connecting independent projects without a central app server. It keeps the old-web ritual intact: portable widgets, static participant data, and visible routes between strange corners of the internet.",
     "category": "infra",
     "tags": ["Infrastructure", "Active", "JavaScript", "API", "Webring"],
     "github": "https://github.com/mojomast/ussyring",
@@ -354,7 +354,7 @@ const USSY_PROJECTS = [
   {
     "id": "ghstatsussy",
     "name": "ghstatsussy",
-    "description": "A CLI-first tool for generating beautiful, interactive, and polished GitHub activity infographics with rich telemetry reports.",
+    "description": "ghstatsussy turns GitHub activity into stylized SVG/HTML artifacts from the command line. It is part stats report, part badge machine, and part experiment in making repository telemetry feel designed instead of dumped.",
     "category": "core",
     "tags": ["Featured", "DevTools", "Stable", "Go", "CLI", "Infographics"],
     "github": "https://github.com/mojomast/ghstatsussy",
@@ -376,7 +376,7 @@ const USSY_PROJECTS = [
   {
     "id": "stenographussy",
     "name": "Stenographussy",
-    "description": "A steganographic code review security tool designed to detect invisible security threats in source code (homoglyphs, zero-width characters).",
+    "description": "Stenographussy scans source code for invisible or hard-to-review text attacks: zero-width characters, homoglyphs, and suspicious Unicode patterns. It stays narrow on purpose so it can be useful during code review without becoming another vague security dashboard.",
     "category": "core",
     "tags": ["Featured", "DevTools", "Active", "Python", "Steganography", "Security"],
     "github": "https://github.com/mojomast/stenographussy",
@@ -398,7 +398,7 @@ const USSY_PROJECTS = [
   {
     "id": "fireslice",
     "name": "fireslice",
-    "description": "A lightweight and reliable Firecracker VM control plane optimized for small operator-managed hosting clusters.",
+    "description": "Fireslice is a lightweight Firecracker control plane for small operator-managed hosting clusters. It focuses on the boring pieces that make VMs real: users, SSH keys, VM profiles, tap devices, launch APIs, and a system shape you can understand without a cloud manual.",
     "category": "infra",
     "tags": ["Infrastructure", "Active", "Go", "Firecracker", "Control Plane"],
     "github": "https://github.com/mojomast/fireslice",
@@ -420,7 +420,7 @@ const USSY_PROJECTS = [
   {
     "id": "ralphussy",
     "name": "Ralphussy",
-    "description": "An early historical autonomous CLI coding agent system. Featured a terminal user interface (TUI), swarm mode, and DevPlan workflows, representing a milestone in Kyle's AI planning research.",
+    "description": "Ralphussy is an early autonomous CLI coding agent and a fossil record for the newer planning tools. It keeps the rough edges visible: terminal UI experiments, swarm mode attempts, DevPlan v1, and the lessons that pushed later systems toward stricter operator control.",
     "category": "core",
     "tags": ["Ecosystem", "Historical", "Stable", "Python", "TUI", "DevPlan"],
     "github": "https://github.com/mojomast/ralphussy",
@@ -442,7 +442,7 @@ const USSY_PROJECTS = [
   {
     "id": "ragussy",
     "name": "RAGussy",
-    "description": "A self-hosted, universal Retrieval-Augmented Generation (RAG) chatbot with a comprehensive web-based management UI, designed to easily ingest markdown directories for context-gated user Q&A.",
+    "description": "RAGussy is a self-hosted retrieval chatbot for local markdown and documentation collections. It emphasizes visible ingestion, prompt/config controls, and a management UI that lets the retrieval layer be inspected instead of hiding everything behind one chat input.",
     "category": "ai",
     "tags": ["Featured", "AI Tools", "Active", "Python", "FastAPI", "ChromaDB", "React"],
     "github": "https://github.com/mojomast/ragussy",
@@ -464,7 +464,7 @@ const USSY_PROJECTS = [
   {
     "id": "nexussy",
     "name": "nexussy",
-    "description": "Fifth-generation Ussyverse staged software delivery pipeline. Takes a plain-language idea through interview, design, validation, planning, review, and multi-worker development stages, producing built projects with full artifact traces and handoff documents.",
+    "description": "Nexussy is the fifth-generation staged delivery pipeline in the Ussyverse. It carries a plain-language idea through interview, design, validation, planning, review, and multi-worker development while leaving artifact traces that can be audited after the build settles.",
     "category": "core",
     "tags": ["Featured", "Ussyverse Core", "Active", "Python", "TypeScript", "SQLite", "SSE"],
     "github": "https://github.com/mojomast/nexussy",
@@ -486,7 +486,7 @@ const USSY_PROJECTS = [
   {
     "id": "rpg-dm-bot",
     "name": "RPG DM Bot",
-    "description": "An AI-powered Discord bot serving as a full Dungeon Master for tabletop RPG campaigns. Features persistent characters, turn-based combat, spellcasting, inventory management, NPC party members, generative AI worldbuilding, and a complete web dashboard with ~80 REST API endpoints.",
+    "description": "RPG DM Bot is an AI-powered Discord Dungeon Master with persistent characters, combat, inventory, NPCs, generated worldbuilding, and a management dashboard. It is built like a real campaign backend rather than a novelty command, with REST endpoints supporting the play loop.",
     "category": "creative",
     "tags": ["Featured", "Games & Creative", "Active", "Python", "Discord", "SQLite", "AI DM"],
     "github": "https://github.com/mojomast/rpg-dm-bot",
@@ -510,22 +510,22 @@ const USSY_PROJECTS = [
 const USSY_CATEGORIES = {
   "core": {
     "title": "Planning & Core",
-    "description": "The structural heart of the ecosystem: planning interfaces, multi-agent orchestrators, and developer handoff tools that structure execution.",
+    "description": "Planning formats, operator consoles, multi-agent experiments, and handoff tools for making software delivery easier to inspect.",
     "color": "#00ff66" // Cyber Green
   },
   "infra": {
     "title": "Systems & Infra",
-    "description": "Durable platform machinery, VM control planes, webrings, and routing tables underpinning our creative experiments.",
+    "description": "Firecracker controllers, developer sandboxes, routing glue, and small-web infrastructure that keep the experiments reachable.",
     "color": "#00f0ff" // Cyber Cyan
   },
   "ai": {
     "title": "Autonomous AI",
-    "description": "Bilingual WebSocket routers, competitive adversarial arenas, and orchestration runtimes built to let agents perform without boundaries.",
+    "description": "Translation rooms, RAG interfaces, policy-gated agent runtimes, and sandboxes for testing AI behavior with sharper edges.",
     "color": "#b026ff" // Cyber Purple
   },
   "creative": {
     "title": "Games & Creative",
-    "description": "DAWs, custom game architectures, nostalgic emulators, and synthetic audio instruments designed to make weird things serious.",
+    "description": "Browser DAWs, retro machines, tabletop bots, media studios, game systems, and odd tools that make the web feel handmade.",
     "color": "#ff0055" // Cyber Pink
   }
 };
