@@ -321,82 +321,83 @@
         <span><i data-lucide="mouse-pointer"></i> Click Node: Inspect Blueprint</span>
       </div>
       <div class="flight-hud hud-interactive" id="flight-hud" aria-live="polite">
-        <div id="tts-status" class="tts-status-indicator" aria-live="polite" aria-label="TTS status"></div>
-        <div class="flight-hud-header">
-          <span>DOGFIGHT MODE</span>
-          <span id="flight-status">TYPE USSY TO LAUNCH</span>
-        </div>
-        <div class="flight-hud-grid">
-          <div>
-            <span class="flight-hud-label">KILLS</span>
+        <div class="flight-hud-inner">
+          <div id="tts-status" class="tts-status-indicator" aria-live="polite" aria-label="TTS status"></div>
+          <div class="flight-hud-header">
+            <span>COMBAT / NAV</span>
+            <span id="flight-status">TYPE USSY TO LAUNCH</span>
+          </div>
+          <div class="flight-hud-grid">
+            <div>
+              <span class="flight-hud-label">CREDITS</span>
+              <strong id="flight-credits">1000CR</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">SHIELD</span>
+              <strong id="flight-shield">100</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">HEAT</span>
+              <strong id="flight-heat">0/100</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">XP</span>
+              <div class="mini-meter"><span id="flight-xp-bar"></span></div>
+              <strong id="flight-sp">SP:0</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">PRIMARY WEAPON</span>
+              <strong id="flight-weapon-primary">LASER Mk.I</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">NEAREST PROJECT</span>
+              <strong id="flight-target">NONE</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">CROSSHAIR TARGET</span>
+              <strong id="flight-crosshair-target">NO PROJECT</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">NAV TARGET</span>
+              <strong id="flight-nav-target">NONE</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">ETA</span>
+              <strong id="flight-nav-eta">--</strong>
+            </div>
+            <div>
+              <span class="flight-hud-label">AUTOPILOT</span>
+              <strong id="flight-autopilot">OFF</strong>
+            </div>
+          </div>
+          <div class="mini-meter heat"><span id="flight-heat-bar" class="heat-bar-fill"></span></div>
+          <div class="flight-hud-help">MOUSELOOK // W/S THRUST // LMB FIRE // V NAV // P AUTO</div>
+          <div class="hud-hidden-telemetry" aria-hidden="true">
             <strong id="flight-score">0</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">CREDITS</span>
-            <strong id="flight-credits">1000CR</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">SHIELD</span>
-            <strong id="flight-shield">100</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">HEAT</span>
-            <strong id="flight-heat">0/100</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">XP</span>
-            <div class="mini-meter"><span id="flight-xp-bar"></span></div>
-            <strong id="flight-sp">SP:0</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">PRIMARY</span>
-            <strong id="flight-weapon-primary">LASER Mk.I</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">SECONDARY</span>
             <strong id="flight-weapon-secondary">MISSILE RACK</strong>
           </div>
-          <div>
-            <span class="flight-hud-label">NEAREST PROJECT</span>
-            <strong id="flight-target">NONE</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">CROSSHAIR</span>
-            <strong id="flight-crosshair-target">NO PROJECT</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">NAV TARGET</span>
-            <strong id="flight-nav-target">NONE</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">ETA</span>
-            <strong id="flight-nav-eta">--</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">AUTOPILOT</span>
-            <strong id="flight-autopilot">OFF</strong>
-          </div>
         </div>
-        <div class="mini-meter heat"><span id="flight-heat-bar" class="heat-bar-fill"></span></div>
-        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // LMB primary // RMB secondary // V nav // P autopilot // C view // O objectives // M audio // L land // T station // U upgrades // SPACE confirm</div>
       </div>
       <div class="objectives-panel hud-interactive" id="objectives-panel" aria-live="polite">
-        <div class="objectives-panel-header">
-          <span>OBJECTIVES</span>
-          <div class="objectives-toggle" role="tablist" aria-label="Objectives view">
-            <button type="button" class="objective-view-btn active" data-objective-view="current" role="tab" aria-selected="true">Current</button>
-            <button type="button" class="objective-view-btn" data-objective-view="available" role="tab" aria-selected="false">Available</button>
+        <div class="objectives-panel-inner">
+          <div class="objectives-panel-header">
+            <span>OBJECTIVES</span>
+            <div class="objectives-toggle" role="tablist" aria-label="Objectives view">
+              <button type="button" class="objective-view-btn active" data-objective-view="current" role="tab" aria-selected="true">Current</button>
+              <button type="button" class="objective-view-btn" data-objective-view="available" role="tab" aria-selected="false">Available</button>
+            </div>
           </div>
+          <section id="current-objective-pane" class="objective-pane">
+            <div class="objective-kicker" id="objective-kicker">DIRECTOR IDLE</div>
+            <h4 id="objective-title">Free Roam</h4>
+            <p id="objective-body">Launch the ship, pick a project node, or accept a contract.</p>
+            <div class="objective-tracked-badge">TRACKED IN HUD</div>
+            <div class="objective-progress" id="objective-progress">NO ACTIVE OBJECTIVE</div>
+          </section>
+          <section id="available-objectives-pane" class="objective-pane" hidden>
+            <div id="available-objectives-list" class="available-objectives-list"></div>
+          </section>
         </div>
-        <section id="current-objective-pane" class="objective-pane">
-          <div class="objective-kicker" id="objective-kicker">DIRECTOR IDLE</div>
-          <h4 id="objective-title">Free Roam</h4>
-          <p id="objective-body">Launch the ship, pick a project node, or accept a contract.</p>
-          <div class="objective-progress" id="objective-progress">NO ACTIVE OBJECTIVE</div>
-        </section>
-        <section id="available-objectives-pane" class="objective-pane" hidden>
-          <div id="available-objectives-list" class="available-objectives-list"></div>
-        </section>
       </div>
       <div></div> <!-- Spacer -->
     </div>
@@ -497,9 +498,17 @@
   <div class="cockpit-overlay" id="cockpit-overlay">
     <div class="cockpit-vignette"></div>
     <div class="cockpit-reticle"></div>
+    <div class="radar-panel hud-interactive" aria-live="polite">
+      <div class="radar-panel-inner">
+        <div class="radar-title">TACTICAL RADAR</div>
+        <canvas id="cockpit-radar" class="cockpit-radar" width="220" height="220" aria-hidden="true"></canvas>
+        <div class="radar-range">RANGE 12KM</div>
+      </div>
+    </div>
     <div class="cockpit-frame cockpit-frame-left">
       <div class="cockpit-frame-content">
         <div class="flight-resource-panel flight-resource-left" aria-live="polite">
+          <div class="resource-panel-title">SHIP STATUS</div>
           <div class="resource-row"><span>SPEED</span><strong id="flight-speed">0</strong></div>
           <div class="resource-meter"><span id="flight-speed-bar"></span></div>
           <div class="resource-row"><span>SHIELDS</span><strong id="flight-shields-detail">100</strong></div>
@@ -513,21 +522,13 @@
         </div>
       </div>
     </div>
-    <div class="cockpit-frame cockpit-frame-right">
-      <div class="cockpit-frame-content">
-        <div class="flight-resource-panel flight-resource-right" aria-live="polite">
-          <div class="radar-module">
-            <div class="radar-title">TACTICAL RADAR</div>
-            <canvas id="cockpit-radar" class="cockpit-radar" width="220" height="220" aria-hidden="true"></canvas>
-          </div>
-          <div class="resource-row"><span>ARMOR</span><strong id="flight-armor">100</strong></div>
-          <div class="resource-meter armor"><span id="flight-armor-bar"></span></div>
-          <div class="resource-row"><span>LASER AMMO</span><strong id="flight-ammo">240</strong></div>
-          <div class="resource-meter ammo"><span id="flight-ammo-bar"></span></div>
-          <div class="resource-row"><span>MISSILES</span><strong id="flight-missiles">8</strong></div>
-          <div class="resource-meter missile"><span id="flight-missile-bar"></span></div>
-        </div>
-      </div>
+    <div class="hud-hidden-telemetry" aria-hidden="true">
+      <strong id="flight-armor">100</strong>
+      <span id="flight-armor-bar"></span>
+      <strong id="flight-ammo">240</strong>
+      <span id="flight-ammo-bar"></span>
+      <strong id="flight-missiles">8</strong>
+      <span id="flight-missile-bar"></span>
     </div>
     <div class="cockpit-dash">
       <span>COCKPIT_VIEW</span>
