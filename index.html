@@ -410,8 +410,17 @@
   <div class="flight-nav-marker" id="flight-nav-marker" aria-hidden="true">NAV</div>
 
   <div class="cockpit-overlay" id="cockpit-overlay">
+    <div id="hud-master-warning" class="hud-master-warning" aria-live="assertive"></div>
     <div class="cockpit-vignette"></div>
-    <div class="cockpit-reticle"></div>
+    <div class="cockpit-reticle-container">
+      <div class="cockpit-reticle"></div>
+      <svg class="cockpit-reticle-arches" viewBox="0 0 200 200" aria-hidden="true">
+        <!-- Left arch for Shields -->
+        <path id="reticle-shield-arch" d="M 65,35 A 70,70 0 0,0 65,165" fill="none" stroke="var(--cyber-cyan)" stroke-width="3" stroke-dasharray="220" stroke-dashoffset="0"/>
+        <!-- Right arch for Heat -->
+        <path id="reticle-heat-arch" d="M 135,35 A 70,70 0 0,1 135,165" fill="none" stroke="var(--cyber-pink)" stroke-width="3" stroke-dasharray="220" stroke-dashoffset="0"/>
+      </svg>
+    </div>
 
     <!-- TOP LEFT: Radar -->
     <div class="radar-panel hud-interactive" aria-live="polite">
@@ -454,6 +463,8 @@
           <div class="resource-meter"><span id="flight-speed-bar"></span></div>
           <div class="resource-bar"><span class="resource-bar-label">SHIELDS</span><strong id="flight-shields-detail" class="resource-bar-value">100</strong></div>
           <div class="resource-meter shield"><span id="flight-shield-bar"></span></div>
+          <div class="resource-bar"><span class="resource-bar-label">ARMOR</span><strong id="flight-armor" class="resource-bar-value">100%</strong></div>
+          <div class="resource-meter armor"><span id="flight-armor-bar"></span></div>
           <div class="resource-bar"><span class="resource-bar-label">ENERGY</span><strong id="flight-energy" class="resource-bar-value">100</strong></div>
           <div class="resource-meter energy"><span id="flight-energy-bar"></span></div>
           <div class="resource-bar"><span class="resource-bar-label">HEAT</span><strong id="flight-heat-cockpit" class="resource-bar-value">0</strong></div>
@@ -469,35 +480,41 @@
       <div class="cockpit-dash-center-inner">
         <div class="dash-center-title">COMBAT // NAV</div>
         <div class="dash-center-grid">
-
-          <!-- Row 1 -->
-          <div class="dash-cell">
-            <span class="dash-label">PRIMARY WPN</span>
-            <strong id="flight-weapon-primary-c">LASER Mk.I</strong>
+          <!-- Column 1 (WEAPON SYSTEMS) -->
+          <div class="dash-column">
+            <div class="dash-cell">
+              <span class="dash-label">PRIMARY WPN</span>
+              <strong id="flight-weapon-primary-c">LASER Mk.I</strong>
+            </div>
+            <div class="dash-cell">
+              <span class="dash-label">SECONDARY WPN</span>
+              <strong id="flight-weapon-secondary-c">MISSILE RACK</strong>
+            </div>
           </div>
-          <div class="dash-cell dash-cell-center">
-            <span class="dash-label">CROSSHAIR TARGET</span>
-            <strong id="flight-crosshair-c">NO PROJECT</strong>
+          
+          <!-- Column 2 (TARGET SYSTEM) -->
+          <div class="dash-column dash-column-center">
+            <div class="dash-cell">
+              <span class="dash-label">CROSSHAIR TARGET</span>
+              <strong id="flight-crosshair-c">NO PROJECT</strong>
+            </div>
+            <div class="dash-cell">
+              <span class="dash-label">LOCKED THREAT</span>
+              <strong id="flight-threat-c">NO THREAT</strong>
+            </div>
           </div>
-          <div class="dash-cell">
-            <span class="dash-label">NAV TARGET</span>
-            <strong id="flight-nav-target-c">NONE</strong>
+          
+          <!-- Column 3 (NAV & TELEMETRY) -->
+          <div class="dash-column">
+            <div class="dash-cell">
+              <span class="dash-label">NAV TARGET</span>
+              <strong id="flight-nav-target-c">NONE</strong>
+            </div>
+            <div class="dash-cell">
+              <span class="dash-label">AUTOPILOT / ETA</span>
+              <strong id="flight-nav-telemetry-c">OFF // --</strong>
+            </div>
           </div>
-
-          <!-- Row 2 -->
-          <div class="dash-cell">
-            <span class="dash-label">SECONDARY WPN</span>
-            <strong id="flight-weapon-secondary-c">MISSILE RACK</strong>
-          </div>
-          <div class="dash-cell dash-cell-center">
-            <span class="dash-label">ETA</span>
-            <strong id="flight-nav-eta-c">--</strong>
-          </div>
-          <div class="dash-cell">
-            <span class="dash-label">AUTOPILOT</span>
-            <strong id="flight-autopilot-c">OFF</strong>
-          </div>
-
         </div>
         <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // C CAM // T TRADE // I INVENTORY</div>
       </div>
@@ -517,15 +534,7 @@
             <strong id="flight-credits">1000CR</strong>
             <span id="flight-credit-gain" class="credit-gain-indicator"></span>
           </div>
-          <div>
-            <span class="flight-hud-label">SHIELD</span>
-            <strong id="flight-shield">100</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">HEAT</span>
-            <strong id="flight-heat">0/100</strong>
-          </div>
-          <div>
+          <div class="hud-peace-only">
             <span class="flight-hud-label">XP</span>
             <div class="hud-xp-row">
               <span id="flight-sp">SP: 3</span>
@@ -533,12 +542,21 @@
               <span id="flight-xp-label">XP 0/100</span>
             </div>
           </div>
-          <div>
+          <div class="hud-peace-only">
             <span class="flight-hud-label">NEAREST PROJECT</span>
             <strong id="flight-target">NONE</strong>
           </div>
+          <div class="hud-combat-only">
+            <span class="flight-hud-label">AMMO</span>
+            <strong id="flight-ammo">240</strong>
+            <div class="resource-meter ammo"><span id="flight-ammo-bar"></span></div>
+          </div>
+          <div class="hud-combat-only">
+            <span class="flight-hud-label">MISSILES</span>
+            <strong id="flight-missiles">8</strong>
+            <div class="resource-meter missile"><span id="flight-missile-bar"></span></div>
+          </div>
         </div>
-        <div class="mini-meter heat"><span id="flight-heat-bar" class="heat-bar-fill"></span></div>
         <div class="hud-hidden-telemetry" aria-hidden="true">
           <strong id="flight-score">0</strong>
         </div>
@@ -546,12 +564,6 @@
     </div>
 
     <div class="hud-hidden-telemetry" aria-hidden="true">
-      <strong id="flight-armor">100</strong>
-      <span id="flight-armor-bar"></span>
-      <strong id="flight-ammo">240</strong>
-      <span id="flight-ammo-bar"></span>
-      <strong id="flight-missiles">8</strong>
-      <span id="flight-missile-bar"></span>
       <strong id="flight-weapon-primary">LASER Mk.I</strong>
       <strong id="flight-crosshair-target">NO PROJECT</strong>
       <strong id="flight-nav-target">NONE</strong>
@@ -612,8 +624,6 @@
         'flight-weapon-primary': 'flight-weapon-primary-c',
         'flight-crosshair-target': 'flight-crosshair-c',
         'flight-nav-target': 'flight-nav-target-c',
-        'flight-nav-eta': 'flight-nav-eta-c',
-        'flight-autopilot': 'flight-autopilot-c',
         'flight-weapon-secondary': 'flight-weapon-secondary-c',
       };
 

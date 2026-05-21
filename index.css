@@ -3326,3 +3326,138 @@ body.flight-active .cockpit-frame.cockpit-frame-left {
   /* The new fixed-position block below overrides layout; suppress old absolute positioning */
   position: fixed !important;
 }
+
+/* ==========================================================================
+   COCKPIT HUD REDESIGN STYLES
+   ========================================================================== */
+
+.cockpit-reticle-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  pointer-events: none;
+  z-index: 9005;
+}
+.cockpit-reticle-arches {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 5px rgba(0, 240, 255, 0.45));
+  pointer-events: none;
+}
+#reticle-shield-arch {
+  transition: stroke-dashoffset 0.25s ease;
+  filter: drop-shadow(0 0 3px var(--cyber-cyan));
+}
+#reticle-heat-arch {
+  transition: stroke-dashoffset 0.25s ease;
+  filter: drop-shadow(0 0 3px var(--cyber-pink));
+}
+
+.resource-meter.armor span {
+  background: rgba(148, 163, 184, 0.8);
+  box-shadow: 0 0 6px rgba(148, 163, 184, 0.5);
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.hud-combat-only {
+  display: none;
+}
+.cockpit-overlay.combat-active .hud-peace-only {
+  display: none !important;
+}
+.cockpit-overlay.combat-active .hud-combat-only {
+  display: flex !important;
+}
+/* Style the dynamic resource meters inside the grid */
+.hud-combat-only .resource-meter {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-top: 2px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+.hud-combat-only .resource-meter.ammo span {
+  background: var(--cyber-yellow);
+  box-shadow: 0 0 4px var(--cyber-yellow);
+  display: block;
+  height: 100%;
+}
+.hud-combat-only .resource-meter.missile span {
+  background: var(--cyber-pink);
+  box-shadow: 0 0 4px var(--cyber-pink);
+  display: block;
+  height: 100%;
+}
+
+.cockpit-overlay.hud-docked .radar-panel,
+.cockpit-overlay.hud-docked .objectives-panel,
+.cockpit-overlay.hud-docked .cockpit-frame-left,
+.cockpit-overlay.hud-docked .cockpit-dash-center,
+.cockpit-overlay.hud-docked #flight-hud {
+  opacity: 0.16 !important;
+  pointer-events: none !important;
+  filter: grayscale(0.5) blur(0.5px);
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+.hud-master-warning {
+  position: fixed;
+  top: 15vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9600;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  letter-spacing: 0.22em;
+  color: #ff3355;
+  background: rgba(18, 2, 8, 0.88);
+  border: 1px solid #ff3355;
+  padding: 10px 28px;
+  box-shadow: 0 0 24px rgba(255, 51, 85, 0.35), inset 0 0 12px rgba(255, 51, 85, 0.2);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10% 100%, 0 50%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  text-transform: uppercase;
+  text-align: center;
+}
+.hud-master-warning.active {
+  opacity: 1;
+  animation: hud-flash-warning 1s infinite steps(2, start);
+}
+@keyframes hud-flash-warning {
+  0%, 100% {
+    border-color: #ff3355;
+    color: #ff3355;
+    box-shadow: 0 0 24px rgba(255, 51, 85, 0.35);
+  }
+  50% {
+    border-color: transparent;
+    color: transparent;
+    box-shadow: none;
+  }
+}
+
+.dash-center-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr !important;
+  grid-template-rows: 1fr !important;
+  gap: 16px;
+  overflow: hidden;
+}
+.dash-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+}
+.dash-column-center {
+  border-left: 1px solid rgba(0, 240, 255, 0.12);
+  border-right: 1px solid rgba(0, 240, 255, 0.12);
+  padding: 0 10px;
+}

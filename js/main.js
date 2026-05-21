@@ -4661,10 +4661,12 @@ function updateFlightHud(force) {
   }
   if (flightArmor) flightArmor.textContent = `${Math.round(flightState.armor)}%`;
   if (flightArmorBar) flightArmorBar.style.width = `${Math.max(0, flightState.armor).toFixed(1)}%`;
-  if (flightAmmo) flightAmmo.textContent = `${flightState.ammo}/${maxPlayerAmmo}`;
+  
+  if (flightAmmo) flightAmmo.textContent = String(flightState.ammo);
   if (flightAmmoBar) flightAmmoBar.style.width = `${((flightState.ammo / maxPlayerAmmo) * 100).toFixed(1)}%`;
-  if (flightMissiles) flightMissiles.textContent = `${flightState.missiles}/${maxPlayerMissilesStored}`;
+  if (flightMissiles) flightMissiles.textContent = String(flightState.missiles);
   if (flightMissileBar) flightMissileBar.style.width = `${((flightState.missiles / maxPlayerMissilesStored) * 100).toFixed(1)}%`;
+  
   if (flightHeat) flightHeat.textContent = `${Math.round(combatState.heat)}/${combatState.maxHeat}`;
   if (flightHeatCockpit) flightHeatCockpit.textContent = `${Math.round(combatState.heat)}`;
   [flightHeatBar, flightHeatBarCockpit].forEach(bar => {
@@ -4684,6 +4686,65 @@ function updateFlightHud(force) {
   const secondaryWeaponName = WEAPON_DEFS.find(weapon => weapon.id === combatState.secondaryWeapon)?.name || '--';
   if (flightWeaponPrimary) flightWeaponPrimary.textContent = primaryWeaponName;
   if (flightWeaponSecondary) flightWeaponSecondary.textContent = secondaryWeaponName;
+
+  // Reticle arches
+  const shieldOffset = Math.max(0, 220 - (220 * (flightState.shield / maxShield)));
+  const reticleShieldArch = document.getElementById('reticle-shield-arch');
+  if (reticleShieldArch) reticleShieldArch.style.strokeDashoffset = String(shieldOffset);
+
+  const heatOffset = Math.max(0, 220 - (220 * (combatState.heat / combatState.maxHeat)));
+  const reticleHeatArch = document.getElementById('reticle-heat-arch');
+  if (reticleHeatArch) reticleHeatArch.style.strokeDashoffset = String(heatOffset);
+
+  // Lock locked threat target in center dash
+  const flightThreatEl = document.getElementById('flight-threat-c');
+  if (flightThreatEl) {
+    const nearestEnemy = typeof findNearestEnemy === 'function' ? findNearestEnemy() : null;
+    if (nearestEnemy && nearestEnemy.userData && nearestEnemy.userData.active) {
+      const clsId = nearestEnemy.userData.classId || 'scout';
+      const dist = playerShip.position.distanceTo(nearestEnemy.position);
+      flightThreatEl.textContent = `${clsId.toUpperCase()} [${Math.round(dist)}u]`;
+      flightThreatEl.style.color = '#ff3355';
+    } else {
+      flightThreatEl.textContent = 'NO THREAT';
+      flightThreatEl.style.color = 'var(--cyber-yellow)';
+    }
+  }
+
+  // Autopilot & ETA combination update for nav-telemetry
+  const flightNavTelemetryEl = document.getElementById('flight-nav-telemetry-c');
+  if (flightNavTelemetryEl) {
+    const apText = flightState.autopilot ? 'AP: ON' : 'AP: OFF';
+    flightNavTelemetryEl.textContent = `${apText} // ETA:${flightState.navEta}`;
+  }
+
+  // Active Combat HUD state swapping
+  const cockpitOverlayEl = document.getElementById('cockpit-overlay');
+  if (cockpitOverlayEl) {
+    const inCombat = enemies.some(e => e.userData.active) || combatState.adrenaline > 0;
+    cockpitOverlayEl.classList.toggle('combat-active', inCombat);
+    cockpitOverlayEl.classList.toggle('hud-docked', Boolean(flightState.landed));
+  }
+
+  // Master Warning alert bar
+  const masterWarningEl = document.getElementById('hud-master-warning');
+  if (masterWarningEl) {
+    let warningText = '';
+    if (combatState.overheated) {
+      warningText = 'WARNING: WEAPONS OVERHEATED';
+    } else if (flightState.shield <= 0) {
+      warningText = 'WARNING: SHIELDS DEPLETED';
+    } else if (flightState.armor <= 25) {
+      warningText = 'WARNING: HULL INTEGRITY CRITICAL';
+    }
+    
+    if (warningText) {
+      masterWarningEl.textContent = warningText;
+      masterWarningEl.classList.add('active');
+    } else {
+      masterWarningEl.classList.remove('active');
+    }
+  }
 }
 
 function updateTtsStatusIndicator() {
