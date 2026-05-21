@@ -127,6 +127,32 @@ body {
   opacity: 0.055;
 }
 
+#adrenaline-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 150;
+  background: radial-gradient(ellipse at center, transparent 38%, rgba(255, 20, 20, 0.45) 100%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.hud-hit { animation: hudHitFlash 0.18s ease-out forwards; }
+
+@keyframes hudHitFlash {
+  0% { filter: brightness(2.2) hue-rotate(340deg) saturate(2); }
+  100% { filter: none; }
+}
+
+.afterburner-active { filter: hue-rotate(20deg) saturate(1.4); transition: filter 0.3s; }
+
+.heat-bar-fill { background: #44ff44; transition: background 0.2s; }
+.heat-bar-fill.heat-warm { background: #ffcc00; }
+.heat-bar-fill.heat-hot { background: #ff4400; }
+.heat-bar-fill.heat-over { background: #ff0000; animation: heatFlicker 0.25s infinite; }
+
+@keyframes heatFlicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
 /* Three.js Canvas Container */
 #canvas-container {
   position: absolute;
@@ -1337,6 +1363,26 @@ body.flight-active .flight-nav-marker.active {
   white-space: nowrap;
 }
 
+.mini-meter {
+  height: 8px;
+  margin: 4px 0 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  overflow: hidden;
+}
+
+.mini-meter span {
+  display: block;
+  width: 0%;
+  height: 100%;
+  background: rgba(0, 255, 102, 0.82);
+  transition: width 0.16s linear;
+}
+
+.mini-meter.heat span {
+  background: #44ff44;
+}
+
 .flight-hud-help {
   margin-top: 14px;
   color: rgba(203, 213, 225, 0.7);
@@ -1590,6 +1636,14 @@ body.flight-active .flight-resource-panel {
 
 .resource-meter.energy span {
   background: rgba(255, 204, 0, 0.9);
+}
+
+.resource-meter.heat span {
+  background: #44ff44;
+}
+
+.resource-meter.fuel span {
+  background: rgba(0, 255, 102, 0.84);
 }
 
 .resource-meter.armor span {

@@ -14,11 +14,11 @@ function listen(server) {
 }
 
 async function loadTTSBrowserContext() {
-  const appSource = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+  const appSource = await readFile(new URL('../js/main.js', import.meta.url), 'utf8');
   const start = appSource.indexOf('function numToWord');
   const end = appSource.indexOf('function getRenderPixelRatio');
-  assert.notEqual(start, -1, 'Expected app.js TTS helper start marker');
-  assert.notEqual(end, -1, 'Expected app.js TTS helper end marker');
+  assert.notEqual(start, -1, 'Expected js/main.js TTS helper start marker');
+  assert.notEqual(end, -1, 'Expected js/main.js TTS helper end marker');
 
   const context = vm.createContext({
     AbortController,
@@ -28,6 +28,9 @@ async function loadTTSBrowserContext() {
     Promise,
     String,
     URL,
+    gameOrchestrator: {},
+    pollOrchestrator() {},
+    buildOrchestratorPayload() {},
     fetch: async () => ({ ok: false }),
     setTimeout,
     clearTimeout,

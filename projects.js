@@ -529,3 +529,6 @@ const USSY_CATEGORIES = {
     "color": "#ff0055" // Cyber Pink
   }
 };
+
+window.USSY_PROJECTS = USSY_PROJECTS;
+window.USSY_CATEGORIES = USSY_CATEGORIES;

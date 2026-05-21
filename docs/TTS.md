@@ -55,3 +55,35 @@ Diagram:
 ttsEngine.speak()   -> comms channel  -> priority-gated radio chain with clicks
 combatAudio.bark()  -> combat channel -> capped overlapping barks, no click noise
 ```
+
+## API
+
+| Function/Object | Purpose |
+| --- | --- |
+| `ttsEngine.speak(text, options)` | Speak a radio line with priority, pitch, rate, volume, and voice ID |
+| `ttsEngine.stop()` | Cancel active speech |
+| `preprocessRadioText(text)` | Strip markup and normalize radio wording |
+| `getTtsPriorityRank(priority)` | Rank low, normal, high, and mission messages |
+| `setTTSBackendEnabled(enabled)` | Toggle same-origin backend TTS from the browser console |
+
+## Radio Chain
+
+The main app keeps a radio-style audio chain for browser speech and backend audio. It adds click-in/click-out effects, highpass/lowpass filtering, compression, and short noise beds when the Web Audio context is available.
+
+## Voice Personas
+
+| Source | Persona |
+| --- | --- |
+| USSYVERSE CONTROL | Low, steady mission controller |
+| DEVUSSY DOCK CONTROL | Dock/station operator |
+| COMBAT SYSTEM | Fast combat bark |
+| NAVIGATION | Clear nav assistant |
+| FACTION COMMS | Contract/faction voice |
+
+## OpenRouter AI Voice
+
+Backend AI voice is proxied through the same-origin `/api/tts` endpoint. Keep `OPENROUTER_API_KEY` on the server; do not expose it in browser code.
+
+## Kill Callouts
+
+The combat pool includes: SPLASH ONE, BOGEY DOWN, KILL CONFIRMED, TARGET ELIMINATED, FOX TWO AWAY, TALLY HO, GUNS GUNS GUNS, BANDIT DOWN, CLEARED HOT, WINCHESTER ACHIEVED, SPLASH ANOTHER, GOOD KILL, RADAR CONTACT LOST, BINGO BINGO, BREAKING RIGHT, ENGAGED.

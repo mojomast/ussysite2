@@ -1,5 +1,25 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
+import { configureTrader, openTradeMenu, refuelAt, traderState, updateFuelDrain } from './economy/trader.js';
+import {
+  ENEMY_CLASSES,
+  WEAPON_DEFS,
+  WEAPON_PRICES,
+  SKILL_TREE_NODES,
+  addCombatXp,
+  applyDamageModel,
+  applyHeatShot,
+  getDifficultyTier,
+  getEnemyClass,
+  getRandomClassForTier,
+  getStationEquipment,
+  getWeaponDef
+} from './flight/combat-overhaul.js';
+import { activateEnemyWave, buildOrchestratorGameState } from './flight/orchestrator.js';
+
+const USSY_PROJECTS = window.USSY_PROJECTS || [];
+const USSY_CATEGORIES = window.USSY_CATEGORIES || {};
+
 let scene, camera, renderer;
 let coreGroup, nodesGroup, connectionsGroup;
 let coreMesh, coreOuterParticles;
@@ -98,6 +118,9 @@ const flightState = {
   energy: 100,
   ammo: 240,
   missiles: 8,
+  fuel: 100,
+  maxFuel: 100,
+  fuelDepleted: false,
   lastTime: 0,
   lastShot: 0,
   lastMissile: 0,
@@ -113,16 +136,35 @@ const flightState = {
   landed: false,
   shieldCriticalSpoken: false,
   finalApproachSpoken: false,
+  currentDockedProject: null,
   lastHudUpdate: 0,
   mouseSensitivity: 0.0022,
   thrust: 14,
   strafe: 8,
-  damping: 0.985,
-  fireCooldown: 140,
-  missileCooldown: 900,
-  laserEnergyCost: 2.5,
-  missileEnergyCost: 18,
-  enemyFireCooldown: 1500
+  damping: 0.985
+};
+
+const combatState = {
+  credits: 1000,
+  xp: 0,
+  xpToNextPoint: 100,
+  skillPoints: 0,
+  heat: 0,
+  maxHeat: 100,
+  overheated: false,
+  heatCoolRate: 12,
+  lastHitAt: 0,
+  shieldRegenRate: 4,
+  shieldRegenDelay: 5000,
+  adrenaline: 0,
+  adrenalineDecay: 0.04,
+  afterburnerActive: false,
+  afterburnerUntil: 0,
+  afterburnerCooldownUntil: 0,
+  bountyPending: 0,
+  overchargeUsed: false,
+  lastAdrenalineBarkAt: 0,
+  lastAdrenalineFrame: 0
 };
 
 const enemies = [];
@@ -144,12 +186,94 @@ const radarRange = 140;
 let radarLastUpdate = 0;
 let activeUniverseScale = 1;
 
+const loadoutState = {
+  primary: 'laser_mk1',
+  secondary: 'missile_rack',
+  getWeapon(slot) {
+    return getWeaponDef(this[slot]);
+  }
+};
+
+const skillTree = {
+  unlocked: new Set(),
+
+  canUnlock(nodeId) {
+    const node = SKILL_TREE_NODES.find(item => item.id === nodeId);
+    if (!node) return false;
+    if (this.unlocked.has(nodeId)) return false;
+    if (combatState.skillPoints < node.cost) return false;
+    if (node.requires && !this.unlocked.has(node.requires)) return false;
+    return true;
+  },
+
+  unlock(nodeId) {
+    if (!this.canUnlock(nodeId)) return false;
+    const node = SKILL_TREE_NODES.find(item => item.id === nodeId);
+    combatState.skillPoints -= node.cost;
+    this.unlocked.add(nodeId);
+    this.applyAll();
+    return true;
+  },
+
+  getMaxShield() {
+    let value = 100;
+    if (this.unlocked.has('shield_1')) value += 25;
+    if (this.unlocked.has('shield_2')) value += 25;
+    return value;
+  },
+
+  getMaxArmor() {
+    let value = 100;
+    if (this.unlocked.has('hull_1')) value += 20;
+    if (this.unlocked.has('hull_2')) value += 30;
+    return value;
+  },
+
+  getMaxEnergy() {
+    return this.unlocked.has('weap_1') ? 120 : 100;
+  },
+
+  getPrimaryCooldown(weapon) {
+    const multiplier = this.unlocked.has('weap_3') ? 0.85 : 1;
+    return weapon.cooldown * multiplier;
+  },
+
+  getArmorDamageMultiplier() {
+    return this.unlocked.has('hull_3') ? 0.85 : 1;
+  },
+
+  applyAll() {
+    let thrust = 14;
+    if (this.unlocked.has('eng_1')) thrust += 3;
+    if (this.unlocked.has('eng_2')) thrust += 3;
+    flightState.thrust = thrust;
+    flightState.damping = this.unlocked.has('eng_4') ? 0.975 : 0.985;
+    flightState.energy = Math.min(Math.max(flightState.energy, this.getMaxEnergy()), this.getMaxEnergy());
+    combatState.maxHeat = this.unlocked.has('weap_2') ? 130 : 100;
+    combatState.shieldRegenDelay = this.unlocked.has('shield_3') ? 3000 : 5000;
+  }
+};
+
 const missionState = {
   active: false,
   step: 'idle',
   killGoal: 5,
   kills: 0,
   landingProjectId: 'devussy'
+};
+
+const gameOrchestrator = {
+  enabled: true,
+  polling: false,
+  lastEventTime: 0,
+  lastEventId: null,
+  minInterval: 40000,
+  maxInterval: 90000,
+  nextPollAt: 0,
+  tutorialComplete: false,
+  pendingEvent: null,
+  bountyPendingReward: 0,
+  _lastCheck: 0
 };
 
 const gameMessageState = {
@@ -592,6 +716,9 @@ function setTTSBackendEnabled(enabled = true) {
 }
 
 window.setTTSBackendEnabled = setTTSBackendEnabled;
+window.gameOrchestrator = gameOrchestrator;
+window.pollOrchestrator = pollOrchestrator;
+window.buildOrchestratorPayload = buildOrchestratorPayload;
 
 function buildBackendTTSRequest(text, persona = {}) {
   return {
@@ -630,12 +757,20 @@ async function fetchTTSSpeech(text, persona = {}, signal = null) {
 window.__USSY_TTS_DEBUG__ = {
   ttsConfig,
   setTTSBackendEnabled,
+  ttsEngine,
+  radioChain,
   fetchTTSSpeech,
   buildBackendTTSRequest,
   combatAudio,
+  ENEMY_CLASSES: typeof ENEMY_CLASSES !== 'undefined' ? ENEMY_CLASSES : [],
+  WEAPON_DEFS: typeof WEAPON_DEFS !== 'undefined' ? WEAPON_DEFS : [],
+  loadoutState: typeof loadoutState !== 'undefined' ? loadoutState : null,
   preprocessRadioText,
   getVoicePersona: source => getVoicePersona(source)
 };
+window.__USSY_TTS_ENGINE__ = ttsEngine;
+window.__USSY_LOADOUT__ = typeof loadoutState !== 'undefined' ? loadoutState : null;
+window.__USSY_SKILL_TREE__ = typeof skillTree !== 'undefined' ? skillTree : null;
 
 if (ttsEngine.supported) {
   window.speechSynthesis.onvoiceschanged = () => ttsEngine.initVoices();
@@ -729,12 +864,24 @@ const flightShieldsDetail = document.getElementById('flight-shields-detail');
 const flightShieldBar = document.getElementById('flight-shield-bar');
 const flightEnergy = document.getElementById('flight-energy');
 const flightEnergyBar = document.getElementById('flight-energy-bar');
+const flightFuel = document.getElementById('flight-fuel');
+const flightFuelBar = document.getElementById('flight-fuel-bar');
 const flightArmor = document.getElementById('flight-armor');
 const flightArmorBar = document.getElementById('flight-armor-bar');
 const flightAmmo = document.getElementById('flight-ammo');
 const flightAmmoBar = document.getElementById('flight-ammo-bar');
 const flightMissiles = document.getElementById('flight-missiles');
 const flightMissileBar = document.getElementById('flight-missile-bar');
+const flightHeat = document.getElementById('flight-heat');
+const flightHeatBar = document.getElementById('flight-heat-bar');
+const flightHeatCockpit = document.getElementById('flight-heat-cockpit');
+const flightHeatBarCockpit = document.getElementById('flight-heat-bar-cockpit');
+const flightCredits = document.getElementById('flight-credits');
+const flightXpBar = document.getElementById('flight-xp-bar');
+const flightSp = document.getElementById('flight-sp');
+const flightWeaponPrimary = document.getElementById('flight-weapon-primary');
+const flightWeaponSecondary = document.getElementById('flight-weapon-secondary');
+const adrenalineVignette = document.getElementById('adrenaline-vignette');
 const gameMessageSystem = document.getElementById('game-message-system');
 const gameMessageType = document.getElementById('game-message-type');
 const gameMessageSource = document.getElementById('game-message-source');
@@ -763,6 +910,13 @@ let inspectHowLabel, inspectHowBody;
 
 // Init application
 function init() {
+  configureTrader({
+    showGameMessage,
+    dismissGameMessage,
+    updateFlightHud,
+    getVoicePersona
+  });
+
   // Initialize Three.js Scene
   scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x03060f, 0.02);
@@ -1109,29 +1263,10 @@ function createFlightGameObjects() {
   });
   gameRoot.add(playerShip);
 
-  const enemyBodyGeo = new THREE.SphereGeometry(0.32, 10, 8);
-  const enemyBodyMat = new THREE.MeshBasicMaterial({ color: 0xff3355, wireframe: true, transparent: true, opacity: 0.95 });
-  const enemyWingGeo = new THREE.BoxGeometry(0.08, 1.05, 1.05);
-  const enemyWingMat = new THREE.MeshBasicMaterial({ color: 0xb8c4d8, wireframe: true, transparent: true, opacity: 0.78 });
-  const enemyStrutGeo = new THREE.BoxGeometry(0.78, 0.05, 0.05);
-  const enemyStrutMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true, transparent: true, opacity: 0.65 });
   for (let i = 0; i < maxEnemies; i++) {
     const enemy = new THREE.Group();
-    const body = new THREE.Mesh(enemyBodyGeo, enemyBodyMat.clone());
-    const leftWing = new THREE.Mesh(enemyWingGeo, enemyWingMat.clone());
-    const rightWing = new THREE.Mesh(enemyWingGeo, enemyWingMat.clone());
-    const strut = new THREE.Mesh(enemyStrutGeo, enemyStrutMat.clone());
-    const antenna = new THREE.Mesh(
-      new THREE.ConeGeometry(0.05, 0.48, 5),
-      new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true, transparent: true, opacity: 0.7 })
-    );
-    leftWing.position.x = -0.55;
-    rightWing.position.x = 0.55;
-    antenna.rotation.x = -Math.PI / 2;
-    antenna.position.z = -0.42;
-    enemy.add(body, leftWing, rightWing, strut, antenna);
     enemy.visible = false;
-    enemy.userData = { active: false, health: 1, cooldown: 500 + Math.random() * 1200, radius: 0.62 };
+    enemy.userData = { active: false, health: 1, maxHealth: 1, cooldown: 500 + Math.random() * 1200, radius: 0.62, classId: 'scout' };
     gameRoot.add(enemy);
     enemies.push(enemy);
   }
@@ -1139,7 +1274,7 @@ function createFlightGameObjects() {
   const playerBulletGeo = new THREE.CylinderGeometry(0.025, 0.025, 1.8, 6);
   const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0x66ff44, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending });
   for (let i = 0; i < maxPlayerBullets; i++) {
-    const bullet = new THREE.Mesh(playerBulletGeo, playerBulletMat);
+    const bullet = new THREE.Mesh(playerBulletGeo, playerBulletMat.clone());
     bullet.visible = false;
     bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.22 };
     gameRoot.add(bullet);
@@ -1149,7 +1284,7 @@ function createFlightGameObjects() {
   const enemyBulletGeo = new THREE.CylinderGeometry(0.026, 0.026, 1.55, 6);
   const enemyBulletMat = new THREE.MeshBasicMaterial({ color: 0xff3355, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
   for (let i = 0; i < maxEnemyBullets; i++) {
-    const bullet = new THREE.Mesh(enemyBulletGeo, enemyBulletMat);
+    const bullet = new THREE.Mesh(enemyBulletGeo, enemyBulletMat.clone());
     bullet.visible = false;
     bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.2 };
     gameRoot.add(bullet);
@@ -1159,7 +1294,7 @@ function createFlightGameObjects() {
   const missileGeo = new THREE.ConeGeometry(0.09, 0.72, 8);
   const missileMat = new THREE.MeshBasicMaterial({ color: 0xfff2cf, wireframe: true, transparent: true, opacity: 0.95 });
   for (let i = 0; i < maxPlayerMissiles; i++) {
-    const missile = new THREE.Mesh(missileGeo, missileMat);
+    const missile = new THREE.Mesh(missileGeo, missileMat.clone());
     missile.visible = false;
     missile.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.36, target: null };
     gameRoot.add(missile);
@@ -1780,6 +1915,34 @@ function enterFlightMode() {
   flightState.energy = 100;
   flightState.ammo = maxPlayerAmmo;
   flightState.missiles = maxPlayerMissilesStored;
+  flightState.fuel = flightState.maxFuel;
+  flightState.fuelDepleted = false;
+  flightState.currentDockedProject = null;
+  flightState.thrust = 14;
+  flightState.strafe = 8;
+  flightState.damping = 0.985;
+  combatState.xp = 0;
+  combatState.xpToNextPoint = 100;
+  combatState.skillPoints = 0;
+  combatState.heat = 0;
+  combatState.overheated = false;
+  combatState.adrenaline = 0;
+  combatState.afterburnerActive = false;
+  combatState.afterburnerUntil = 0;
+  combatState.afterburnerCooldownUntil = 0;
+  combatState.overchargeUsed = false;
+  syncCombatCreditsFromTrader();
+  skillTree.unlocked.clear();
+  skillTree.applyAll();
+  traderState.fuel = traderState.maxFuel;
+  traderState.docked = false;
+  traderState.dockedStation = null;
+  gameOrchestrator.tutorialComplete = false;
+  gameOrchestrator.pendingEvent = null;
+  gameOrchestrator.bountyPendingReward = 0;
+  gameOrchestrator.nextPollAt = 0;
+  gameOrchestrator.lastEventTime = 0;
+  gameOrchestrator.lastEventId = null;
   flightState.lastTime = 0;
   flightState.lastShot = 0;
   flightState.lastMissile = 0;
@@ -1835,7 +1998,13 @@ function exitFlightMode(releasePointer = true) {
   flightState.navDistance = Infinity;
   flightState.navEta = '--';
   flightState.autopilot = false;
+  flightState.currentDockedProject = null;
   flightState.vel.set(0, 0, 0);
+  traderState.docked = false;
+  traderState.dockedStation = null;
+  gameOrchestrator.polling = false;
+  gameOrchestrator.pendingEvent = null;
+  if (flightHud) flightHud.classList.remove('afterburner-active');
   document.body.classList.remove('flight-active', 'pointer-unlocked', 'flight-third-person');
   if (gameRoot) gameRoot.visible = false;
   applyFlightUniverseScale(1);
@@ -2039,7 +2208,175 @@ function getVoicePersona(source = '') {
   return { pitch: 0.82, rate: 1.0, voiceId: 'onyx' };
 }
 
-function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18 }) {
+function syncCombatCreditsFromTrader() {
+  combatState.credits = Math.max(0, Math.round(traderState.credits));
+}
+
+function setCombatCredits(value) {
+  combatState.credits = Math.max(0, Math.round(value));
+  traderState.credits = combatState.credits;
+}
+
+function addCombatCredits(value) {
+  setCombatCredits(combatState.credits + value);
+}
+
+function buildEnemyMaterial(color, opacity = 0.88) {
+  return new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity });
+}
+
+function buildEnemyGeometry(classId) {
+  const cls = getEnemyClass(classId);
+  const group = new THREE.Group();
+  const bodyMat = buildEnemyMaterial(cls.color, 0.95);
+  const wingMat = buildEnemyMaterial(cls.wingColor, 0.78);
+  const accentMat = buildEnemyMaterial(0xffcc00, 0.65);
+  const geometry = cls.geometry;
+
+  if (geometry === 'dart') {
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.1, 8), bodyMat);
+    body.rotation.x = -Math.PI / 2;
+    body.userData.enemyBody = true;
+    const wingGeo = new THREE.BoxGeometry(0.08, 0.72, 0.28);
+    [-1, 1].forEach(side => {
+      const wing = new THREE.Mesh(wingGeo, wingMat);
+      wing.position.set(side * 0.42, 0, 0.16);
+      wing.rotation.z = side * 0.42;
+      group.add(wing);
+    });
+    group.add(body);
+  } else if (geometry === 'box') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.9), bodyMat);
+    body.userData.enemyBody = true;
+    const podGeo = new THREE.BoxGeometry(0.18, 0.18, 0.74);
+    [-1, 1].forEach(side => {
+      const pod = new THREE.Mesh(podGeo, wingMat);
+      pod.position.set(side * 0.48, 0, -0.05);
+      group.add(pod);
+    });
+    group.add(body);
+  } else if (geometry === 'diamond') {
+    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), bodyMat);
+    body.userData.enemyBody = true;
+    const finGeo = new THREE.BoxGeometry(0.08, 0.34, 0.08);
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([x, y]) => {
+      const fin = new THREE.Mesh(finGeo, wingMat);
+      fin.position.set(x * 0.4, y * 0.4, 0);
+      fin.rotation.z = Math.atan2(y, x);
+      group.add(fin);
+    });
+    group.add(body);
+  } else if (geometry === 'cruiser') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.42, 1.45), bodyMat);
+    const crossA = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.42), wingMat);
+    const crossB = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.82, 0.52), wingMat);
+    body.userData.enemyBody = true;
+    group.add(body, crossA, crossB);
+  } else {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), bodyMat);
+    const leftWing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.05, 1.05), wingMat);
+    const rightWing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.05, 1.05), wingMat);
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.05, 0.05), accentMat);
+    const antenna = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.48, 5), accentMat);
+    body.userData.enemyBody = true;
+    leftWing.position.x = -0.55;
+    rightWing.position.x = 0.55;
+    antenna.rotation.x = -Math.PI / 2;
+    antenna.position.z = -0.42;
+    group.add(body, leftWing, rightWing, strut, antenna);
+  }
+
+  group.userData.bodyMaterial = bodyMat;
+  return group;
+}
+
+function buildEnemyHealthPips(enemy) {
+  const existing = enemy.userData.healthPips;
+  if (existing) enemy.remove(existing);
+  const total = (enemy.userData.maxHealth || 1) + (enemy.userData.maxShieldHp || 0);
+  if (total <= 1) {
+    enemy.userData.healthPips = null;
+    return;
+  }
+  const pips = new THREE.Group();
+  const pipGeo = new THREE.SphereGeometry(0.06, 6, 4);
+  for (let i = 0; i < total; i++) {
+    const pip = new THREE.Mesh(pipGeo, new THREE.MeshBasicMaterial({ color: 0xff3355, transparent: true, opacity: 0.9 }));
+    pip.position.set((i - (total - 1) / 2) * 0.16, 1.2, 0);
+    pips.add(pip);
+  }
+  enemy.add(pips);
+  enemy.userData.healthPips = pips;
+  enemy.userData.lastPipUpdate = 0;
+}
+
+function updateEnemyHealthPips(enemy, now = performance.now()) {
+  const pips = enemy.userData.healthPips;
+  if (!pips || now - (enemy.userData.lastPipUpdate || 0) < 200) return;
+  enemy.userData.lastPipUpdate = now;
+  const shieldHp = Math.max(0, enemy.userData.shieldHp || 0);
+  const health = Math.max(0, enemy.userData.health || 0);
+  pips.children.forEach((pip, idx) => {
+    if (idx < shieldHp) pip.material.color.setHex(0x88ffff);
+    else if (idx < shieldHp + health) pip.material.color.setHex(0xff3355);
+    else pip.material.color.setHex(0x334055);
+  });
+}
+
+function buildEnemyFromClass(enemy, classId) {
+  const cls = getEnemyClass(classId);
+  while (enemy.children.length) enemy.remove(enemy.children[0]);
+  const geometry = buildEnemyGeometry(cls.id);
+  enemy.add(geometry);
+  enemy.userData.classId = cls.id;
+  enemy.userData.bodyMaterial = geometry.userData.bodyMaterial;
+}
+
+function getEnemyDamageUnits(rawDamage = 12) {
+  return Math.max(1, Math.round(rawDamage / 12));
+}
+
+function applyEnemyHit(enemy, rawDamage = 12) {
+  const cls = getEnemyClass(enemy.userData.classId);
+  let damageUnits = getEnemyDamageUnits(rawDamage);
+  if (skillTree.unlocked.has('weap_4') && enemy.userData.shieldHp > 0 && enemy.userData.health > 0) {
+    enemy.userData.health = Math.max(0, enemy.userData.health - 1);
+  }
+  while (damageUnits > 0 && enemy.userData.shieldHp > 0) {
+    enemy.userData.shieldHp -= 1;
+    damageUnits -= 1;
+    if (enemy.userData.bodyMaterial) {
+      enemy.userData.bodyMaterial.color.setHex(0x88ffff);
+      enemy.userData.flashUntil = performance.now() + 120;
+    }
+  }
+  if (damageUnits > 0) {
+    enemy.userData.health = Math.max(0, enemy.userData.health - damageUnits);
+  }
+  updateEnemyHealthPips(enemy, 0);
+  if (enemy.userData.health <= 0) {
+    handleEnemyDestroyed(enemy);
+  } else {
+    flightState.status = `HIT - ${cls.label} ${enemy.userData.health}/${enemy.userData.maxHealth}HP`;
+    flightState.statusUntil = performance.now() + 1200;
+  }
+}
+
+function applyEmpBurst(origin, weapon) {
+  let hitCount = 0;
+  enemies.forEach(enemy => {
+    if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0) return;
+    if (enemy.position.distanceTo(origin) > weapon.aoeRadius) return;
+    enemy.userData.stunUntil = performance.now() + 1200;
+    applyEnemyHit(enemy, weapon.damage);
+    hitCount += 1;
+  });
+  flightState.status = hitCount ? `EMP BURST - ${hitCount} CONTACTS STUNNED` : 'EMP BURST - NO CONTACTS';
+  flightState.statusUntil = performance.now() + 1600;
+  return true;
+}
+
+function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18, ttsPriority = 'high' }) {
   const messageToken = Symbol('game-message');
   gameMessageState.active = true;
   gameMessageState.type = type;
@@ -2056,7 +2393,7 @@ function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text 
   renderGameMessage();
   ttsEngine.speak(text, {
     ...getVoicePersona(source),
-    priority: 'high',
+    priority: ttsPriority,
     onStart: () => {
       if (!gameMessageState.active || gameMessageState.token !== messageToken) return;
       gameMessageState.ttsWaitUntil = 0;
@@ -2171,12 +2508,16 @@ function setMissionStep(step) {
     });
     flightState.status = 'MISSION HANDOFF RECEIVED';
     flightState.statusUntil = performance.now() + 3000;
+    missionState.active = false;
+    missionState.step = 'idle';
+    gameOrchestrator.tutorialComplete = true;
+    gameOrchestrator.nextPollAt = performance.now() + 30000;
   }
 }
 
 function updateMission(time) {
-  if (!missionState.active) return;
   updateGameMessage(time);
+  if (!missionState.active) return;
 }
 
 function registerMissionKill() {
@@ -2232,7 +2573,34 @@ function spawnTutorialBogeys() {
 }
 
 function handleEnemyDestroyed(enemy) {
+  const cls = getEnemyClass(enemy?.userData?.classId);
   registerMissionKill();
+  if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
+    deactivateCombatObject(enemy);
+    if (enemies.every(item => !item.userData.active)) {
+      const reward = gameOrchestrator.bountyPendingReward;
+      addCombatCredits(reward);
+      flightState.status = `BOUNTY CLAIMED: +${reward}cr`;
+      flightState.statusUntil = performance.now() + 3000;
+      gameOrchestrator.bountyPendingReward = 0;
+      ttsEngine.speak('BOUNTY CLAIMED.', getVoicePersona('USSYVERSE CONTROL'));
+      updateFlightHud(true);
+    }
+    return;
+  }
+  flightState.score += Math.max(1, Math.round(cls.xpReward / 10));
+  addCombatCredits(cls.creditReward);
+  const pointsBefore = combatState.skillPoints;
+  addCombatXp(combatState, cls.xpReward);
+  if (combatState.skillPoints > pointsBefore) {
+    flightState.status = `SKILL POINT EARNED - SP:${combatState.skillPoints}`;
+    flightState.statusUntil = performance.now() + 2500;
+  } else {
+    flightState.status = `${cls.label} DESTROYED +${cls.creditReward}CR`;
+    flightState.statusUntil = performance.now() + 1800;
+  }
+  const killCallouts = ['SPLASH ONE', 'BOGEY DOWN', 'KILL CONFIRMED', 'TARGET ELIMINATED', 'BANDIT DOWN', 'GOOD KILL'];
+  combatAudio.bark(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85, priority: 'low' });
   if (missionState.active && missionState.step === 'killTutorialBogeys' && missionState.kills < missionState.killGoal) {
     spawnEnemy(enemy, flightState.score + missionState.kills, 1.2 + Math.random() * 1.6);
   } else if (missionState.active && missionState.step !== 'killTutorialBogeys') {
@@ -2259,25 +2627,178 @@ function landOnNearestProject() {
   if (!handleMissionLanding(project)) return;
   restockAtProject(project);
   flightState.landed = true;
+  flightState.currentDockedProject = project;
+  traderState.docked = true;
+  traderState.dockedStation = project.id;
   flightState.vel.set(0, 0, 0);
   selectProject(project.id, false);
   if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
     document.exitPointerLock();
   }
+  if (!gameMessageState.active) openStationMenu(project.id);
 }
 
 function restockAtProject(project) {
-  flightState.shield = 100;
-  flightState.armor = 100;
+  skillTree.applyAll();
+  combatState.overchargeUsed = false;
+  const maxShield = skillTree.getMaxShield();
+  flightState.shield = Math.min(flightState.shield + maxShield, maxShield);
+  flightState.armor = skillTree.getMaxArmor();
+  if (skillTree.unlocked.has('shield_4') && !combatState.overchargeUsed) {
+    flightState.shield = Math.round(maxShield * 1.5);
+    combatState.overchargeUsed = true;
+  }
   flightState.ammo = maxPlayerAmmo;
   flightState.missiles = maxPlayerMissilesStored;
-  flightState.energy = 100;
+  flightState.energy = skillTree.getMaxEnergy();
+  combatState.heat = 0;
+  combatState.overheated = false;
+  refuelAt(project.id, { free: true, silent: true });
+  flightState.fuel = traderState.fuel;
+  flightState.fuelDepleted = false;
+  flightState.strafe = 8;
   flightState.shieldCriticalSpoken = false;
   flightState.finalApproachSpoken = false;
   flightState.status = `RESTOCKED AT ${project.name.toUpperCase()}`;
   flightState.statusUntil = performance.now() + 2500;
   ttsEngine.speak(`DOCKING AT ${project.name.toUpperCase()}. RESTOCKING SUPPLIES.`, { rate: 1.0, pitch: 0.80, priority: 'normal' });
   updateFlightHud(true);
+}
+
+function stationName(projectId) {
+  return USSY_PROJECTS.find(project => project.id === projectId)?.name || 'UNKNOWN';
+}
+
+function getStationCategory(projectId) {
+  return USSY_PROJECTS.find(project => project.id === projectId)?.category || 'default';
+}
+
+function openStationMenu(projectId) {
+  if (!projectId) return;
+  syncCombatCreditsFromTrader();
+  showGameMessage({
+    type: 'STATION SERVICES',
+    source: `${stationName(projectId).toUpperCase()} DOCK CONTROL`,
+    text: `DOCKED AT ${stationName(projectId).toUpperCase()}. CREDITS: ${combatState.credits}CR. SELECT SERVICE:`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'RESTOCK', action: () => restockAtProject(USSY_PROJECTS.find(project => project.id === projectId) || { id: projectId, name: stationName(projectId) }) },
+      { key: '2', code: 'Digit2', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
+      { key: '3', code: 'Digit3', label: 'CARGO MARKET', action: () => openTradeMenu(projectId) },
+      { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessage() }
+    ],
+    ttsPriority: 'normal'
+  });
+}
+
+function openEquipmentMarket(projectId) {
+  syncCombatCreditsFromTrader();
+  const weaponIds = getStationEquipment(getStationCategory(projectId));
+  const choices = [];
+  const rows = weaponIds.map((weaponId, idx) => {
+    const weapon = getWeaponDef(weaponId);
+    const price = WEAPON_PRICES[weaponId] ?? 0;
+    const slot = weapon.type === 'missile' || weapon.type === 'area' ? 'secondary' : 'primary';
+    const equippedSlot = loadoutState.primary === weaponId ? 'P' : (loadoutState.secondary === weaponId ? 'S' : null);
+    if (equippedSlot) return `${equippedSlot}: ${weapon.name} - EQUIPPED`;
+    if (combatState.credits >= price) {
+      choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${weapon.name} - ${price}CR`, action: () => buyAndEquipWeapon(projectId, weaponId, slot) });
+      return `[${idx + 1}] ${weapon.name} - ${price}CR`;
+    }
+    return `${weapon.name} - ${price}CR (NEED ${price - combatState.credits}CR MORE)`;
+  });
+  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => openStationMenu(projectId) });
+  showGameMessage({
+    type: 'EQUIPMENT MARKET',
+    source: `${stationName(projectId).toUpperCase()} ARMORY`,
+    text: `AVAILABLE SYSTEMS: ${rows.join(' // ')}`,
+    choices,
+    ttsPriority: 'normal'
+  });
+}
+
+function buyAndEquipWeapon(projectId, weaponId, slot) {
+  const weapon = getWeaponDef(weaponId);
+  const price = WEAPON_PRICES[weaponId] ?? 0;
+  if (!weapon || combatState.credits < price) {
+    openEquipmentMarket(projectId);
+    return;
+  }
+  setCombatCredits(combatState.credits - price);
+  loadoutState[slot] = weaponId;
+  ttsEngine.speak('WEAPON SYSTEM UPDATED.', { ...getVoicePersona('USSYVERSE CONTROL'), priority: 'normal' });
+  updateFlightHud(true);
+  showGameMessage({
+    type: 'SYSTEM UPDATED',
+    source: `${stationName(projectId).toUpperCase()} ARMORY`,
+    text: `${weapon.name} EQUIPPED TO ${slot.toUpperCase()} SLOT. CREDITS REMAINING: ${combatState.credits}CR.`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
+      { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openStationMenu(projectId) }
+    ],
+    ttsPriority: 'normal'
+  });
+}
+
+function openSkillTree() {
+  showGameMessage({
+    type: 'SHIP UPGRADES',
+    source: 'LOADOUT TERMINAL',
+    text: `SKILL POINTS: ${combatState.skillPoints} // XP: ${combatState.xp}/${combatState.xpToNextPoint} // SELECT BRANCH:`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'HULL', action: () => showSkillBranch('HULL') },
+      { key: '2', code: 'Digit2', label: 'SHIELDS', action: () => showSkillBranch('SHIELD') },
+      { key: '3', code: 'Digit3', label: 'WEAPONS', action: () => showSkillBranch('WEAPONS') },
+      { key: '4', code: 'Digit4', label: 'ENGINES', action: () => showSkillBranch('ENGINES') },
+      { key: 'space', code: 'Space', label: 'CLOSE', action: () => dismissGameMessage() }
+    ],
+    ttsPriority: 'normal'
+  });
+}
+
+function showSkillBranch(branch) {
+  const nodes = SKILL_TREE_NODES.filter(node => node.branch === branch);
+  const choices = [];
+  const rows = nodes.map((node, idx) => {
+    if (skillTree.unlocked.has(node.id)) return `OK ${node.name} - ${node.effect}`;
+    if (skillTree.canUnlock(node.id)) {
+      choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${node.name} (${node.cost}SP)`, action: () => confirmSkillUnlock(node.id) });
+      return `> ${node.name} (${node.cost}SP) - ${node.effect}`;
+    }
+    const need = node.requires ? SKILL_TREE_NODES.find(item => item.id === node.requires)?.name : `${node.cost}SP`;
+    return `LOCK ${node.name} (need: ${need})`;
+  });
+  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => openSkillTree() });
+  showGameMessage({
+    type: `${branch} UPGRADES`,
+    source: 'LOADOUT TERMINAL',
+    text: rows.join(' // '),
+    choices,
+    ttsPriority: 'normal'
+  });
+}
+
+function confirmSkillUnlock(nodeId) {
+  const node = SKILL_TREE_NODES.find(item => item.id === nodeId);
+  if (!node) return;
+  showGameMessage({
+    type: 'UNLOCK CONFIRM',
+    source: 'LOADOUT TERMINAL',
+    text: `UNLOCK ${node.name}? COST: ${node.cost} SP // ${node.description}`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'CONFIRM', action: () => unlockSkillNode(nodeId) },
+      { key: '2', code: 'Digit2', label: 'CANCEL', action: () => showSkillBranch(node.branch) }
+    ],
+    ttsPriority: 'normal'
+  });
+}
+
+function unlockSkillNode(nodeId) {
+  const node = SKILL_TREE_NODES.find(item => item.id === nodeId);
+  if (skillTree.unlock(nodeId)) {
+    ttsEngine.speak(`${node.name} UNLOCKED.`, { ...getVoicePersona('USSYVERSE CONTROL'), priority: 'normal' });
+    updateFlightHud(true);
+  }
+  showSkillBranch(node.branch);
 }
 
 function deactivateCombatObject(object) {
@@ -2287,8 +2808,13 @@ function deactivateCombatObject(object) {
   object.userData.life = 0;
 }
 
-function spawnEnemy(enemy, offset = 0, delay = 0) {
+function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   if (!enemy) return;
+  const resolvedClassId = missionState.step === 'killTutorialBogeys'
+    ? 'scout'
+    : (classId || getRandomClassForTier(getDifficultyTier(flightState.score)));
+  const cls = getEnemyClass(resolvedClassId);
+  buildEnemyFromClass(enemy, cls.id);
   const angle = Math.random() * Math.PI * 2 + offset;
   const height = (Math.random() - 0.5) * 54;
   const radius = 92 + Math.random() * 58;
@@ -2298,32 +2824,45 @@ function spawnEnemy(enemy, offset = 0, delay = 0) {
     flightState.pos.z + Math.sin(angle) * radius
   );
   enemy.userData.active = true;
-  enemy.userData.health = 1;
+  enemy.userData.health = cls.health;
+  enemy.userData.maxHealth = cls.health;
+  enemy.userData.classId = cls.id;
+  enemy.userData.burstRemaining = 0;
+  enemy.userData.burstNextAt = 0;
+  enemy.userData.evasionTimer = 0;
+  enemy.userData.stunUntil = 0;
+  enemy.userData.shieldHp = cls.health > 2 ? cls.health - 1 : 0;
+  enemy.userData.maxShieldHp = enemy.userData.shieldHp;
   enemy.userData.spawnDelay = delay;
-  enemy.userData.cooldown = 2400 + delay * 1000 + Math.random() * flightState.enemyFireCooldown;
+  enemy.userData.cooldown = cls.fireRate + delay * 1000 + Math.random() * cls.fireRate;
   enemy.visible = delay <= 0;
+  buildEnemyHealthPips(enemy);
 }
 
-function fireBullet(pool, origin, direction, speed, life) {
+function fireBullet(pool, origin, direction, speed, life, options = {}) {
   const bullet = pool.find(item => !item.userData.active);
   if (!bullet) return false;
   bullet.position.copy(origin);
   bullet.userData.velocity.copy(direction).multiplyScalar(speed);
   bullet.userData.life = life;
+  bullet.userData.damage = options.damage ?? 12;
   bullet.userData.active = true;
+  if (options.color && bullet.material?.color) bullet.material.color.setHex(options.color);
   bullet.quaternion.setFromUnitVectors(flightBeamAxis, direction);
   bullet.visible = true;
   return true;
 }
 
-function fireMissile(origin, direction) {
+function fireMissile(origin, direction, options = {}) {
   const missile = playerMissiles.find(item => !item.userData.active);
   if (!missile) return false;
   missile.position.copy(origin);
-  missile.userData.velocity.copy(direction).multiplyScalar(17);
-  missile.userData.life = 4.2;
+  missile.userData.velocity.copy(direction).multiplyScalar(options.speed ?? 17);
+  missile.userData.life = options.life ?? 4.2;
+  missile.userData.damage = options.damage ?? 60;
   missile.userData.target = findNearestEnemy();
   missile.userData.active = true;
+  if (options.color && missile.material?.color) missile.material.color.setHex(options.color);
   missile.quaternion.setFromUnitVectors(flightBeamAxis, direction);
   missile.visible = true;
   return true;
@@ -2341,6 +2880,201 @@ function findNearestEnemy() {
     }
   });
   return nearest;
+}
+
+function buildOrchestratorPayload() {
+  const nearestStation = flightState.nearestNode?.userData?.project?.id || null;
+  return buildOrchestratorGameState({
+    flightState,
+    traderState,
+    missionState,
+    nearestStation,
+    dockedAt: traderState.docked ? traderState.dockedStation : null,
+    lastEvent: gameOrchestrator.lastEventId,
+    lastEventTime: gameOrchestrator.lastEventTime,
+    now: performance.now(),
+    tutorialComplete: gameOrchestrator.tutorialComplete
+  });
+}
+
+async function pollOrchestrator() {
+  if (!gameOrchestrator.enabled || gameOrchestrator.polling || !isFlightActive) return;
+  if (performance.now() < gameOrchestrator.nextPollAt) return;
+  if (gameMessageState.active) return;
+  if (!gameOrchestrator.tutorialComplete) return;
+
+  gameOrchestrator.polling = true;
+  try {
+    const res = await fetch('/api/orchestrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameState: buildOrchestratorPayload() })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.fire && data.event) {
+      gameOrchestrator.pendingEvent = data.event;
+      fireOrchestratedEvent(data.event);
+    }
+  } catch {
+    // Orchestration is opportunistic and must never interrupt the local game loop.
+  } finally {
+    gameOrchestrator.polling = false;
+    const jitter = Math.random() * 20000;
+    gameOrchestrator.nextPollAt = performance.now() + gameOrchestrator.minInterval + jitter;
+  }
+}
+
+function spawnOrchestratedEnemies(event, count = event.spawnEnemies) {
+  const spawned = activateEnemyWave(enemies, Math.min(count || 0, maxEnemies), (enemy, offset, delay) => {
+    spawnEnemy(enemy, offset, delay);
+    enemy.userData.orchestratorEventId = event.id;
+    enemy.userData.bountyEventId = event.type === 'BOUNTY' ? event.id : null;
+  });
+  return spawned;
+}
+
+function getRandomActiveProjectNode() {
+  const visible = projectNodes.filter(node => node.visible);
+  if (!visible.length) return null;
+  return visible[Math.floor(Math.random() * visible.length)];
+}
+
+function showOrchestratorMessage(event, choices, overrides = {}) {
+  showGameMessage({
+    type: event.title || event.type,
+    source: event.source || 'DEEP SPACE',
+    text: event.text || 'NO SIGNAL.',
+    choices,
+    typeSpeed: overrides.typeSpeed ?? (event.urgency === 'high' ? 12 : 20),
+    ttsPriority: overrides.ttsPriority ?? (event.urgency === 'low' ? 'low' : 'high')
+  });
+}
+
+function fireOrchestratedEvent(event) {
+  const normalizedEvent = {
+    id: event.id || `event_${Date.now()}`,
+    type: String(event.type || 'COMMS').toUpperCase(),
+    source: event.source || 'DEEP SPACE',
+    title: event.title || event.type || 'COMMS',
+    text: event.text || 'UNRESOLVED TRANSMISSION.',
+    choices: Array.isArray(event.choices) ? event.choices : [],
+    spawnEnemies: Math.max(0, Math.min(5, Number(event.spawnEnemies) || 0)),
+    creditReward: Math.max(0, Number(event.creditReward) || 0),
+    fuelReward: Math.max(0, Number(event.fuelReward) || 0),
+    urgency: event.urgency || 'normal'
+  };
+  gameOrchestrator.lastEventTime = performance.now();
+  gameOrchestrator.lastEventId = normalizedEvent.id;
+
+  if (normalizedEvent.type === 'COMBAT') {
+    spawnOrchestratedEnemies(normalizedEvent);
+    flightState.status = `HOSTILE CONTACT: ${normalizedEvent.source}`;
+    flightState.statusUntil = performance.now() + 3000;
+  } else if (normalizedEvent.type === 'BOUNTY') {
+    spawnOrchestratedEnemies(normalizedEvent);
+    gameOrchestrator.bountyPendingReward = normalizedEvent.creditReward || 250;
+  }
+
+  if (normalizedEvent.type === 'DISTRESS') {
+    showOrchestratorMessage(normalizedEvent, [
+      {
+        key: '1',
+        code: 'Digit1',
+        label: 'RESPOND',
+        action: () => {
+          dismissGameMessage();
+          const node = getRandomActiveProjectNode();
+          if (node) setNavigationTarget(node, 'mission');
+          window.setTimeout(() => showGameMessage({ type: 'NAVIGATION UPDATED', source: 'USSYVERSE CONTROL', text: 'NAVIGATION UPDATED. PROCEED TO COORDINATES.', typeSpeed: 16 }), 400);
+        }
+      },
+      { key: '2', code: 'Digit2', label: 'IGNORE', action: () => resolveOrchestratedChoice(normalizedEvent, { key: '2', outcome: 'DISTRESS SIGNAL IGNORED. THE CHANNEL FADES INTO STATIC.' }) }
+    ]);
+    return;
+  }
+
+  if (normalizedEvent.type === 'CONTRABAND') {
+    const cargoIds = Object.keys(traderState.cargo).filter(id => traderState.cargo[id] > 0);
+    if (!cargoIds.length) {
+      showOrchestratorMessage({ ...normalizedEvent, text: normalizedEvent.text || 'INSPECTION SWEEP PASSES. NO CONTRABAND SIGNATURE FOUND.' }, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }]);
+      return;
+    }
+    showOrchestratorMessage(normalizedEvent, [
+      {
+        key: '1',
+        code: 'Digit1',
+        label: 'JETTISON CARGO',
+        action: () => {
+          const cargoId = cargoIds[0];
+          delete traderState.cargo[cargoId];
+          traderState.credits = Math.max(0, traderState.credits - 50);
+          updateFlightHud(true);
+          resolveOrchestratedChoice(normalizedEvent, { key: '1', outcome: 'CARGO JETTISONED. ENFORCER SCAN SATISFIED. 50 CREDIT HANDLING FINE PAID.' });
+        }
+      },
+      {
+        key: '2',
+        code: 'Digit2',
+        label: 'REFUSE',
+        action: () => {
+          spawnOrchestratedEnemies({ ...normalizedEvent, source: 'ENFORCERS', type: 'COMBAT' }, 2);
+          flightState.status = 'ENFORCERS DEPLOYED';
+          flightState.statusUntil = performance.now() + 3000;
+          resolveOrchestratedChoice(normalizedEvent, { key: '2', outcome: 'REFUSAL LOGGED. ENFORCER FLIGHT HAS WEAPONS FREE.' });
+        }
+      }
+    ]);
+    return;
+  }
+
+  if (normalizedEvent.type === 'ANOMALY') {
+    const fuelReward = normalizedEvent.fuelReward || (5 + Math.floor(Math.random() * 6));
+    traderState.fuel = Math.min(traderState.maxFuel, traderState.fuel + fuelReward);
+    updateFlightHud(true);
+    showOrchestratorMessage(normalizedEvent, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }], { typeSpeed: 24, ttsPriority: 'low' });
+    return;
+  }
+
+  const choices = normalizedEvent.choices.map(choice => ({
+    key: choice.key,
+    code: `Digit${choice.key}`,
+    label: choice.label,
+    action: () => resolveOrchestratedChoice(normalizedEvent, choice)
+  }));
+
+  if (choices.length === 0) {
+    choices.push({ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() });
+  }
+
+  const typeSpeed = normalizedEvent.type === 'SILENCE' ? 28 : undefined;
+  const ttsPriority = normalizedEvent.type === 'SILENCE' ? 'low' : undefined;
+  showOrchestratorMessage(normalizedEvent, choices, { typeSpeed, ttsPriority });
+}
+
+function resolveOrchestratedChoice(event, choice) {
+  dismissGameMessage();
+  if (choice.outcome) {
+    const outcomeText = choice.outcome.slice(0, 160);
+    window.setTimeout(() => {
+      showGameMessage({
+        type: 'OUTCOME',
+        source: event.source,
+        text: outcomeText,
+        typeSpeed: 16
+      });
+    }, 400);
+  }
+  if (event.type !== 'BOUNTY' && event.creditReward && choice.key === '1') {
+    addCombatCredits(event.creditReward);
+    flightState.status = `+${event.creditReward} CREDITS`;
+    flightState.statusUntil = performance.now() + 2500;
+    updateFlightHud(true);
+  }
+  if (event.fuelReward && choice.key === '1') {
+    traderState.fuel = Math.min(traderState.maxFuel, traderState.fuel + event.fuelReward);
+    updateFlightHud(true);
+  }
 }
 
 function onGlobalKeyDown(event) {
@@ -2389,6 +3123,16 @@ function onGlobalKeyDown(event) {
   if (event.code === 'KeyL') {
     event.preventDefault();
     if (!event.repeat) landOnNearestProject();
+    return;
+  }
+  if (event.code === 'KeyT') {
+    event.preventDefault();
+    if (!event.repeat && flightState.landed && traderState.dockedStation && !gameMessageState.active) openStationMenu(traderState.dockedStation);
+    return;
+  }
+  if (event.code === 'KeyU') {
+    event.preventDefault();
+    if (!event.repeat && flightState.landed && !gameMessageState.active) openSkillTree();
     return;
   }
   if (event.code === 'KeyM') {
@@ -2640,15 +3384,107 @@ function updateFlightBasis() {
   flightUp.set(0, 1, 0).applyQuaternion(flightQuat).normalize();
 }
 
+function getWeaponDirection(spreadAngle = 0) {
+  flightTempVec2.copy(flightForward);
+  if (spreadAngle > 0) {
+    flightTempVec2
+      .addScaledVector(flightRight, (Math.random() - 0.5) * spreadAngle)
+      .addScaledVector(flightUp, (Math.random() - 0.5) * spreadAngle)
+      .normalize();
+  }
+  return flightTempVec2;
+}
+
+function firePrimaryWeapon(time) {
+  const weapon = loadoutState.getWeapon('primary') || getWeaponDef('laser_mk1');
+  if (time - flightState.lastShot <= skillTree.getPrimaryCooldown(weapon)) return;
+  if (combatState.overheated) {
+    flightState.status = 'WEAPONS OFFLINE - COOLING';
+    if (flightHeatBar) flightHeatBar.classList.add('heat-over');
+    flightState.lastShot = time;
+    return;
+  }
+  if (flightState.ammo < weapon.ammoCost) {
+    flightState.status = 'LASER AMMO EMPTY // LAND TO RESTOCK';
+  } else if (flightState.energy < weapon.energyCost) {
+    flightState.status = 'ENERGY LOW';
+  } else if (weapon.type === 'area') {
+    flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.2);
+    if (applyEmpBurst(flightTempVec, weapon)) {
+      flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
+      applyHeatShot(combatState, weapon.overheatBuildup);
+    }
+  } else {
+    const pellets = Math.max(1, weapon.pellets || 1);
+    let fired = 0;
+    for (let i = 0; i < pellets; i++) {
+      flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 0.85);
+      const direction = getWeaponDirection(weapon.spreadAngle);
+      if (fireBullet(playerBullets, flightTempVec, direction, weapon.projectileSpeed, weapon.projectileLife / 1000, { damage: weapon.damage, color: weapon.color })) fired += 1;
+    }
+    if (fired > 0) {
+      flightState.ammo = Math.max(0, flightState.ammo - weapon.ammoCost);
+      flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
+      applyHeatShot(combatState, weapon.overheatBuildup);
+    }
+  }
+  flightState.lastShot = time;
+}
+
+function fireSecondaryWeapon(time) {
+  const weapon = loadoutState.getWeapon('secondary') || getWeaponDef('missile_rack');
+  if (time - flightState.lastMissile <= weapon.cooldown) return;
+  if (weapon.type === 'area') {
+    if (flightState.energy < weapon.energyCost) {
+      flightState.status = 'EMP ENERGY LOW';
+    } else {
+      flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.2);
+      if (applyEmpBurst(flightTempVec, weapon)) flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
+    }
+    flightState.lastMissile = time;
+    return;
+  }
+  if (flightState.missiles <= 0) {
+    flightState.status = 'MISSILES EMPTY // LAND TO RESTOCK';
+  } else if (flightState.energy < weapon.energyCost) {
+    flightState.status = 'MISSILE ENERGY LOW';
+  } else {
+    const count = Math.max(1, weapon.missileCount || 1);
+    let fired = 0;
+    for (let i = 0; i < count && flightState.missiles > 0; i++) {
+      flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.05 + i * 0.08);
+      const direction = getWeaponDirection(count > 1 ? 0.045 : 0);
+      if (fireMissile(flightTempVec, direction, { speed: weapon.projectileSpeed, life: weapon.projectileLife / 1000, damage: weapon.damage, color: weapon.color })) {
+        fired += 1;
+        flightState.missiles -= 1;
+      }
+    }
+    if (fired > 0) {
+      flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
+      flightState.status = count > 1 ? 'MISSILES AWAY' : 'MISSILE AWAY';
+      combatAudio.bark('FOX TWO', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
+    }
+  }
+  flightState.lastMissile = time;
+}
+
 function updateFlight(time) {
   const dt = Math.min(((time - flightState.lastTime) / 1000) || 0.016, 0.05);
   flightState.lastTime = time;
   updateFlightBasis();
   updateMission(time);
-  flightState.energy = Math.min(100, flightState.energy + 18 * dt);
+  const maxShield = skillTree.getMaxShield();
+  flightState.energy = Math.min(skillTree.getMaxEnergy(), flightState.energy + 8 * dt);
+  if (flightState.shield < maxShield && performance.now() - combatState.lastHitAt > combatState.shieldRegenDelay) {
+    flightState.shield = Math.min(maxShield, flightState.shield + combatState.shieldRegenRate * dt);
+  }
+  combatState.heat = Math.max(0, combatState.heat - combatState.heatCoolRate * dt);
+  if (combatState.overheated && combatState.heat <= 0) combatState.overheated = false;
+  if (combatState.overheated) flightState.status = 'WEAPONS OFFLINE - COOLING';
 
   if (flightState.landed) {
     flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
+    if (skillTree.unlocked.has('hull_4')) flightState.armor = Math.min(skillTree.getMaxArmor(), flightState.armor + dt);
     updateProjectLandingTarget();
     updateFlightNavigation();
     updateFlightCamera();
@@ -2664,7 +3500,17 @@ function updateFlight(time) {
     if (flightState.keys.has('KeyE')) applyLocalFlightRotation(0, 0, 1, -1.85 * dt);
     updateFlightBasis();
 
-    const boost = flightState.keys.has('ShiftLeft') || flightState.keys.has('ShiftRight') ? 1.75 : 1;
+    const shiftHeld = flightState.keys.has('ShiftLeft') || flightState.keys.has('ShiftRight');
+    if (shiftHeld && skillTree.unlocked.has('eng_3') && performance.now() >= combatState.afterburnerCooldownUntil) {
+      if (!combatState.afterburnerActive) {
+        combatState.afterburnerActive = true;
+        combatState.afterburnerUntil = performance.now() + 3000;
+        combatState.afterburnerCooldownUntil = performance.now() + 12000;
+      }
+    }
+    if (combatState.afterburnerActive && performance.now() >= combatState.afterburnerUntil) combatState.afterburnerActive = false;
+    const boost = combatState.afterburnerActive ? 1.8 : 1;
+    if (flightHud) flightHud.classList.toggle('afterburner-active', combatState.afterburnerActive);
     if (flightState.keys.has('KeyW') || flightState.keys.has('ArrowUp')) {
       flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * dt);
     }
@@ -2680,40 +3526,27 @@ function updateFlight(time) {
 
     const maxSpeed = 22 * boost;
     if (flightState.vel.lengthSq() > maxSpeed * maxSpeed) flightState.vel.setLength(maxSpeed);
-    if (flightState.mouseButtons.has(0) && time - flightState.lastShot > flightState.fireCooldown) {
-      if (flightState.ammo <= 0) {
-        flightState.status = 'LASER AMMO EMPTY // LAND TO RESTOCK';
-      } else if (flightState.energy < flightState.laserEnergyCost) {
-        flightState.status = 'ENERGY LOW';
-      } else {
-        flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 0.85);
-        if (fireBullet(playerBullets, flightTempVec, flightForward, 46, 1.35)) {
-          flightState.ammo -= 1;
-          flightState.energy = Math.max(0, flightState.energy - flightState.laserEnergyCost);
-        }
-      }
-      flightState.lastShot = time;
-    }
-    if (flightState.mouseButtons.has(2) && time - flightState.lastMissile > flightState.missileCooldown) {
-      if (flightState.missiles <= 0) {
-        flightState.status = 'MISSILES EMPTY // LAND TO RESTOCK';
-      } else if (flightState.energy < flightState.missileEnergyCost) {
-        flightState.status = 'MISSILE ENERGY LOW';
-      } else {
-        flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.05);
-        if (fireMissile(flightTempVec, flightForward)) {
-          flightState.missiles -= 1;
-          flightState.energy = Math.max(0, flightState.energy - flightState.missileEnergyCost);
-          flightState.status = 'MISSILE AWAY';
-          combatAudio.bark('FOX TWO', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
-        }
-      }
-      flightState.lastMissile = time;
-    }
+    if (flightState.mouseButtons.has(0)) firePrimaryWeapon(time);
+    if (flightState.mouseButtons.has(2)) fireSecondaryWeapon(time);
   }
 
   flightState.vel.multiplyScalar(Math.pow(flightState.damping, dt * 60));
   flightState.pos.addScaledVector(flightState.vel, dt);
+  const isThrusting = flightState.keys.has('KeyW') || flightState.keys.has('KeyS')
+    || flightState.keys.has('ArrowUp') || flightState.keys.has('ArrowDown')
+    || flightState.autopilot;
+  if (updateFuelDrain(dt, isThrusting) && !flightState.fuelDepleted) {
+    flightState.fuelDepleted = true;
+    flightState.thrust = 2;
+    flightState.strafe = 1;
+    showGameMessage({
+      type: 'CRITICAL SYSTEM',
+      source: 'USSYVERSE CONTROL',
+      text: 'FUEL DEPLETED. THRUST REDUCED TO EMERGENCY DRIFT. DOCK AT ANY STATION TO REFUEL.'
+    });
+    ttsEngine.speak('FUEL DEPLETED. EMERGENCY DRIFT ONLY.', getVoicePersona('USSYVERSE CONTROL'));
+  }
+  flightState.fuel = traderState.fuel;
   flightState.pos.clampLength(1.8, flightBounds * activeUniverseScale);
 
   updateProjectLandingTarget();
@@ -2737,6 +3570,7 @@ function updateProjectLandingTarget() {
   });
   if (flightState.nearestNode) {
     const projectName = flightState.nearestNode.userData.project.name;
+    if (flightState.landed) flightState.currentDockedProject = flightState.nearestNode.userData.project;
     const activeLandingRange = landingRange * activeUniverseScale;
     const missionNode = projectNodeById.get(missionState.landingProjectId);
     const isMissionApproach = missionState.active && missionState.step === 'goLandAtProject' && flightState.nearestNode === missionNode;
@@ -2767,18 +3601,50 @@ function updateCombatObjects(dt) {
       if (enemy.userData.spawnDelay <= 0) enemy.visible = true;
       return;
     }
+    const now = performance.now();
+    const cls = getEnemyClass(enemy.userData.classId);
+    if (enemy.userData.bodyMaterial && enemy.userData.flashUntil && now >= enemy.userData.flashUntil) {
+      enemy.userData.bodyMaterial.color.setHex(cls.color);
+      enemy.userData.flashUntil = 0;
+    }
+    updateEnemyHealthPips(enemy, now);
     flightTempVec.copy(flightState.pos).sub(enemy.position);
     const dist = flightTempVec.length();
     if (dist > 0.001) flightTempVec.multiplyScalar(1 / dist);
-    const approachSpeed = dist > 46 ? 18 : (4.2 + Math.min(flightState.score * 0.08, 2.2));
+    const approachSpeed = dist > 46 ? cls.approachSpeed.far : cls.approachSpeed.near;
     enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
+    if (cls.evasion > 0) {
+      enemy.userData.evasionTimer = Math.max(0, (enemy.userData.evasionTimer || 0) - dt * 1000);
+      if (enemy.userData.evasionTimer <= 0 && Math.random() < cls.evasion) {
+        enemy.position
+          .addScaledVector(flightRight, (Math.random() - 0.5) * 2.8)
+          .addScaledVector(flightUp, (Math.random() - 0.5) * 2.8);
+        enemy.userData.evasionTimer = 800 + Math.random() * 400;
+      }
+    }
     enemy.lookAt(flightState.pos);
+    if (now < (enemy.userData.stunUntil || 0)) return;
     enemy.userData.cooldown -= dt * 1000;
 
     if (enemy.userData.cooldown <= 0 && dist < 46) {
+      enemy.userData.burstRemaining = cls.burstCount;
+      enemy.userData.burstNextAt = now;
+      enemy.userData.cooldown = Infinity;
+    }
+
+    if (enemy.userData.burstRemaining > 0 && now >= enemy.userData.burstNextAt) {
       flightTempVec2.copy(flightState.pos).sub(enemy.position).normalize();
-      fireBullet(enemyBullets, enemy.position, flightTempVec2, 18, 2.1);
-      enemy.userData.cooldown = 900 + Math.random() * flightState.enemyFireCooldown;
+      const jitter = Math.max(0, 1 - cls.accuracy);
+      flightTempVec2
+        .addScaledVector(flightRight, (Math.random() - 0.5) * jitter)
+        .addScaledVector(flightUp, (Math.random() - 0.5) * jitter)
+        .normalize();
+      fireBullet(enemyBullets, enemy.position, flightTempVec2, 18, 2.1, { damage: 8, color: cls.color });
+      enemy.userData.burstRemaining -= 1;
+      enemy.userData.burstNextAt = now + cls.burstDelay;
+      if (enemy.userData.burstRemaining <= 0) {
+        enemy.userData.cooldown = cls.fireRate + Math.random() * cls.fireRate * 0.45;
+      }
     }
 
     if (dist < 1.15) {
@@ -2794,9 +3660,7 @@ function updateCombatObjects(dt) {
       const radius = enemy.userData.radius + bullet.userData.radius;
       if (bullet.position.distanceToSquared(enemy.position) < radius * radius) {
         deactivateCombatObject(bullet);
-        flightState.score += 1;
-        flightState.status = 'BOGEY SPLASHED';
-        handleEnemyDestroyed(enemy);
+        applyEnemyHit(enemy, bullet.userData.damage || 12);
       }
     });
   });
@@ -2816,9 +3680,7 @@ function updateCombatObjects(dt) {
       const radius = enemy.userData.radius + missile.userData.radius;
       if (missile.position.distanceToSquared(enemy.position) < radius * radius) {
         deactivateCombatObject(missile);
-        flightState.score += 2;
-        flightState.status = 'MISSILE KILL';
-        handleEnemyDestroyed(enemy);
+        applyEnemyHit(enemy, missile.userData.damage || 60);
       }
     });
   });
@@ -2836,14 +3698,16 @@ function updateCombatObjects(dt) {
 
 function applyPlayerDamage(amount) {
   const shieldBefore = flightState.shield;
-  let remaining = amount;
-  if (flightState.shield > 0) {
-    const absorbed = Math.min(flightState.shield, remaining);
-    flightState.shield -= absorbed;
-    remaining -= absorbed;
-  }
-  if (remaining > 0) {
-    flightState.armor = Math.max(0, flightState.armor - remaining);
+  combatState.lastHitAt = performance.now();
+  combatState.adrenaline = Math.min(1.0, combatState.adrenaline + 0.15);
+  const damage = applyDamageModel({ shield: flightState.shield, armor: flightState.armor }, amount, skillTree.getArmorDamageMultiplier());
+  flightState.shield = damage.shield;
+  flightState.armor = damage.armor;
+  if (flightHud) {
+    flightHud.classList.remove('hud-hit');
+    void flightHud.offsetWidth;
+    flightHud.classList.add('hud-hit');
+    window.setTimeout(() => flightHud.classList.remove('hud-hit'), 180);
   }
   const shieldDrop = shieldBefore - flightState.shield;
   if (shieldDrop > 15) {
@@ -3013,7 +3877,10 @@ function updateFlightHud(force) {
   const now = performance.now();
   if (!force && now - flightState.lastHudUpdate < 120) return;
   flightState.lastHudUpdate = now;
+  syncCombatCreditsFromTrader();
   const speed = flightState.vel.length();
+  const maxShield = skillTree.getMaxShield();
+  const maxEnergy = skillTree.getMaxEnergy();
   updateTtsStatusIndicator();
   if (flightStatus) flightStatus.textContent = isFlightActive ? flightState.status : 'TYPE USSY TO LAUNCH';
   if (flightScore) flightScore.textContent = String(flightState.score);
@@ -3037,16 +3904,40 @@ function updateFlightHud(force) {
   if (flightAutopilot) flightAutopilot.textContent = flightState.autopilot ? 'P: ON' : 'P: OFF';
   if (flightSpeed) flightSpeed.textContent = `${speed.toFixed(1)}u/s`;
   if (flightSpeedBar) flightSpeedBar.style.width = `${Math.min(100, (speed / 38) * 100).toFixed(1)}%`;
-  if (flightShieldsDetail) flightShieldsDetail.textContent = `${Math.round(flightState.shield)}%`;
-  if (flightShieldBar) flightShieldBar.style.width = `${Math.max(0, flightState.shield).toFixed(1)}%`;
-  if (flightEnergy) flightEnergy.textContent = `${Math.round(flightState.energy)}%`;
-  if (flightEnergyBar) flightEnergyBar.style.width = `${Math.max(0, flightState.energy).toFixed(1)}%`;
+  if (flightShieldsDetail) flightShieldsDetail.textContent = `${Math.round(flightState.shield)}/${maxShield}`;
+  if (flightShieldBar) flightShieldBar.style.width = `${Math.min(100, Math.max(0, (flightState.shield / maxShield) * 100)).toFixed(1)}%`;
+  if (flightEnergy) flightEnergy.textContent = `${Math.round(flightState.energy)}/${maxEnergy}`;
+  if (flightEnergyBar) flightEnergyBar.style.width = `${Math.min(100, Math.max(0, (flightState.energy / maxEnergy) * 100)).toFixed(1)}%`;
+  const fuelPercent = Math.max(0, Math.min(100, traderState.fuel));
+  const fuelColor = fuelPercent < 25 ? 'rgba(255, 68, 85, 0.88)' : (fuelPercent <= 50 ? 'rgba(255, 204, 0, 0.9)' : 'rgba(0, 255, 102, 0.84)');
+  flightState.fuel = fuelPercent;
+  if (flightFuel) flightFuel.textContent = `${Math.round(fuelPercent)}%`;
+  if (flightFuelBar) {
+    flightFuelBar.style.width = `${fuelPercent.toFixed(1)}%`;
+    flightFuelBar.style.background = fuelColor;
+  }
   if (flightArmor) flightArmor.textContent = `${Math.round(flightState.armor)}%`;
   if (flightArmorBar) flightArmorBar.style.width = `${Math.max(0, flightState.armor).toFixed(1)}%`;
   if (flightAmmo) flightAmmo.textContent = `${flightState.ammo}/${maxPlayerAmmo}`;
   if (flightAmmoBar) flightAmmoBar.style.width = `${((flightState.ammo / maxPlayerAmmo) * 100).toFixed(1)}%`;
   if (flightMissiles) flightMissiles.textContent = `${flightState.missiles}/${maxPlayerMissilesStored}`;
   if (flightMissileBar) flightMissileBar.style.width = `${((flightState.missiles / maxPlayerMissilesStored) * 100).toFixed(1)}%`;
+  if (flightHeat) flightHeat.textContent = `${Math.round(combatState.heat)}/${combatState.maxHeat}`;
+  if (flightHeatCockpit) flightHeatCockpit.textContent = `${Math.round(combatState.heat)}`;
+  [flightHeatBar, flightHeatBarCockpit].forEach(bar => {
+    if (!bar) return;
+    const heatPercent = Math.min(100, (combatState.heat / combatState.maxHeat) * 100);
+    bar.style.width = `${heatPercent.toFixed(1)}%`;
+    bar.classList.toggle('heat-warm', heatPercent >= 50 && heatPercent < 75 && !combatState.overheated);
+    bar.classList.toggle('heat-hot', heatPercent >= 75 && !combatState.overheated);
+    bar.classList.toggle('heat-over', combatState.overheated);
+  });
+  if (combatState.overheated && flightStatus) flightStatus.textContent = 'WEAPONS OFFLINE - COOLING';
+  if (flightCredits) flightCredits.textContent = `${combatState.credits}CR`;
+  if (flightXpBar) flightXpBar.style.width = `${Math.min(100, (combatState.xp / combatState.xpToNextPoint) * 100).toFixed(1)}%`;
+  if (flightSp) flightSp.textContent = `SP:${combatState.skillPoints}`;
+  if (flightWeaponPrimary) flightWeaponPrimary.textContent = loadoutState.getWeapon('primary')?.name || '--';
+  if (flightWeaponSecondary) flightWeaponSecondary.textContent = loadoutState.getWeapon('secondary')?.name || '--';
 }
 
 function updateTtsStatusIndicator() {
@@ -3120,6 +4011,15 @@ function animate(time) {
   requestAnimationFrame(animate);
   
   const startTime = performance.now();
+  const frameDt = Math.min(((time - (combatState.lastAdrenalineFrame || time)) / 1000) || 0.016, 0.05);
+  combatState.lastAdrenalineFrame = time;
+  combatState.adrenaline = Math.max(0, combatState.adrenaline - combatState.adrenalineDecay * frameDt);
+  if (adrenalineVignette) adrenalineVignette.style.opacity = String(combatState.adrenaline * 0.4);
+  if (combatState.adrenaline > 0.85 && time - combatState.lastAdrenalineBarkAt > 7000) {
+    const lines = ['MULTIPLE CONTACTS', 'WEAPONS HOT', 'THREAT LEVEL: CRITICAL'];
+    combatAudio.bark(lines[Math.floor(Math.random() * lines.length)], { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
+    combatState.lastAdrenalineBarkAt = time;
+  }
   
   // Slow background rotation for holographic core
   if (!prefersReducedMotion) {
@@ -3168,6 +4068,10 @@ function animate(time) {
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
     updateFlight(time);
+    if (time - gameOrchestrator._lastCheck > 1000) {
+      gameOrchestrator._lastCheck = time;
+      pollOrchestrator();
+    }
     pointLight1.color.lerp(tempColor1.set(0xffcc00), 0.08);
     pointLight2.color.lerp(tempColor2.set(0xff3355), 0.08);
   } else if (!isConsoleActive && heroContainer) {
