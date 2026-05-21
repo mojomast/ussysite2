@@ -11,6 +11,7 @@ export function buildOrchestratorGameState({ flightState, traderState, missionSt
     kills: Number(missionState?.kills) || 0,
     nearestStation: nearestStation || 'unknown',
     dockedAt: dockedAt || null,
+    currentObjective: missionState?.currentObjective?.title || null,
     lastEvent: lastEvent || null,
     timeSinceLastEvent: lastEventTime ? Math.max(0, (now - lastEventTime) / 1000) : 999,
     tutorialComplete: Boolean(tutorialComplete || ((missionState?.step === 'idle' && !missionState?.active)))

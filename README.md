@@ -81,9 +81,13 @@ To switch back to GPT Audio, set `OPENROUTER_TTS_MODEL=openai/gpt-audio`. See `d
 
 The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The player starts with credits, fuel, and an empty cargo hold. Project nodes act as stations with deterministic markets: production goods are cheap, demand goods sell high, and prices vary by station/commodity hash.
 
+## Objectives
+
+Dogfight mode now opens with a deployment choice: run the guided tutorial or enter free roam with the director enabled. The tutorial covers combat, landing, and a cargo-market buy/sell route. The flight HUD includes an objectives panel toggled with `O`, showing the current objective and available multi-step contracts.
+
 ## How It Works
 
-The client runs all rendering, flight, combat, trade, mission, and HUD state locally. After the tutorial handoff completes, `gameOrchestrator` begins sparse polling of `/api/orchestrate`; the server asks a cheap Gemini Flash model whether to fire a post-tutorial event. Events return as JSON and are rendered through the existing `showGameMessage()` radio/HUD system.
+The client runs all rendering, flight, combat, trade, objective, mission, and HUD state locally. After the tutorial completes or free roam is selected, `gameOrchestrator` begins sparse polling of `/api/orchestrate`; the server asks a cheap Gemini Flash model whether to fire a post-tutorial event. Events return as JSON and are rendered through the existing `showGameMessage()` radio/HUD system.
 
 ## Environment
 

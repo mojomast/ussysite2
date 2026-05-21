@@ -377,7 +377,25 @@
           </div>
         </div>
         <div class="mini-meter heat"><span id="flight-heat-bar" class="heat-bar-fill"></span></div>
-        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // LMB primary // RMB secondary // V nav // P autopilot // C view // L land // T station // U upgrades // SPACE confirm</div>
+        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // LMB primary // RMB secondary // V nav // P autopilot // C view // O objectives // L land // T station // U upgrades // SPACE confirm</div>
+      </div>
+      <div class="objectives-panel hud-interactive" id="objectives-panel" aria-live="polite">
+        <div class="objectives-panel-header">
+          <span>OBJECTIVES</span>
+          <div class="objectives-toggle" role="tablist" aria-label="Objectives view">
+            <button type="button" class="objective-view-btn active" data-objective-view="current" role="tab" aria-selected="true">Current</button>
+            <button type="button" class="objective-view-btn" data-objective-view="available" role="tab" aria-selected="false">Available</button>
+          </div>
+        </div>
+        <section id="current-objective-pane" class="objective-pane">
+          <div class="objective-kicker" id="objective-kicker">DIRECTOR IDLE</div>
+          <h4 id="objective-title">Free Roam</h4>
+          <p id="objective-body">Launch the ship, pick a project node, or accept a contract.</p>
+          <div class="objective-progress" id="objective-progress">NO ACTIVE OBJECTIVE</div>
+        </section>
+        <section id="available-objectives-pane" class="objective-pane" hidden>
+          <div id="available-objectives-list" class="available-objectives-list"></div>
+        </section>
       </div>
       <div></div> <!-- Spacer -->
     </div>

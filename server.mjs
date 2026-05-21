@@ -59,6 +59,8 @@ Schema:
     "choices": [
       { "key": "1"|"2"|"3", "label": string, "outcome": string }
     ],
+    "objectiveText": string,      // optional HUD objective text for long-lived follow-up
+    "objectiveTarget": string | null, // optional station/project hint
     "spawnEnemies": number,
     "creditReward": number,
     "fuelReward": number,
@@ -207,6 +209,8 @@ function validateOrchestratorEvent(event) {
     title: cleanString(event.title || type).toUpperCase().slice(0, 32),
     text: cleanString(event.text).slice(0, 180),
     choices,
+    objectiveText: cleanString(event.objectiveText).slice(0, 140),
+    objectiveTarget: cleanString(event.objectiveTarget || '').slice(0, 64) || null,
     spawnEnemies: Math.max(0, Math.min(5, Math.floor(Number(event.spawnEnemies) || 0))),
     creditReward: Math.max(0, Math.floor(Number(event.creditReward) || 0)),
     fuelReward: Math.max(0, Math.floor(Number(event.fuelReward) || 0)),
@@ -366,6 +370,7 @@ function normalizeOrchestratorGameState(gameState) {
     kills: Number(gameState?.kills) || 0,
     nearestStation: cleanString(gameState?.nearestStation || 'unknown').slice(0, 64),
     dockedAt: gameState?.dockedAt === null || gameState?.dockedAt === undefined ? null : cleanString(gameState.dockedAt).slice(0, 64),
+    currentObjective: gameState?.currentObjective === null || gameState?.currentObjective === undefined ? null : cleanString(gameState.currentObjective).slice(0, 80),
     lastEvent: gameState?.lastEvent === null || gameState?.lastEvent === undefined ? null : cleanString(gameState.lastEvent).slice(0, 64),
     timeSinceLastEvent: Number(gameState?.timeSinceLastEvent) || 0,
     tutorialComplete: Boolean(gameState?.tutorialComplete)

@@ -259,7 +259,14 @@ const missionState = {
   step: 'idle',
   killGoal: 5,
   kills: 0,
-  landingProjectId: 'devussy'
+  landingProjectId: 'devussy',
+  contractId: null,
+  contractTitle: '',
+  contractStepIndex: 0,
+  contractProgress: 0,
+  contractStartStationId: null,
+  currentObjective: null,
+  objectiveView: 'current'
 };
 
 const gameOrchestrator = {
@@ -291,6 +298,40 @@ const gameMessageState = {
 };
 
 const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. CONTROL REFERENCE IS LIVE ON YOUR HUD. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
+
+const missionContracts = [
+  {
+    id: 'patrol-sweep',
+    title: 'Patrol Sweep',
+    description: 'Clear a pirate scout wing, then dock at any project station for a 300cr bounty.',
+    rewardCredits: 300,
+    steps: [
+      { id: 'patrol-clear', type: 'kills', label: 'Clear Pirate Scouts', detail: 'Destroy 3 hostile contacts before they push into the project graph.', target: 3, spawnEnemies: 3 },
+      { id: 'patrol-dock', type: 'land', label: 'Dock For Bounty', detail: 'Land at any project station to transmit proof of sweep completion.' }
+    ]
+  },
+  {
+    id: 'market-proving-run',
+    title: 'Market Proving Run',
+    description: 'Buy any cargo, fly to a different station, sell cargo, and pocket a 150cr route bonus.',
+    rewardCredits: 150,
+    steps: [
+      { id: 'market-buy', type: 'trade', action: 'buy', label: 'Buy Cargo', detail: 'Open a cargo market and buy at least 1 unit of any commodity.', target: 1 },
+      { id: 'market-dock-away', type: 'landDifferent', label: 'Change Markets', detail: 'Fly to a different project station before selling.', target: 1 },
+      { id: 'market-sell', type: 'trade', action: 'sell', label: 'Sell Cargo', detail: 'Sell at least 1 unit from your hold to complete the run.', target: 1 }
+    ]
+  },
+  {
+    id: 'constellation-survey',
+    title: 'Constellation Survey',
+    description: 'Visit two different project stations and transmit survey telemetry for 200cr.',
+    rewardCredits: 200,
+    steps: [
+      { id: 'survey-first', type: 'land', label: 'Survey First Node', detail: 'Land at any project node to capture local telemetry.', target: 1 },
+      { id: 'survey-second', type: 'landDifferent', label: 'Survey Second Node', detail: 'Land at a different project node to complete the route.', target: 1 }
+    ]
+  }
+];
 
 function numToWord(value) {
   const words = [
@@ -889,6 +930,15 @@ const gameMessageBody = document.getElementById('game-message-body');
 const gameMessageChoices = document.getElementById('game-message-choices');
 const cockpitRadar = document.getElementById('cockpit-radar');
 const radarCtx = cockpitRadar ? cockpitRadar.getContext('2d', { alpha: true }) : null;
+const objectivesPanel = document.getElementById('objectives-panel');
+const objectiveViewButtons = document.querySelectorAll('[data-objective-view]');
+const currentObjectivePane = document.getElementById('current-objective-pane');
+const availableObjectivesPane = document.getElementById('available-objectives-pane');
+const objectiveKicker = document.getElementById('objective-kicker');
+const objectiveTitle = document.getElementById('objective-title');
+const objectiveBody = document.getElementById('objective-body');
+const objectiveProgress = document.getElementById('objective-progress');
+const availableObjectivesList = document.getElementById('available-objectives-list');
 
 // Hero elements
 const heroContainer = document.getElementById('hero-container');
@@ -914,8 +964,11 @@ function init() {
     showGameMessage,
     dismissGameMessage,
     updateFlightHud,
-    getVoicePersona
+    getVoicePersona,
+    onTrade: handleTradeCompleted
   });
+  if (objectivesPanel) objectivesPanel.addEventListener('click', handleObjectivesPanelClick);
+  renderObjectivesPanel();
 
   // Initialize Three.js Scene
   scene = new THREE.Scene();
@@ -1975,7 +2028,7 @@ function enterFlightMode() {
   playerMissiles.forEach(missile => deactivateCombatObject(missile));
 
   ttsEngine.speak('USSYVERSE DOGFIGHT MODE ACTIVATED. WELCOME, OPERATOR.', { rate: 1.0, pitch: 0.72, priority: 'high' });
-  startTutorialMission();
+  showFlightStartupChoice();
   updateFlightHud(true);
   updateCockpitRadar(0, true);
   if (!isCoarsePointer && renderer.domElement.requestPointerLock) {
@@ -2458,10 +2511,149 @@ function handleGameMessageChoice(event) {
   return true;
 }
 
-function startTutorialMission() {
-  missionState.active = true;
+function resetContractState() {
+  missionState.contractId = null;
+  missionState.contractTitle = '';
+  missionState.contractStepIndex = 0;
+  missionState.contractProgress = 0;
+  missionState.contractStartStationId = null;
+}
+
+function getMissionContract(contractId) {
+  return missionContracts.find(contract => contract.id === contractId) || null;
+}
+
+function getActiveContractStep() {
+  const contract = getMissionContract(missionState.contractId);
+  return contract?.steps?.[missionState.contractStepIndex] || null;
+}
+
+function setCurrentObjective({ id = 'free-roam', kicker = 'DIRECTOR IDLE', title = 'Free Roam', detail = 'Pick a project node, accept a contract, or wait for the director.', progress = null, target = null, targetProjectId = null, source = 'local' } = {}) {
+  missionState.currentObjective = { id, kicker, title, detail, progress, target, targetProjectId, source };
+  renderObjectivesPanel();
+}
+
+function getObjectiveProgressLabel(objective = missionState.currentObjective) {
+  if (!objective) return 'NO ACTIVE OBJECTIVE';
+  if (Number.isFinite(objective.progress) && Number.isFinite(objective.target) && objective.target > 0) {
+    return `PROGRESS ${Math.min(objective.progress, objective.target)}/${objective.target}`;
+  }
+  return objective.source === 'director' ? 'DIRECTOR TRACKING' : 'TRACKED IN HUD';
+}
+
+function renderObjectivesPanel() {
+  if (!objectivesPanel) return;
+  const objective = missionState.currentObjective || {
+    kicker: 'DIRECTOR IDLE',
+    title: 'Free Roam',
+    detail: 'Launch the ship, pick a project node, or accept a contract.',
+    source: 'local'
+  };
+  if (objectiveKicker) objectiveKicker.textContent = objective.kicker || 'OBJECTIVE';
+  if (objectiveTitle) objectiveTitle.textContent = objective.title || 'Free Roam';
+  if (objectiveBody) objectiveBody.textContent = objective.detail || 'No objective selected.';
+  if (objectiveProgress) objectiveProgress.textContent = getObjectiveProgressLabel(objective);
+  objectiveViewButtons.forEach(button => {
+    const active = button.dataset.objectiveView === missionState.objectiveView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  if (currentObjectivePane) currentObjectivePane.hidden = missionState.objectiveView !== 'current';
+  if (availableObjectivesPane) availableObjectivesPane.hidden = missionState.objectiveView !== 'available';
+  if (!availableObjectivesList) return;
+  availableObjectivesList.innerHTML = '';
+  missionContracts.forEach(contract => {
+    const canStart = gameOrchestrator.tutorialComplete && !missionState.active;
+    const card = document.createElement('div');
+    card.className = 'available-objective-card';
+    const title = document.createElement('h5');
+    title.textContent = contract.title;
+    const desc = document.createElement('p');
+    desc.textContent = contract.description;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'objective-start-btn';
+    button.dataset.startObjective = contract.id;
+    button.disabled = !canStart;
+    button.textContent = missionState.active ? 'ACTIVE MISSION LOCK' : (gameOrchestrator.tutorialComplete ? 'TRACK OBJECTIVE' : 'COMPLETE STARTUP FIRST');
+    card.append(title, desc, button);
+    availableObjectivesList.appendChild(card);
+  });
+}
+
+function switchObjectivesView(view) {
+  missionState.objectiveView = view === 'available' ? 'available' : 'current';
+  renderObjectivesPanel();
+}
+
+function toggleObjectivesView() {
+  switchObjectivesView(missionState.objectiveView === 'current' ? 'available' : 'current');
+}
+
+function handleObjectivesPanelClick(event) {
+  const viewButton = event.target.closest('[data-objective-view]');
+  if (viewButton) {
+    switchObjectivesView(viewButton.dataset.objectiveView);
+    return;
+  }
+  const startButton = event.target.closest('[data-start-objective]');
+  if (startButton && !startButton.disabled) startMissionContract(startButton.dataset.startObjective);
+}
+
+function showFlightStartupChoice() {
+  setCurrentObjective({
+    id: 'startup-choice',
+    kicker: 'BOOT SEQUENCE',
+    title: 'Choose Deployment',
+    detail: 'Start the guided tutorial or drop directly into director-led free roam.'
+  });
+  showGameMessage({
+    type: 'DEPLOYMENT CHOICE',
+    source: 'USSYVERSE CONTROL',
+    text: 'DOGFIGHT MODE ONLINE. CHOOSE A GUIDED TUTORIAL WITH COMBAT, LANDING, AND TRADING, OR DROP STRAIGHT INTO FREE ROAM WITH THE DIRECTOR ENABLED.',
+    choices: [
+      { key: '1', code: 'Digit1', label: 'START TUTORIAL', action: () => startTutorialMission() },
+      { key: '2', code: 'Digit2', label: 'FREE ROAM WITH DIRECTOR', action: () => startFreeRoam() }
+    ],
+    onDismiss: () => startTutorialMission(),
+    typeSpeed: 18
+  });
+  flightState.status = 'SELECT DEPLOYMENT PROFILE';
+  flightState.statusUntil = performance.now() + 3500;
+}
+
+function startFreeRoam(message = 'FREE ROAM ENABLED. THE DIRECTOR WILL OFFER COMMS, BOUNTIES, DISTRESS CALLS, AND ROUTE PRESSURE AS YOU EXPLORE.') {
+  missionState.active = false;
+  missionState.step = 'idle';
   missionState.kills = 0;
+  resetContractState();
+  gameOrchestrator.tutorialComplete = true;
+  gameOrchestrator.nextPollAt = performance.now() + 12000;
+  setCurrentObjective({
+    id: 'free-roam',
+    kicker: 'DIRECTOR ONLINE',
+    title: 'Free Roam',
+    detail: 'Accept available objectives from the HUD, land at project stations, trade cargo, or wait for the director to inject events.',
+    source: 'director'
+  });
+  showGameMessage({ type: 'SYSTEM UPDATE', source: 'USSYVERSE CONTROL', text: message, ttsPriority: 'normal' });
+  updateFlightHud(true);
+}
+
+function startTutorialMission() {
+  resetContractState();
+  missionState.active = true;
+  missionState.contractId = 'tutorial-flight-school';
+  missionState.contractTitle = 'Flight Tutorial';
+  missionState.kills = 0;
+  missionState.landingProjectId = 'devussy';
   missionState.step = 'introTyping';
+  setCurrentObjective({
+    id: 'tutorial-intro',
+    kicker: 'TUTORIAL 1/5',
+    title: 'Read Flight Briefing',
+    detail: 'Confirm the briefing to spawn tutorial bogeys.'
+  });
   showGameMessage({
     type: 'EASTER EGG DISCOVERED',
     source: 'USSYVERSE CONTROL',
@@ -2477,6 +2669,14 @@ function setMissionStep(step) {
   missionState.step = step;
   if (step === 'killTutorialBogeys') {
     flightState.landed = false;
+    setCurrentObjective({
+      id: 'tutorial-bogeys',
+      kicker: 'TUTORIAL 2/5',
+      title: 'Splash Tutorial Bogeys',
+      detail: 'Destroy teleporting tutorial targets using lasers or missiles.',
+      progress: missionState.kills,
+      target: missionState.killGoal
+    });
     flightState.status = 'TUTORIAL BOGEYS TELEPORTING IN';
     flightState.statusUntil = performance.now() + 2500;
     spawnTutorialBogeys();
@@ -2489,30 +2689,113 @@ function setMissionStep(step) {
     const projectName = getMissionLandingProjectName();
     const missionNode = projectNodeById.get(missionState.landingProjectId);
     if (missionNode) setNavigationTarget(missionNode, 'mission');
+    setCurrentObjective({
+      id: 'tutorial-land',
+      kicker: 'TUTORIAL 3/5',
+      title: `Land At ${projectName}`,
+      detail: 'Follow the nav marker to the project node and press L inside landing range.',
+      targetProjectId: missionState.landingProjectId
+    });
     showGameMessage({
       type: 'MISSION UPDATE',
       source: 'USSYVERSE CONTROL',
-      text: `OBJECTIVE COMPLETE. NAVIGATE TO ${projectName.toUpperCase()} AND LAND WITH L TO RECEIVE YOUR NEXT MISSION PACKAGE.`
+      text: `OBJECTIVE COMPLETE. NAVIGATE TO ${projectName.toUpperCase()} AND LAND WITH L TO RECEIVE YOUR TRADING PACKAGE.`
     });
     flightState.status = `LAND AT ${projectName.toUpperCase()}`;
     flightState.statusUntil = performance.now() + 3000;
   } else if (step === 'landedHandoff') {
+    setCurrentObjective({
+      id: 'tutorial-trade-open',
+      kicker: 'TUTORIAL 4/5',
+      title: 'Open Cargo Market',
+      detail: 'Use the cargo market to buy one commodity. Production goods are cheaper; demand goods sell higher.'
+    });
     showGameMessage({
-      type: 'INCOMING COMMUNICATION',
+      type: 'TRADING TUTORIAL',
       source: 'DEVUSSY DOCK CONTROL',
-      text: 'DOCKING CONFIRMED. DEVUSSY HAS REARMED YOUR SHIP AND DELIVERED THE NEXT CONTRACT. THE FULL GAME LOOP IS ONLINE: HUNT BOGEYS, LAND ON PROJECTS, LEARN THE SYSTEM, RESTOCK, AND KEEP MOVING.',
+      text: 'DOCKING CONFIRMED. YOUR SHIP IS RESTOCKED. NEXT: OPEN THE CARGO MARKET AND BUY ONE UNIT. STATIONS SELL PRODUCTION GOODS CHEAP AND PAY PREMIUMS FOR DEMAND GOODS.',
       choices: [
-        { key: '1', code: 'Digit1', label: 'ACKNOWLEDGE AND FREE ROAM', action: () => showGameMessage({ type: 'SYSTEM UPDATE', source: 'USSYVERSE CONTROL', text: 'FREE ROAM ENABLED. LAND ON PROJECT NODES TO INSPECT SYSTEMS AND RESTOCK BETWEEN ENGAGEMENTS.' }) },
-        { key: '2', code: 'Digit2', label: 'REQUEST MORE CONTRACTS', action: () => showGameMessage({ type: 'FACTION COMMS', source: 'DEVUSSY DOCK CONTROL', text: 'CONTRACT BOARD IS BEING ASSEMBLED. FOR NOW, KEEP THE CONSTELLATION CLEAR AND MAP PROJECT NODES.' }) }
+        { key: '1', code: 'Digit1', label: 'OPEN CARGO MARKET', action: () => startTradingTutorialBuy(missionState.landingProjectId) },
+        { key: '2', code: 'Digit2', label: 'SKIP TO FREE ROAM', action: () => startFreeRoam('TUTORIAL SKIPPED AFTER DOCKING. DIRECTOR ONLINE; OPTIONAL CONTRACTS ARE AVAILABLE IN THE OBJECTIVES HUD.') }
       ]
     });
-    flightState.status = 'MISSION HANDOFF RECEIVED';
+    flightState.status = 'TRADING TUTORIAL READY';
     flightState.statusUntil = performance.now() + 3000;
-    missionState.active = false;
-    missionState.step = 'idle';
-    gameOrchestrator.tutorialComplete = true;
-    gameOrchestrator.nextPollAt = performance.now() + 30000;
+  } else if (step === 'tradingTutorialTravel') {
+    const targetId = getTradingTutorialDestinationId();
+    const targetNode = projectNodeById.get(targetId);
+    const targetName = stationName(targetId);
+    missionState.landingProjectId = targetId;
+    if (targetNode) setNavigationTarget(targetNode, 'mission');
+    setCurrentObjective({
+      id: 'tutorial-trade-route',
+      kicker: 'TUTORIAL 5/5',
+      title: `Fly To ${targetName}`,
+      detail: 'Leave dock, follow the nav marker, and land at a different market before selling.',
+      targetProjectId: targetId
+    });
+    showGameMessage({
+      type: 'TRADE ROUTE SET',
+      source: 'USSYVERSE CONTROL',
+      text: `CARGO LOADED. NAVIGATION SET TO ${targetName.toUpperCase()}. FLY THERE, LAND WITH L, THEN SELL CARGO FROM THE MARKET.`
+    });
+  } else if (step === 'tradingTutorialSell') {
+    setCurrentObjective({
+      id: 'tutorial-trade-sell',
+      kicker: 'TUTORIAL 5/5',
+      title: 'Sell Cargo',
+      detail: 'Open the cargo market at this station and sell at least one unit from your hold.',
+      progress: 0,
+      target: 1
+    });
+    showGameMessage({
+      type: 'SELL CARGO',
+      source: `${stationName(traderState.dockedStation).toUpperCase()} DOCK CONTROL`,
+      text: 'NEW MARKET CONTACT ESTABLISHED. OPEN THE CARGO MARKET, SELECT A HELD COMMODITY, AND SELL ONE UNIT TO COMPLETE THE TUTORIAL.',
+      choices: [
+        { key: '1', code: 'Digit1', label: 'OPEN CARGO MARKET', action: () => openTradeMenu(traderState.dockedStation) },
+        { key: '2', code: 'Digit2', label: 'FINISH WITHOUT SELLING', action: () => finishTutorialMission('TUTORIAL COMPLETE. DIRECTOR ONLINE; USE OBJECTIVES TO PICK CONTRACTS OR KEEP EXPLORING.') }
+      ]
+    });
   }
+  renderObjectivesPanel();
+}
+
+function startTradingTutorialBuy(projectId) {
+  missionState.step = 'tradingTutorialBuy';
+  missionState.contractStartStationId = projectId;
+  setCurrentObjective({
+    id: 'tutorial-trade-buy',
+    kicker: 'TUTORIAL 4/5',
+    title: 'Buy Cargo',
+    detail: 'Buy at least one commodity from the station market.',
+    progress: 0,
+    target: 1
+  });
+  openTradeMenu(projectId);
+}
+
+function finishTutorialMission(message) {
+  missionState.active = false;
+  missionState.step = 'idle';
+  resetContractState();
+  gameOrchestrator.tutorialComplete = true;
+  gameOrchestrator.nextPollAt = performance.now() + 30000;
+  setCurrentObjective({
+    id: 'free-roam',
+    kicker: 'DIRECTOR ONLINE',
+    title: 'Free Roam',
+    detail: 'Pick an available objective, trade between project stations, or wait for the director to inject live events.',
+    source: 'director'
+  });
+  showGameMessage({ type: 'SYSTEM UPDATE', source: 'USSYVERSE CONTROL', text: message, ttsPriority: 'normal' });
+  updateFlightHud(true);
+}
+
+function getTradingTutorialDestinationId() {
+  if (projectNodeById.has('openclawssy')) return 'openclawssy';
+  const destination = USSY_PROJECTS.find(project => project.id !== missionState.contractStartStationId && project.id !== 'devussy');
+  return destination?.id || 'devussy';
 }
 
 function updateMission(time) {
@@ -2521,48 +2804,93 @@ function updateMission(time) {
 }
 
 function registerMissionKill() {
-  if (!missionState.active || missionState.step !== 'killTutorialBogeys') return;
-  missionState.kills = Math.min(missionState.killGoal, missionState.kills + 1);
-  if (missionState.kills >= missionState.killGoal) {
-    enemies.forEach(enemy => deactivateCombatObject(enemy));
-    setMissionStep('goLandAtProject');
-  } else {
-    const killCallouts = [
-      'SPLASH ONE',
-      'BOGEY DOWN',
-      'KILL CONFIRMED',
-      'TARGET ELIMINATED',
-      'FOX TWO AWAY',
-      'TALLY HO',
-      'GUNS GUNS GUNS',
-      'BANDIT DOWN',
-      'CLEARED HOT',
-      'WINCHESTER ACHIEVED',
-      'SPLASH ANOTHER',
-      'GOOD KILL',
-      'RADAR CONTACT LOST',
-      'BINGO BINGO',
-      'BREAKING RIGHT',
-      'ENGAGED'
-    ];
-    combatAudio.bark(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85, priority: 'low' });
-    showGameMessage({
-      type: 'MISSION PROGRESS',
-      source: 'COMBAT SYSTEM',
-      text: `BOGEY DESTROYED. OBJECTIVE PROGRESS: ${missionState.kills}/${missionState.killGoal}. CONTINUE SWEEPING RADAR.`
+  if (!missionState.active) return;
+  if (missionState.step === 'killTutorialBogeys') {
+    missionState.kills = Math.min(missionState.killGoal, missionState.kills + 1);
+    setCurrentObjective({
+      id: 'tutorial-bogeys',
+      kicker: 'TUTORIAL 2/5',
+      title: 'Splash Tutorial Bogeys',
+      detail: 'Destroy teleporting tutorial targets using lasers or missiles.',
+      progress: missionState.kills,
+      target: missionState.killGoal
     });
+    if (missionState.kills >= missionState.killGoal) {
+      enemies.forEach(enemy => deactivateCombatObject(enemy));
+      setMissionStep('goLandAtProject');
+    } else {
+      showMissionKillProgress(`BOGEY DESTROYED. OBJECTIVE PROGRESS: ${missionState.kills}/${missionState.killGoal}. CONTINUE SWEEPING RADAR.`);
+    }
+    return;
   }
+
+  const step = getActiveContractStep();
+  if (!step || step.type !== 'kills') return;
+  missionState.contractProgress = Math.min(step.target, missionState.contractProgress + 1);
+  updateContractObjectiveProgress();
+  if (missionState.contractProgress >= step.target) advanceContractStep();
+}
+
+function showMissionKillProgress(text) {
+  const killCallouts = [
+    'SPLASH ONE',
+    'BOGEY DOWN',
+    'KILL CONFIRMED',
+    'TARGET ELIMINATED',
+    'FOX TWO AWAY',
+    'TALLY HO',
+    'GUNS GUNS GUNS',
+    'BANDIT DOWN',
+    'CLEARED HOT',
+    'WINCHESTER ACHIEVED',
+    'SPLASH ANOTHER',
+    'GOOD KILL',
+    'RADAR CONTACT LOST',
+    'BINGO BINGO',
+    'BREAKING RIGHT',
+    'ENGAGED'
+  ];
+  combatAudio.bark(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85, priority: 'low' });
+  showGameMessage({ type: 'MISSION PROGRESS', source: 'COMBAT SYSTEM', text });
 }
 
 function handleMissionLanding(project) {
-  if (!missionState.active || missionState.step !== 'goLandAtProject') return true;
-  if (project.id !== missionState.landingProjectId) {
-    flightState.status = `WRONG DOCK // LAND AT ${getMissionLandingProjectName().toUpperCase()}`;
-    flightState.statusUntil = performance.now() + 2500;
-    updateFlightHud(true);
-    return false;
+  if (!missionState.active) return handleDirectorLanding(project);
+  if (missionState.step === 'goLandAtProject') {
+    if (project.id !== missionState.landingProjectId) {
+      flightState.status = `WRONG DOCK // LAND AT ${getMissionLandingProjectName().toUpperCase()}`;
+      flightState.statusUntil = performance.now() + 2500;
+      updateFlightHud(true);
+      return false;
+    }
+    setMissionStep('landedHandoff');
+    return true;
   }
-  setMissionStep('landedHandoff');
+  if (missionState.step === 'tradingTutorialTravel') {
+    if (project.id !== missionState.landingProjectId) {
+      flightState.status = `TRADE ROUTE TARGET: ${stationName(missionState.landingProjectId).toUpperCase()}`;
+      flightState.statusUntil = performance.now() + 2500;
+      updateFlightHud(true);
+      return false;
+    }
+    setMissionStep('tradingTutorialSell');
+    return true;
+  }
+  return handleContractLanding(project);
+}
+
+function handleDirectorLanding(project) {
+  const objective = missionState.currentObjective;
+  if (!objective?.id?.startsWith('director-distress')) return true;
+  if (objective.targetProjectId && project.id !== objective.targetProjectId) return true;
+  setCurrentObjective({
+    id: 'free-roam',
+    kicker: 'DIRECTOR ONLINE',
+    title: 'Free Roam',
+    detail: 'Distress coordinates reached. Await the next director event or pick a contract.',
+    source: 'director'
+  });
+  showGameMessage({ type: 'DISTRESS RESOLVED', source: 'USSYVERSE CONTROL', text: 'DISTRESS COORDINATES REACHED. LOCAL STATION LOGGED YOUR RESPONSE.' });
   return true;
 }
 
@@ -2570,6 +2898,124 @@ function spawnTutorialBogeys() {
   enemies.forEach(enemy => deactivateCombatObject(enemy));
   const tutorialCount = Math.min(3, enemies.length);
   for (let i = 0; i < tutorialCount; i++) spawnEnemy(enemies[i], i * 2.2, i * 0.8);
+}
+
+function startMissionContract(contractId) {
+  if (missionState.active || !gameOrchestrator.tutorialComplete) return;
+  const contract = getMissionContract(contractId);
+  if (!contract) return;
+  missionState.active = true;
+  missionState.contractId = contract.id;
+  missionState.contractTitle = contract.title;
+  missionState.contractStepIndex = 0;
+  missionState.contractProgress = 0;
+  missionState.contractStartStationId = traderState.dockedStation || null;
+  missionState.objectiveView = 'current';
+  beginContractStep();
+  showGameMessage({ type: 'OBJECTIVE ACCEPTED', source: 'USSYVERSE CONTROL', text: `${contract.title.toUpperCase()} ACCEPTED. ${contract.description}`, ttsPriority: 'normal' });
+}
+
+function beginContractStep() {
+  const step = getActiveContractStep();
+  if (!step) return completeMissionContract();
+  missionState.step = step.id;
+  missionState.contractProgress = 0;
+  updateContractObjectiveProgress();
+  if (step.type === 'kills') {
+    enemies.forEach(enemy => deactivateCombatObject(enemy));
+    const count = Math.min(step.spawnEnemies || step.target || 1, enemies.length);
+    for (let i = 0; i < count; i++) spawnEnemy(enemies[i], i * 1.8, i * 0.6);
+    flightState.status = `${step.label.toUpperCase()} STARTED`;
+    flightState.statusUntil = performance.now() + 2400;
+  }
+}
+
+function updateContractObjectiveProgress() {
+  const contract = getMissionContract(missionState.contractId);
+  const step = getActiveContractStep();
+  if (!contract || !step) return;
+  setCurrentObjective({
+    id: `${contract.id}:${step.id}`,
+    kicker: `${contract.title} ${missionState.contractStepIndex + 1}/${contract.steps.length}`,
+    title: step.label,
+    detail: step.detail,
+    progress: Number.isFinite(step.target) ? missionState.contractProgress : null,
+    target: Number.isFinite(step.target) ? step.target : null
+  });
+}
+
+function advanceContractStep() {
+  const contract = getMissionContract(missionState.contractId);
+  if (!contract) return;
+  missionState.contractStepIndex += 1;
+  if (missionState.contractStepIndex >= contract.steps.length) {
+    completeMissionContract();
+    return;
+  }
+  beginContractStep();
+  const step = getActiveContractStep();
+  showGameMessage({ type: 'OBJECTIVE UPDATED', source: 'USSYVERSE CONTROL', text: `NEXT STEP: ${step.label.toUpperCase()}. ${step.detail}`, ttsPriority: 'normal' });
+}
+
+function completeMissionContract() {
+  const contract = getMissionContract(missionState.contractId);
+  const reward = contract?.rewardCredits || 0;
+  if (reward > 0) addCombatCredits(reward);
+  const title = contract?.title || 'Objective';
+  missionState.active = false;
+  missionState.step = 'idle';
+  resetContractState();
+  setCurrentObjective({
+    id: 'free-roam',
+    kicker: 'DIRECTOR ONLINE',
+    title: 'Free Roam',
+    detail: `${title} complete${reward ? `, ${reward}cr paid` : ''}. Pick another objective or keep flying.`,
+    source: 'director'
+  });
+  showGameMessage({ type: 'OBJECTIVE COMPLETE', source: 'USSYVERSE CONTROL', text: `${title.toUpperCase()} COMPLETE.${reward ? ` ${reward} CREDITS TRANSFERRED.` : ''}`, ttsPriority: 'normal' });
+  updateFlightHud(true);
+}
+
+function handleContractLanding(project) {
+  const step = getActiveContractStep();
+  if (!step || (step.type !== 'land' && step.type !== 'landDifferent')) return true;
+  if (step.type === 'landDifferent' && project.id === missionState.contractStartStationId) {
+    flightState.status = 'OBJECTIVE NEEDS A DIFFERENT STATION';
+    flightState.statusUntil = performance.now() + 2500;
+    updateFlightHud(true);
+    return false;
+  }
+  missionState.contractProgress = step.target || 1;
+  if (!missionState.contractStartStationId) missionState.contractStartStationId = project.id;
+  advanceContractStep();
+  return true;
+}
+
+function handleTradeCompleted(trade) {
+  if (missionState.active && missionState.step === 'tradingTutorialBuy' && trade.action === 'buy') {
+    missionState.contractStartStationId = trade.stationId;
+    setMissionStep('tradingTutorialTravel');
+    return;
+  }
+  if (missionState.active && missionState.step === 'tradingTutorialSell' && trade.action === 'sell') {
+    setCurrentObjective({
+      id: 'tutorial-trade-sell',
+      kicker: 'TUTORIAL 5/5',
+      title: 'Sell Cargo',
+      detail: 'Cargo sold. Tutorial handoff is complete.',
+      progress: 1,
+      target: 1
+    });
+    finishTutorialMission('TUTORIAL COMPLETE. COMBAT, LANDING, TRADING, CONTRACTS, AND THE DIRECTOR ARE ONLINE.');
+    return;
+  }
+  const step = getActiveContractStep();
+  if (!missionState.active || !step || step.type !== 'trade') return;
+  if (step.action && trade.action !== step.action) return;
+  if (step.action === 'buy') missionState.contractStartStationId = trade.stationId;
+  missionState.contractProgress = Math.min(step.target || 1, missionState.contractProgress + Math.max(1, trade.qty || 1));
+  updateContractObjectiveProgress();
+  if (missionState.contractProgress >= (step.target || 1)) advanceContractStep();
 }
 
 function handleEnemyDestroyed(enemy) {
@@ -2583,6 +3029,13 @@ function handleEnemyDestroyed(enemy) {
       flightState.status = `BOUNTY CLAIMED: +${reward}cr`;
       flightState.statusUntil = performance.now() + 3000;
       gameOrchestrator.bountyPendingReward = 0;
+      setCurrentObjective({
+        id: 'free-roam',
+        kicker: 'DIRECTOR ONLINE',
+        title: 'Free Roam',
+        detail: `Bounty wave cleared, ${reward}cr paid. Pick another objective or await director traffic.`,
+        source: 'director'
+      });
       ttsEngine.speak('BOUNTY CLAIMED.', getVoicePersona('USSYVERSE CONTROL'));
       updateFlightHud(true);
     }
@@ -2920,8 +3373,9 @@ async function pollOrchestrator() {
     // Orchestration is opportunistic and must never interrupt the local game loop.
   } finally {
     gameOrchestrator.polling = false;
-    const jitter = Math.random() * 20000;
-    gameOrchestrator.nextPollAt = performance.now() + gameOrchestrator.minInterval + jitter;
+    const minInterval = Math.min(gameOrchestrator.minInterval, gameOrchestrator.maxInterval);
+    const maxInterval = Math.max(gameOrchestrator.minInterval, gameOrchestrator.maxInterval);
+    gameOrchestrator.nextPollAt = performance.now() + minInterval + Math.random() * (maxInterval - minInterval);
   }
 }
 
@@ -2962,18 +3416,36 @@ function fireOrchestratedEvent(event) {
     spawnEnemies: Math.max(0, Math.min(5, Number(event.spawnEnemies) || 0)),
     creditReward: Math.max(0, Number(event.creditReward) || 0),
     fuelReward: Math.max(0, Number(event.fuelReward) || 0),
-    urgency: event.urgency || 'normal'
+    urgency: event.urgency || 'normal',
+    objectiveText: event.objectiveText || '',
+    objectiveTarget: event.objectiveTarget || null
   };
   gameOrchestrator.lastEventTime = performance.now();
   gameOrchestrator.lastEventId = normalizedEvent.id;
 
   if (normalizedEvent.type === 'COMBAT') {
-    spawnOrchestratedEnemies(normalizedEvent);
+    const spawned = spawnOrchestratedEnemies(normalizedEvent);
+    setCurrentObjective({
+      id: `director-combat-${normalizedEvent.id}`,
+      kicker: 'DIRECTOR EVENT',
+      title: normalizedEvent.title || 'Hostile Contact',
+      detail: normalizedEvent.objectiveText || `Survive contact and clear ${spawned || normalizedEvent.spawnEnemies || 1} hostile ships.`,
+      source: 'director'
+    });
     flightState.status = `HOSTILE CONTACT: ${normalizedEvent.source}`;
     flightState.statusUntil = performance.now() + 3000;
   } else if (normalizedEvent.type === 'BOUNTY') {
-    spawnOrchestratedEnemies(normalizedEvent);
+    const spawned = spawnOrchestratedEnemies(normalizedEvent);
     gameOrchestrator.bountyPendingReward = normalizedEvent.creditReward || 250;
+    setCurrentObjective({
+      id: `director-bounty-${normalizedEvent.id}`,
+      kicker: 'BOUNTY CONTRACT',
+      title: normalizedEvent.title || 'Bounty Posted',
+      detail: normalizedEvent.objectiveText || `Clear the bounty wave for ${gameOrchestrator.bountyPendingReward} credits.`,
+      progress: 0,
+      target: spawned || normalizedEvent.spawnEnemies || null,
+      source: 'director'
+    });
   }
 
   if (normalizedEvent.type === 'DISTRESS') {
@@ -2985,7 +3457,17 @@ function fireOrchestratedEvent(event) {
         action: () => {
           dismissGameMessage();
           const node = getRandomActiveProjectNode();
-          if (node) setNavigationTarget(node, 'mission');
+          if (node) {
+            setNavigationTarget(node, 'mission');
+            setCurrentObjective({
+              id: `director-distress-${normalizedEvent.id}`,
+              kicker: 'DISTRESS ROUTE',
+              title: normalizedEvent.title || 'Distress Signal',
+              detail: normalizedEvent.objectiveText || `Proceed to ${getProjectNodeName(node)} and land to log the response.`,
+              targetProjectId: node.userData.project.id,
+              source: 'director'
+            });
+          }
           window.setTimeout(() => showGameMessage({ type: 'NAVIGATION UPDATED', source: 'USSYVERSE CONTROL', text: 'NAVIGATION UPDATED. PROCEED TO COORDINATES.', typeSpeed: 16 }), 400);
         }
       },
@@ -3118,6 +3600,11 @@ function onGlobalKeyDown(event) {
   if (event.code === 'KeyC') {
     event.preventDefault();
     if (!event.repeat) toggleFlightView();
+    return;
+  }
+  if (event.code === 'KeyO') {
+    event.preventDefault();
+    if (!event.repeat) toggleObjectivesView();
     return;
   }
   if (event.code === 'KeyL') {

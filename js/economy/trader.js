@@ -32,12 +32,14 @@ let showGameMessageRef = noop;
 let dismissGameMessageRef = noop;
 let updateFlightHudRef = noop;
 let getVoicePersonaRef = () => ({});
+let onTradeRef = noop;
 
-export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona } = {}) {
+export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona, onTrade } = {}) {
   if (typeof showGameMessage === 'function') showGameMessageRef = showGameMessage;
   if (typeof dismissGameMessage === 'function') dismissGameMessageRef = dismissGameMessage;
   if (typeof updateFlightHud === 'function') updateFlightHudRef = updateFlightHud;
   if (typeof getVoicePersona === 'function') getVoicePersonaRef = getVoicePersona;
+  if (typeof onTrade === 'function') onTradeRef = onTrade;
 }
 
 function getProject(projectId) {
@@ -254,6 +256,7 @@ export function executeTrade(action, projectId, commodityId, qty) {
     traderState.credits -= total;
     traderState.cargo[commodityId] = (traderState.cargo[commodityId] || 0) + quantity;
     recordTrade(action, projectId, commodity, quantity, price);
+    onTradeRef({ ...traderState.lastTrade, total });
     ttsEngine.speak('CARGO LOADED. CREDITS DEDUCTED.', getVoicePersonaRef('USSYVERSE CONTROL'));
     return { success: true, message: `CARGO LOADED: ${quantity} ${commodity.name}. ${total} CREDITS DEDUCTED.` };
   }
@@ -264,6 +267,7 @@ export function executeTrade(action, projectId, commodityId, qty) {
     traderState.cargo[commodityId] -= quantity;
     if (traderState.cargo[commodityId] <= 0) delete traderState.cargo[commodityId];
     recordTrade(action, projectId, commodity, quantity, price);
+    onTradeRef({ ...traderState.lastTrade, total });
     ttsEngine.speak('CARGO SOLD. CREDITS RECEIVED.', getVoicePersonaRef('USSYVERSE CONTROL'));
     return { success: true, message: `CARGO SOLD: ${quantity} ${commodity.name}. ${total} CREDITS RECEIVED.` };
   }

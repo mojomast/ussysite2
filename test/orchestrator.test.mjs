@@ -19,7 +19,7 @@ test('buildOrchestratorPayload returns all required gameState fields', () => {
   const gameState = buildOrchestratorGameState({
     flightState: { score: 3, shield: 90, armor: 80, ammo: 120, missiles: 4, fuel: 60 },
     traderState: { credits: 1250, fuel: 67, cargo: { rawlogs: 2 }, dockedStation: 'devussy' },
-    missionState: { active: false, step: 'idle', kills: 5 },
+    missionState: { active: false, step: 'idle', kills: 5, currentObjective: { title: 'Free Roam' } },
     nearestStation: 'devussy',
     dockedAt: 'devussy',
     lastEvent: 'silence_ping',
@@ -27,7 +27,7 @@ test('buildOrchestratorPayload returns all required gameState fields', () => {
     now: 46000,
     tutorialComplete: true
   });
-  for (const key of ['score', 'credits', 'fuel', 'cargo', 'shield', 'armor', 'ammo', 'missiles', 'kills', 'nearestStation', 'dockedAt', 'lastEvent', 'timeSinceLastEvent', 'tutorialComplete']) {
+  for (const key of ['score', 'credits', 'fuel', 'cargo', 'shield', 'armor', 'ammo', 'missiles', 'kills', 'nearestStation', 'dockedAt', 'currentObjective', 'lastEvent', 'timeSinceLastEvent', 'tutorialComplete']) {
     assert.ok(Object.hasOwn(gameState, key), `Expected ${key}`);
   }
   assert.equal(gameState.timeSinceLastEvent, 45);
@@ -80,6 +80,8 @@ test('response schema validation parses valid LLM JSON', () => {
       title: 'BOUNTY POSTED',
       text: 'Hostile drones are shadowing the constellation. Clear them for payment.',
       choices: [{ key: '1', label: 'ACCEPT', outcome: 'Bounty accepted.' }],
+      objectiveText: 'Clear the bounty wave and return to station traffic.',
+      objectiveTarget: null,
       spawnEnemies: 2,
       creditReward: 300,
       fuelReward: 0,
@@ -89,6 +91,7 @@ test('response schema validation parses valid LLM JSON', () => {
   assert.equal(parsed.fire, true);
   assert.equal(parsed.event.type, 'BOUNTY');
   assert.equal(parsed.event.spawnEnemies, 2);
+  assert.equal(parsed.event.objectiveText, 'Clear the bounty wave and return to station traffic.');
 });
 
 test('fetchOpenRouterOrchestration parses a mock valid LLM response', async () => {

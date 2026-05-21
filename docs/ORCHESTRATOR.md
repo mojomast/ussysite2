@@ -4,7 +4,7 @@
 
 The AI gameplay orchestrator adds post-tutorial variety without replacing the local game loop. The browser remains authoritative for flight, combat, trade, and HUD state. Gemini only decides whether a sparse event should fire and returns validated JSON.
 
-Design priorities: cheap model, sparse polling, non-blocking failures, no active-dialog interruption, and no hard dependency on live AI for the game to run.
+Design priorities: cheap model, sparse polling, non-blocking failures, no active-dialog interruption, browser-authoritative objectives, and no hard dependency on live AI for the game to run.
 
 ## Event Types
 
@@ -38,6 +38,7 @@ Request:
     "kills": 5,
     "nearestStation": "devussy",
     "dockedAt": null,
+    "currentObjective": "Free Roam",
     "lastEvent": null,
     "timeSinceLastEvent": 999,
     "tutorialComplete": true
@@ -57,6 +58,8 @@ Response:
     "title": "DEEP SIGNAL",
     "text": "Carrier static rolls across the canopy. No contact follows.",
     "choices": [],
+    "objectiveText": "",
+    "objectiveTarget": null,
     "spawnEnemies": 0,
     "creditReward": 0,
     "fuelReward": 0,
@@ -65,7 +68,11 @@ Response:
 }
 ```
 
-Failures return `{ "fire": false, "event": null, "error": "..." }` or no event when disabled.
+`objectiveText` and `objectiveTarget` are optional. When present, the browser may surface them in the objectives HUD for distress, bounty, or combat follow-up. Failures return `{ "fire": false, "event": null, "error": "..." }` or no event when disabled.
+
+## Objectives
+
+The browser owns objective state. The director can suggest an objective label, but local handlers decide when it resolves. Distress objectives resolve on landing at the selected project node, bounty objectives resolve when the bounty wave is cleared, and combat objectives remain advisory so they cannot block the player if enemies despawn or the network fails.
 
 ## Environment
 
@@ -78,7 +85,7 @@ The server falls back to `google/gemini-2.0-flash-001` if the primary model requ
 
 ## Testing
 
-From the browser console after completing the tutorial:
+From the browser console after completing the tutorial or choosing free roam:
 
 ```js
 window.pollOrchestrator()
