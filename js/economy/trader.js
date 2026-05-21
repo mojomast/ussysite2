@@ -1,4 +1,12 @@
 import { ttsEngine } from '../tts/engine.js';
+import {
+  SKILL_TREE_NODES,
+  WEAPON_DEFS,
+  WEAPON_PRICES,
+  getStationEquipment,
+  normalizeStationCategory
+} from '../flight/combat-overhaul.js';
+import { combatState, buyWeapon, equipWeapon, reapplySkills, unlockSkillNode } from '../flight/combat-state.js';
 
 export const traderState = {
   credits: 1000,
@@ -126,6 +134,7 @@ export function openTradeMenu(projectId) {
       { key: '1', code: 'Digit1', label: 'VIEW MARKET', action: () => showMarket(projectId, 0) },
       { key: '2', code: 'Digit2', label: 'REFUEL', action: () => refuelDialog(projectId) },
       { key: '3', code: 'Digit3', label: 'VIEW CARGO', action: () => showCargoHold(projectId) },
+      { key: '4', code: 'Digit4', label: 'SHIPYARD', action: () => showShipyard(projectId) },
       { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessageRef() }
     ]
   });
@@ -168,6 +177,167 @@ function showMarket(projectId, page = 0) {
     source: stationSource(projectId),
     text: `MARKET PAGE ${page + 1}. PRODUCTION GOODS ARE CHEAP. DEMAND GOODS PAY PREMIUMS. SELECT COMMODITY:`,
     choices
+  });
+}
+
+function getWeaponSlot(weaponId) {
+  const weapon = WEAPON_DEFS.find(item => item.id === weaponId);
+  if (!weapon) return '';
+  if (combatState.primaryWeapon === weaponId) return 'PRIMARY';
+  if (combatState.secondaryWeapon === weaponId) return 'SECONDARY';
+  return '';
+}
+
+function weaponShopRows(weaponIds) {
+  return weaponIds.map(weaponId => {
+    const weapon = WEAPON_DEFS.find(item => item.id === weaponId);
+    if (!weapon) return `UNKNOWN ${weaponId}`;
+    const price = WEAPON_PRICES[weaponId] ?? 0;
+    const owned = combatState.ownedWeapons.has(weaponId);
+    const slot = getWeaponSlot(weaponId);
+    return `${weapon.name} ${price}cr ${owned ? 'OWNED' : 'LOCKED'}${slot ? ` ${slot}` : ''}`;
+  });
+}
+
+function showShipyard(projectId) {
+  showGameMessageRef({
+    type: 'SHIPYARD',
+    source: `${stationName(projectId).toUpperCase()} SHIPYARD`,
+    text: `SHIPYARD ONLINE. CREDITS: ${traderState.credits}CR. SP: ${combatState.skillPoints}. SELECT BAY:`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'WEAPONS', action: () => showWeaponShop(projectId, 0) },
+      { key: '2', code: 'Digit2', label: 'SKILLS', action: () => showSkillTree('HULL', projectId) },
+      { key: '3', code: 'Digit3', label: 'BACK', action: () => openTradeMenu(projectId) }
+    ]
+  });
+}
+
+function stationWeaponIds(projectId) {
+  const category = getProject(projectId)?.category;
+  return getStationEquipment(normalizeStationCategory(category));
+}
+
+function showWeaponShop(projectId, page = 0) {
+  const weaponIds = stationWeaponIds(projectId);
+  const start = page * 3;
+  const visible = weaponIds.slice(start, start + 3);
+  const choices = visible.map((weaponId, idx) => {
+    const weapon = WEAPON_DEFS.find(item => item.id === weaponId);
+    return {
+      key: String(idx + 1),
+      code: `Digit${idx + 1}`,
+      label: weapon?.name || weaponId.toUpperCase(),
+      action: () => weaponDetailDialog(projectId, weaponId, page)
+    };
+  });
+
+  if (start + 3 < weaponIds.length) {
+    choices.push({ key: '4', code: 'Digit4', label: 'NEXT WEAPON PAGE', action: () => showWeaponShop(projectId, page + 1) });
+  } else {
+    choices.push({ key: '4', code: 'Digit4', label: 'BACK', action: () => showShipyard(projectId) });
+  }
+
+  showGameMessageRef({
+    type: 'WEAPON SHOP',
+    source: `${stationName(projectId).toUpperCase()} ARMORY`,
+    text: `WEAPONS PAGE ${page + 1}. ${weaponShopRows(visible).join(' // ')}`,
+    choices
+  });
+}
+
+function weaponDetailDialog(projectId, weaponId, page = 0) {
+  const weapon = WEAPON_DEFS.find(item => item.id === weaponId);
+  if (!weapon) return showWeaponShop(projectId, page);
+  const price = WEAPON_PRICES[weaponId] ?? 0;
+  const owned = combatState.ownedWeapons.has(weaponId);
+  const choices = [];
+  if (!owned && traderState.credits >= price) {
+    choices.push({ key: '1', code: 'Digit1', label: `BUY ${price}CR`, action: () => confirmWeaponBuy(projectId, weaponId, page) });
+  }
+  if (owned) {
+    choices.push({ key: '1', code: 'Digit1', label: 'EQUIP PRIMARY', action: () => confirmWeaponEquip(projectId, weaponId, 'primary', page) });
+    choices.push({ key: '2', code: 'Digit2', label: 'EQUIP SECONDARY', action: () => confirmWeaponEquip(projectId, weaponId, 'secondary', page) });
+  }
+  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => showWeaponShop(projectId, page) });
+  showGameMessageRef({
+    type: 'WEAPON DETAIL',
+    source: `${stationName(projectId).toUpperCase()} ARMORY`,
+    text: `${weapon.name}. DMG ${weapon.damage}. CD ${weapon.cooldown}MS. ENERGY ${weapon.energyCost}. ${weapon.description} PRICE ${price}CR. ${owned ? 'OWNED.' : `CREDITS ${traderState.credits}CR.`}`,
+    choices
+  });
+}
+
+function confirmWeaponBuy(projectId, weaponId, page = 0) {
+  const result = buyWeapon(weaponId, traderState);
+  reapplySkills();
+  updateFlightHudRef(true);
+  showGameMessageRef({
+    type: result.success ? 'WEAPON PURCHASED' : 'PURCHASE DENIED',
+    source: `${stationName(projectId).toUpperCase()} ARMORY`,
+    text: result.message,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'DETAIL', action: () => weaponDetailDialog(projectId, weaponId, page) },
+      { key: '2', code: 'Digit2', label: 'WEAPON SHOP', action: () => showWeaponShop(projectId, page) }
+    ]
+  });
+}
+
+function confirmWeaponEquip(projectId, weaponId, slot, page = 0) {
+  const result = equipWeapon(weaponId, slot);
+  reapplySkills();
+  updateFlightHudRef(true);
+  showGameMessageRef({
+    type: result.success ? 'WEAPON EQUIPPED' : 'EQUIP FAILED',
+    source: `${stationName(projectId).toUpperCase()} ARMORY`,
+    text: result.message,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'WEAPON SHOP', action: () => showWeaponShop(projectId, page) },
+      { key: '2', code: 'Digit2', label: 'SHIPYARD', action: () => showShipyard(projectId) }
+    ]
+  });
+}
+
+function skillNodeStatus(node) {
+  if (combatState.unlocked.has(node.id)) return 'UNLOCKED';
+  if (node.requires && !combatState.unlocked.has(node.requires)) return 'LOCKED';
+  if (combatState.skillPoints >= node.cost) return 'AVAILABLE';
+  return 'LOCKED';
+}
+
+function showSkillTree(branch = 'HULL', projectId) {
+  const nodes = SKILL_TREE_NODES.filter(node => node.branch === branch);
+  const choices = [
+    { key: 'h', code: 'KeyH', label: 'HULL', action: () => showSkillTree('HULL', projectId) },
+    { key: 's', code: 'KeyS', label: 'SHIELD', action: () => showSkillTree('SHIELD', projectId) },
+    { key: 'w', code: 'KeyW', label: 'WEAPONS', action: () => showSkillTree('WEAPONS', projectId) },
+    { key: 'e', code: 'KeyE', label: 'ENGINES', action: () => showSkillTree('ENGINES', projectId) }
+  ];
+
+  nodes.forEach((node, idx) => {
+    const status = skillNodeStatus(node);
+    if (status === 'AVAILABLE') {
+      choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${node.name} ${node.cost}SP`, action: () => confirmSkillUnlock(projectId, node.id, branch) });
+    }
+  });
+  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => showShipyard(projectId) });
+
+  showGameMessageRef({
+    type: `${branch} SKILLS`,
+    source: `${stationName(projectId).toUpperCase()} SHIPYARD`,
+    text: `SP ${combatState.skillPoints}. ${nodes.map(node => `${node.name} ${node.cost}SP ${skillNodeStatus(node)}`).join(' // ')}`,
+    choices
+  });
+}
+
+function confirmSkillUnlock(projectId, nodeId, branch) {
+  const result = unlockSkillNode(nodeId);
+  reapplySkills();
+  updateFlightHudRef(true);
+  showGameMessageRef({
+    type: result.success ? 'SKILL UNLOCKED' : 'SKILL LOCKED',
+    source: `${stationName(projectId).toUpperCase()} SHIPYARD`,
+    text: result.message,
+    choices: [{ key: '1', code: 'Digit1', label: 'BACK', action: () => showSkillTree(branch, projectId) }]
   });
 }
 

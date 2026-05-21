@@ -499,7 +499,7 @@
           </div>
 
         </div>
-        <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // C CAM // T TRADE</div>
+        <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // C CAM // T TRADE // I INVENTORY</div>
       </div>
     </div>
 
@@ -554,6 +554,36 @@
       <strong id="flight-nav-eta">--</strong>
       <strong id="flight-autopilot">OFF</strong>
       <strong id="flight-weapon-secondary">MISSILE RACK</strong>
+    </div>
+  </div>
+
+  <div id="inventory-panel" class="inventory-panel" hidden
+       role="dialog" aria-modal="true" aria-label="Ship Manifest">
+    <div class="inv-header">
+      <span class="inv-title">SHIP MANIFEST // USSY-1</span>
+      <div class="inv-meta">
+        <span id="inv-sp">SP: 3</span>
+        <span id="inv-credits-display">1000CR</span>
+        <button class="inv-close-btn" aria-label="Close inventory"
+                onclick="document.getElementById('inventory-panel').hidden=true">
+          [ESC]
+        </button>
+      </div>
+    </div>
+    <div class="inv-body">
+      <div class="inv-cargo-col" id="inv-cargo-grid">
+        <div class="inv-col-title">CARGO HOLD</div>
+      </div>
+      <div class="inv-weapons-col" id="inv-weapons-grid">
+        <div class="inv-col-title">WEAPONS</div>
+      </div>
+      <div class="inv-skills-col" id="inv-skills-grid">
+        <div class="inv-col-title">SKILL TREE</div>
+      </div>
+    </div>
+    <div class="inv-footer">
+      <span id="inv-cargo-used">CARGO: 0/20</span>
+      <span id="inv-upgrades-count">SKILLS: 0/16</span>
     </div>
   </div>
 

@@ -1,12 +1,12 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
 import { configureTrader, openTradeMenu, refuelAt, traderState, updateFuelDrain } from './economy/trader.js';
+import { toggleInventoryPanel } from './ui/inventory-panel.js';
 import {
   ENEMY_CLASSES,
   WEAPON_DEFS,
   WEAPON_PRICES,
   SKILL_TREE_NODES,
-  addCombatXp,
   applyDamageModel,
   applyHeatShot,
   getDifficultyTier,
@@ -15,6 +15,15 @@ import {
   getStationEquipment,
   getWeaponDef
 } from './flight/combat-overhaul.js';
+import {
+  awardXp,
+  buyWeapon,
+  combatState,
+  equipWeapon,
+  reapplySkills,
+  setCombatFlightState,
+  unlockSkillNode as unlockCombatSkillNode
+} from './flight/combat-state.js';
 import { activateEnemyWave, buildOrchestratorGameState } from './flight/orchestrator.js';
 
 const USSY_PROJECTS = window.USSY_PROJECTS || [];
@@ -144,29 +153,6 @@ const flightState = {
   damping: 0.985
 };
 
-const combatState = {
-  credits: 1000,
-  xp: 0,
-  xpToNextPoint: 100,
-  skillPoints: 0,
-  heat: 0,
-  maxHeat: 100,
-  overheated: false,
-  heatCoolRate: 12,
-  lastHitAt: 0,
-  shieldRegenRate: 4,
-  shieldRegenDelay: 5000,
-  adrenaline: 0,
-  adrenalineDecay: 0.04,
-  afterburnerActive: false,
-  afterburnerUntil: 0,
-  afterburnerCooldownUntil: 0,
-  bountyPending: 0,
-  overchargeUsed: false,
-  lastAdrenalineBarkAt: 0,
-  lastAdrenalineFrame: 0
-};
-
 const enemies = [];
 const playerBullets = [];
 const enemyBullets = [];
@@ -187,15 +173,25 @@ let radarLastUpdate = 0;
 let activeUniverseScale = 1;
 
 const loadoutState = {
-  primary: 'laser_mk1',
-  secondary: 'missile_rack',
+  get primary() {
+    return combatState.primaryWeapon;
+  },
+  set primary(value) {
+    combatState.primaryWeapon = value;
+  },
+  get secondary() {
+    return combatState.secondaryWeapon;
+  },
+  set secondary(value) {
+    combatState.secondaryWeapon = value;
+  },
   getWeapon(slot) {
     return getWeaponDef(this[slot]);
   }
 };
 
 const skillTree = {
-  unlocked: new Set(),
+  unlocked: combatState.unlocked,
 
   canUnlock(nodeId) {
     const node = SKILL_TREE_NODES.find(item => item.id === nodeId);
@@ -207,12 +203,8 @@ const skillTree = {
   },
 
   unlock(nodeId) {
-    if (!this.canUnlock(nodeId)) return false;
-    const node = SKILL_TREE_NODES.find(item => item.id === nodeId);
-    combatState.skillPoints -= node.cost;
-    this.unlocked.add(nodeId);
-    this.applyAll();
-    return true;
+    const result = unlockCombatSkillNode(nodeId);
+    return result.success;
   },
 
   getMaxShield() {
@@ -243,16 +235,12 @@ const skillTree = {
   },
 
   applyAll() {
-    let thrust = 14;
-    if (this.unlocked.has('eng_1')) thrust += 3;
-    if (this.unlocked.has('eng_2')) thrust += 3;
-    flightState.thrust = thrust;
-    flightState.damping = this.unlocked.has('eng_4') ? 0.975 : 0.985;
+    reapplySkills();
     flightState.energy = Math.min(Math.max(flightState.energy, this.getMaxEnergy()), this.getMaxEnergy());
-    combatState.maxHeat = this.unlocked.has('weap_2') ? 130 : 100;
-    combatState.shieldRegenDelay = this.unlocked.has('shield_3') ? 3000 : 5000;
   }
 };
+
+setCombatFlightState(flightState);
 
 const missionState = {
   active: false,
@@ -2025,9 +2013,6 @@ function enterFlightMode() {
   flightState.thrust = 14;
   flightState.strafe = 8;
   flightState.damping = 0.985;
-  combatState.xp = 0;
-  combatState.xpToNextPoint = 100;
-  combatState.skillPoints = 0;
   combatState.heat = 0;
   combatState.overheated = false;
   combatState.adrenaline = 0;
@@ -2036,7 +2021,6 @@ function enterFlightMode() {
   combatState.afterburnerCooldownUntil = 0;
   combatState.overchargeUsed = false;
   syncCombatCreditsFromTrader();
-  skillTree.unlocked.clear();
   skillTree.applyAll();
   traderState.fuel = traderState.maxFuel;
   traderState.docked = false;
@@ -3095,7 +3079,8 @@ function handleEnemyDestroyed(enemy) {
   flightState.score += Math.max(1, Math.round(cls.xpReward / 10));
   addCombatCredits(cls.creditReward);
   const pointsBefore = combatState.skillPoints;
-  addCombatXp(combatState, cls.xpReward);
+  awardXp(cls.xpReward);
+  reapplySkills();
   if (combatState.skillPoints > pointsBefore) {
     flightState.status = `SKILL POINT EARNED - SP:${combatState.skillPoints}`;
     flightState.statusUntil = performance.now() + 2500;
@@ -3204,6 +3189,10 @@ function openEquipmentMarket(projectId) {
     const slot = weapon.type === 'missile' || weapon.type === 'area' ? 'secondary' : 'primary';
     const equippedSlot = loadoutState.primary === weaponId ? 'P' : (loadoutState.secondary === weaponId ? 'S' : null);
     if (equippedSlot) return `${equippedSlot}: ${weapon.name} - EQUIPPED`;
+    if (combatState.ownedWeapons.has(weaponId)) {
+      choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${weapon.name} - EQUIP ${slot.toUpperCase()}`, action: () => buyAndEquipWeapon(projectId, weaponId, slot) });
+      return `[${idx + 1}] ${weapon.name} - OWNED`;
+    }
     if (combatState.credits >= price) {
       choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${weapon.name} - ${price}CR`, action: () => buyAndEquipWeapon(projectId, weaponId, slot) });
       return `[${idx + 1}] ${weapon.name} - ${price}CR`;
@@ -3222,19 +3211,31 @@ function openEquipmentMarket(projectId) {
 
 function buyAndEquipWeapon(projectId, weaponId, slot) {
   const weapon = getWeaponDef(weaponId);
-  const price = WEAPON_PRICES[weaponId] ?? 0;
-  if (!weapon || combatState.credits < price) {
+  if (!weapon) {
     openEquipmentMarket(projectId);
     return;
   }
-  setCombatCredits(combatState.credits - price);
-  loadoutState[slot] = weaponId;
+  let result = { success: true, message: `${weapon.name} ALREADY IN ARSENAL.` };
+  if (!combatState.ownedWeapons.has(weaponId)) result = buyWeapon(weaponId, traderState);
+  if (!result.success) {
+    showGameMessage({
+      type: 'PURCHASE DENIED',
+      source: `${stationName(projectId).toUpperCase()} ARMORY`,
+      text: result.message,
+      choices: [{ key: '1', code: 'Digit1', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) }],
+      ttsPriority: 'normal'
+    });
+    return;
+  }
+  const equipResult = equipWeapon(weaponId, slot);
+  syncCombatCreditsFromTrader();
+  reapplySkills();
   ttsEngine.speak('WEAPON SYSTEM UPDATED.', { ...getVoicePersona('USSYVERSE CONTROL'), priority: 'normal' });
   updateFlightHud(true);
   showGameMessage({
-    type: 'SYSTEM UPDATED',
+    type: equipResult.success ? 'SYSTEM UPDATED' : 'SYSTEM ERROR',
     source: `${stationName(projectId).toUpperCase()} ARMORY`,
-    text: `${weapon.name} EQUIPPED TO ${slot.toUpperCase()} SLOT. CREDITS REMAINING: ${combatState.credits}CR.`,
+    text: `${equipResult.message} CREDITS REMAINING: ${combatState.credits}CR.`,
     choices: [
       { key: '1', code: 'Digit1', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
       { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openStationMenu(projectId) }
@@ -3627,6 +3628,15 @@ function onGlobalKeyDown(event) {
 
   if (!isFlightActive) return;
 
+  if (event.code === 'Escape') {
+    const invPanel = document.getElementById('inventory-panel');
+    if (invPanel && !invPanel.hidden) {
+      event.preventDefault();
+      invPanel.hidden = true;
+      return;
+    }
+  }
+
   if (handleGameMessageChoice(event)) {
     event.preventDefault();
     return;
@@ -3666,6 +3676,11 @@ function onGlobalKeyDown(event) {
   if (event.code === 'KeyT') {
     event.preventDefault();
     if (!event.repeat && flightState.landed && traderState.dockedStation && !gameMessageState.active) openStationMenu(traderState.dockedStation);
+    return;
+  }
+  if (event.code === 'KeyI') {
+    event.preventDefault();
+    if (!event.repeat) toggleInventoryPanel();
     return;
   }
   if (event.code === 'KeyU') {
@@ -4479,8 +4494,10 @@ function updateFlightHud(force) {
   if (flightCredits) flightCredits.textContent = `${combatState.credits}CR`;
   if (flightXpBar) flightXpBar.style.width = `${Math.min(100, (combatState.xp / combatState.xpToNextPoint) * 100).toFixed(1)}%`;
   if (flightSp) flightSp.textContent = `SP:${combatState.skillPoints}`;
-  if (flightWeaponPrimary) flightWeaponPrimary.textContent = loadoutState.getWeapon('primary')?.name || '--';
-  if (flightWeaponSecondary) flightWeaponSecondary.textContent = loadoutState.getWeapon('secondary')?.name || '--';
+  const primaryWeaponName = WEAPON_DEFS.find(weapon => weapon.id === combatState.primaryWeapon)?.name || '--';
+  const secondaryWeaponName = WEAPON_DEFS.find(weapon => weapon.id === combatState.secondaryWeapon)?.name || '--';
+  if (flightWeaponPrimary) flightWeaponPrimary.textContent = primaryWeaponName;
+  if (flightWeaponSecondary) flightWeaponSecondary.textContent = secondaryWeaponName;
 }
 
 function updateTtsStatusIndicator() {

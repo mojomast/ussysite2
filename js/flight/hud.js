@@ -1,6 +1,18 @@
 import { traderState } from '../economy/trader.js';
+import { WEAPON_DEFS } from './combat-overhaul.js';
+import { combatState } from './combat-state.js';
 
-export function updateFlightHud() { return traderState.fuel; }
+export function updateFlightHud() {
+  const primary = WEAPON_DEFS.find(weapon => weapon.id === combatState.primaryWeapon)?.name || '--';
+  const secondary = WEAPON_DEFS.find(weapon => weapon.id === combatState.secondaryWeapon)?.name || '--';
+  const primaryEl = document.getElementById('flight-weapon-primary');
+  const secondaryEl = document.getElementById('flight-weapon-secondary');
+  const spEl = document.getElementById('flight-sp');
+  if (primaryEl) primaryEl.textContent = primary;
+  if (secondaryEl) secondaryEl.textContent = secondary;
+  if (spEl) spEl.textContent = `SP:${combatState.skillPoints}`;
+  return traderState.fuel;
+}
 export function updateCockpitRadar() {}
 export function updateFlightCamera() {}
 export function updateFlightNavMarker() {}
