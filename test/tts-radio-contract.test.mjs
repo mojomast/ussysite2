@@ -15,7 +15,7 @@ const voiceId = extractStringConfig('voiceId');
 const audioFormat = extractStringConfig('audioFormat');
 
 test('browser TTS config uses the local backend endpoint', () => {
-  assert.equal(model, 'openai/gpt-audio-mini');
+  assert.equal(model, 'openai/gpt-audio');
   assert.equal(voiceId, 'onyx');
   assert.equal(audioFormat, 'pcm16');
   assert.match(appSource, /endpoint:\s*'\/api\/tts'/);
@@ -38,6 +38,15 @@ test('browser request builder sends only speech options to backend', () => {
   assert.match(appSource, /voiceId: persona\.voiceId \|\| ttsConfig\.voiceId/);
   assert.match(appSource, /format: ttsConfig\.audioFormat/);
   assert.match(appSource, /speed: persona\.rate \?\? 1\.0/);
+});
+
+test('game messages wait for TTS audio start before typewriter text advances', () => {
+  assert.match(appSource, /ttsWaitUntil: 0/);
+  assert.match(appSource, /gameMessageState\.ttsWaitUntil = ttsEngine\.enabled \? performance\.now\(\) \+ 3500 : 0/);
+  assert.match(appSource, /onStart: \(\) => \{/);
+  assert.match(appSource, /gameMessageState\.ttsWaitUntil = 0/);
+  assert.match(appSource, /if \(time < gameMessageState\.ttsWaitUntil\) return/);
+  assert.match(appSource, /typeSpeed: 30/);
 });
 
 test('configured OpenRouter model exists and can output audio', { skip: !process.env.OPENROUTER_VALIDATE_MODELS }, async () => {

@@ -31,7 +31,7 @@ The browser never receives the OpenRouter API key. `app.js` calls the same-origi
 Defaults:
 
 ```bash
-OPENROUTER_TTS_MODEL=openai/gpt-audio-mini
+OPENROUTER_TTS_MODEL=openai/gpt-audio
 OPENROUTER_TTS_VOICE=onyx
 OPENROUTER_TTS_FORMAT=pcm16
 OPENROUTER_TTS_SAMPLE_RATE=24000

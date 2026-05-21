@@ -160,6 +160,7 @@ const gameMessageState = {
   shown: '',
   index: 0,
   nextTypeAt: 0,
+  ttsWaitUntil: 0,
   typeSpeed: 18,
   choices: [],
   onDismiss: null
@@ -209,7 +210,8 @@ const ttsEngine = {
       pitch: options.pitch ?? 0.85,
       volume: options.volume ?? 0.9,
       longMessage: radioText.length > 80,
-      voiceId: options.voiceId
+      voiceId: options.voiceId,
+      onStart: typeof options.onStart === 'function' ? options.onStart : null
     };
 
     const requestedVoice = options.voice ?? options.voiceId;
@@ -225,7 +227,7 @@ const ttsEngine = {
     try {
       if (ttsConfig.enabled) {
         const blob = await fetchTTSSpeech(radioText, utteranceOptions);
-        if (blob && await radioChain.processBlob(blob)) return;
+        if (blob && await radioChain.processBlob(blob, utteranceOptions.onStart)) return;
       }
       await radioChain.processSpeechSynthesis(radioText, utteranceOptions);
     } catch {
@@ -323,7 +325,7 @@ const radioChain = {
     return { ctx: this.ctx, input: highpass };
   },
 
-  async processBlob(audioBlob) {
+  async processBlob(audioBlob, onStart = null) {
     try {
       const chain = this.buildChain();
       if (!chain || chain.ctx.state === 'suspended') return false;
@@ -340,6 +342,7 @@ const radioChain = {
           resolve(true);
         };
         source.start();
+        if (typeof onStart === 'function') onStart();
       });
     } catch {
       return false;
@@ -385,6 +388,9 @@ const radioChain = {
 
       utterance.onend = finish;
       utterance.onerror = finish;
+      utterance.onstart = () => {
+        if (typeof utteranceOptions.onStart === 'function') utteranceOptions.onStart();
+      };
       noise.start();
       this.speechTimer = window.setTimeout(() => {
         this.speechTimer = null;
@@ -401,6 +407,9 @@ const radioChain = {
         utterance.pitch = utteranceOptions.pitch ?? 0.85;
         utterance.volume = utteranceOptions.volume ?? 0.9;
         if (utteranceOptions.voice) utterance.voice = utteranceOptions.voice;
+        utterance.onstart = () => {
+          if (typeof utteranceOptions.onStart === 'function') utteranceOptions.onStart();
+        };
         utterance.onend = () => resolve(true);
         utterance.onerror = () => resolve(false);
         window.speechSynthesis.speak(utterance);
@@ -476,7 +485,7 @@ const radioChain = {
 
 const ttsConfig = {
   endpoint: '/api/tts',
-  model: 'openai/gpt-audio-mini',
+  model: 'openai/gpt-audio',
   voiceId: 'onyx',
   audioFormat: 'pcm16',
   enabled: true
@@ -1933,6 +1942,7 @@ function getVoicePersona(source = '') {
 }
 
 function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18 }) {
+  const messageToken = Symbol('game-message');
   gameMessageState.active = true;
   gameMessageState.type = type;
   gameMessageState.source = source;
@@ -1940,11 +1950,20 @@ function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text 
   gameMessageState.shown = '';
   gameMessageState.index = 0;
   gameMessageState.nextTypeAt = 0;
+  gameMessageState.ttsWaitUntil = ttsEngine.enabled ? performance.now() + 3500 : 0;
+  gameMessageState.token = messageToken;
   gameMessageState.typeSpeed = typeSpeed;
   gameMessageState.choices = choices;
   gameMessageState.onDismiss = onDismiss;
   renderGameMessage();
-  ttsEngine.speak(text, getVoicePersona(source));
+  ttsEngine.speak(text, {
+    ...getVoicePersona(source),
+    onStart: () => {
+      if (!gameMessageState.active || gameMessageState.token !== messageToken) return;
+      gameMessageState.ttsWaitUntil = 0;
+      gameMessageState.nextTypeAt = performance.now() + 180;
+    }
+  });
 }
 
 function renderGameMessage() {
@@ -1970,6 +1989,7 @@ function renderGameMessage() {
 
 function updateGameMessage(time) {
   if (!gameMessageState.active || gameMessageState.index >= gameMessageState.text.length) return;
+  if (time < gameMessageState.ttsWaitUntil) return;
   if (time < gameMessageState.nextTypeAt) return;
   const chunk = gameMessageState.text.slice(gameMessageState.index, gameMessageState.index + 2);
   gameMessageState.shown += chunk;
@@ -2010,6 +2030,7 @@ function startTutorialMission() {
     type: 'EASTER EGG DISCOVERED',
     source: 'USSYVERSE CONTROL',
     text: missionIntroText,
+    typeSpeed: 30,
     onDismiss: () => setMissionStep('killTutorialBogeys')
   });
   flightState.status = 'MISSION BRIEFING OPEN';
