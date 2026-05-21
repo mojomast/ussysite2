@@ -46,7 +46,7 @@ const commonSecurityHeaders = {
 
 const htmlSecurityHeaders = {
   ...commonSecurityHeaders,
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://openrouter.ai; img-src 'self' data: blob:; worker-src blob:; frame-ancestors 'none'"
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://openrouter.ai https://unpkg.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; worker-src blob:; frame-ancestors 'none'"
 };
 
 // HARDENING: In-memory per-IP sliding-window rate limiter for API endpoints.

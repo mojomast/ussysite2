@@ -1072,6 +1072,7 @@ function init() {
   document.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
   document.addEventListener('wheel', onSceneWheel, { passive: false });
   document.addEventListener('keydown', onGlobalKeyDown);
   document.addEventListener('keyup', onGlobalKeyUp);
@@ -3722,8 +3723,7 @@ function onHeroScroll() {
 function isOnFinalHeroCard() {
   if (!heroContainer) return false;
   const clientHeight = heroContainer.clientHeight || window.innerHeight;
-  const finalCardTop = (sectionCamPositions.length - 1) * clientHeight;
-  return heroContainer.scrollTop >= finalCardTop - 8;
+  return heroContainer.scrollTop + clientHeight >= heroContainer.scrollHeight - 32;
 }
 
 function onHeroWheel(event) {
@@ -3848,6 +3848,9 @@ function onPointerUp(event) {
     return;
   }
   if (orbitState.pointerId !== event.pointerId) return;
+  if (orbitState.captureTarget?.releasePointerCapture) {
+    try { orbitState.captureTarget.releasePointerCapture(event.pointerId); } catch {}
+  }
   orbitState.dragging = false;
   orbitState.pointerId = null;
   orbitState.captureTarget = null;

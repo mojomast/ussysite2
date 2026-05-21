@@ -197,6 +197,7 @@ body.scene-dragging .webgl-viewport {
 .hero-scrollable {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  visibility: visible;
 }
 
 .hero-snap-section {
@@ -817,8 +818,13 @@ body.console-active .hero-scroll-nav {
 /* Transition Body States */
 body.console-active .hero-scrollable {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transform: translateY(-80px);
+}
+
+body.console-active .hero-scrollable * {
+  pointer-events: none !important;
 }
 
 body.console-active .hud-layout {
