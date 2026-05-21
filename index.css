@@ -1243,6 +1243,10 @@ body.flight-active .flight-hud {
   gap: 16px;
 }
 
+.flight-hud-grid {
+  flex-wrap: wrap;
+}
+
 .flight-hud-header {
   font-family: var(--font-display);
   font-size: 0.95rem;
@@ -1254,11 +1258,45 @@ body.flight-active .flight-hud {
 }
 
 .flight-hud-grid > div {
-  flex: 1;
+  flex: 1 1 145px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(148, 163, 184, 0.16);
   padding: 12px 14px;
   min-width: 0;
+}
+
+.flight-nav-marker {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 15;
+  min-width: 118px;
+  padding: 8px 11px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  pointer-events: none;
+  color: rgba(255, 238, 179, 0.96);
+  background: rgba(5, 9, 18, 0.82);
+  border: 1px solid rgba(255, 204, 0, 0.58);
+  border-left: 4px solid rgba(255, 204, 0, 0.84);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: pre-line;
+  box-shadow: 0 0 22px rgba(255, 204, 0, 0.14);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+body.flight-active .flight-nav-marker.active {
+  opacity: 1;
+}
+
+.flight-nav-marker.offscreen {
+  border-color: rgba(0, 240, 255, 0.58);
+  border-left-color: rgba(0, 240, 255, 0.86);
+  color: rgba(184, 245, 255, 0.96);
 }
 
 .flight-hud-label {

@@ -15,7 +15,7 @@ let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
 let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
 let telemetryLastUpdate = 0;
 let launchCodeBuffer = '';
-let gameRoot, playerShip;
+let gameRoot, playerShip, flightNavLine;
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
@@ -34,6 +34,11 @@ const flightUp = new THREE.Vector3();
 const flightTempVec = new THREE.Vector3();
 const flightTempVec2 = new THREE.Vector3();
 const radarTempVec = new THREE.Vector3();
+const navTempVec = new THREE.Vector3();
+const navTempVec2 = new THREE.Vector3();
+const navScreenVec = new THREE.Vector3();
+const flightNavQuat = new THREE.Quaternion();
+const flightNavMatrix = new THREE.Matrix4();
 const flightBeamAxis = new THREE.Vector3(0, 1, 0);
 const flightQuat = new THREE.Quaternion();
 const flightInputQuat = new THREE.Quaternion();
@@ -59,6 +64,7 @@ const manualRelationHints = [
   ['ghstatsussy', 'hermes-dashboard'],
   ['ussyring', 'mediageckussy']
 ];
+const manualFlightKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']);
 const orbitState = {
   dragging: false,
   moved: false,
@@ -97,6 +103,11 @@ const flightState = {
   lastMissile: 0,
   nearestNode: null,
   nearestDistance: Infinity,
+  crosshairNode: null,
+  navNode: null,
+  navDistance: Infinity,
+  navEta: '--',
+  autopilot: false,
   status: 'TYPE USSY TO LAUNCH',
   statusUntil: 0,
   landed: false,
@@ -152,7 +163,7 @@ const gameMessageState = {
   onDismiss: null
 };
 
-const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. MOUSELOOK TO AIM, W/S TO THRUST, A/D TO STRAFE, Q/E TO ROLL, LEFT CLICK FOR LASERS, RIGHT CLICK FOR MISSILES, SPACE TO CONFIRM MESSAGES, V FOR CHASE CAM, L TO LAND AND RESTOCK. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
+const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. MOUSELOOK TO AIM, W/S TO THRUST, A/D TO STRAFE, Q/E TO ROLL, LEFT CLICK FOR LASERS, RIGHT CLICK FOR MISSILES, V TO SET NAV, P FOR AUTOPILOT, C FOR CHASE CAM, SPACE TO CONFIRM MESSAGES, L TO LAND AND RESTOCK. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
 
 function getRenderPixelRatio() {
   return Math.min(window.devicePixelRatio || 1, isCoarsePointer ? 1 : 1.25);
@@ -229,6 +240,11 @@ const flightStatus = document.getElementById('flight-status');
 const flightScore = document.getElementById('flight-score');
 const flightShield = document.getElementById('flight-shield');
 const flightTarget = document.getElementById('flight-target');
+const flightCrosshairTarget = document.getElementById('flight-crosshair-target');
+const flightNavTarget = document.getElementById('flight-nav-target');
+const flightNavEta = document.getElementById('flight-nav-eta');
+const flightAutopilot = document.getElementById('flight-autopilot');
+const flightNavMarker = document.getElementById('flight-nav-marker');
 const flightSpeed = document.getElementById('flight-speed');
 const flightSpeedBar = document.getElementById('flight-speed-bar');
 const flightShieldsDetail = document.getElementById('flight-shields-detail');
@@ -671,6 +687,22 @@ function createFlightGameObjects() {
     gameRoot.add(missile);
     playerMissiles.push(missile);
   }
+
+  const navLineGeo = new THREE.BufferGeometry();
+  navLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  flightNavLine = new THREE.Line(
+    navLineGeo,
+    new THREE.LineBasicMaterial({
+      color: 0xffcc00,
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false
+    })
+  );
+  flightNavLine.visible = false;
+  gameRoot.add(flightNavLine);
 }
 
 // 2. Procedural Nodes Graph
@@ -1275,6 +1307,11 @@ function enterFlightMode() {
   flightState.lastMissile = 0;
   flightState.nearestNode = null;
   flightState.nearestDistance = Infinity;
+  flightState.crosshairNode = null;
+  flightState.navNode = null;
+  flightState.navDistance = Infinity;
+  flightState.navEta = '--';
+  flightState.autopilot = false;
   flightState.landed = false;
   flightState.statusUntil = 0;
   flightState.status = isCoarsePointer ? 'KEYBOARD FLIGHT READY' : 'REQUESTING MOUSELOOK LOCK';
@@ -1310,6 +1347,11 @@ function exitFlightMode(releasePointer = true) {
   flightState.pointerLocked = false;
   flightState.keys.clear();
   flightState.mouseButtons.clear();
+  flightState.crosshairNode = null;
+  flightState.navNode = null;
+  flightState.navDistance = Infinity;
+  flightState.navEta = '--';
+  flightState.autopilot = false;
   flightState.vel.set(0, 0, 0);
   document.body.classList.remove('flight-active', 'pointer-unlocked', 'flight-third-person');
   if (gameRoot) gameRoot.visible = false;
@@ -1323,6 +1365,8 @@ function exitFlightMode(releasePointer = true) {
   }
   syncOrbitFromCamera();
   gameMessageState.active = false;
+  updateFlightNavLine();
+  updateFlightNavMarker();
   renderGameMessage();
   updateFlightHud(true);
 }
@@ -1363,6 +1407,140 @@ function toggleFlightView() {
   flightState.status = `${flightState.view.toUpperCase()} VIEW ACTIVE`;
   updateFlightHud(true);
   updateCockpitRadar(0, true);
+}
+
+function formatEta(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '--';
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.ceil(seconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${remainder}`;
+}
+
+function getProjectNodeName(node) {
+  return node?.userData?.project?.name || 'UNKNOWN';
+}
+
+function updateCrosshairProjectTarget() {
+  flightState.crosshairNode = null;
+  let bestScore = Infinity;
+  projectNodes.forEach(node => {
+    if (!node.visible) return;
+    navTempVec.copy(node.position).sub(flightState.pos);
+    const distance = navTempVec.length();
+    if (distance < 0.001) return;
+    navTempVec.multiplyScalar(1 / distance);
+    const alignment = navTempVec.dot(flightForward);
+    if (alignment < 0.988) return;
+    const score = (1 - alignment) * 1000 + distance * 0.001;
+    if (score < bestScore) {
+      bestScore = score;
+      flightState.crosshairNode = node;
+    }
+  });
+}
+
+function updateFlightNavigation() {
+  updateCrosshairProjectTarget();
+  if (!flightState.navNode || !flightState.navNode.visible) {
+    flightState.navDistance = Infinity;
+    flightState.navEta = '--';
+    flightState.autopilot = false;
+    updateFlightNavLine();
+    return;
+  }
+
+  navTempVec.copy(flightState.navNode.position).sub(flightState.pos);
+  flightState.navDistance = navTempVec.length();
+  const closingSpeed = flightState.navDistance > 0.001
+    ? flightState.vel.dot(navTempVec.multiplyScalar(1 / flightState.navDistance))
+    : 0;
+  flightState.navEta = closingSpeed > 1 ? formatEta(flightState.navDistance / closingSpeed) : '--';
+  updateFlightNavLine();
+}
+
+function setNavigationTarget(node, source = 'manual') {
+  if (!node) return false;
+  flightState.navNode = node;
+  flightState.navDistance = node.position.distanceTo(flightState.pos);
+  flightState.status = `NAV SET: ${getProjectNodeName(node).toUpperCase()}`;
+  flightState.statusUntil = performance.now() + 2400;
+  if (source === 'manual') selectProject(node.userData.project.id, false);
+  updateFlightNavigation();
+  updateFlightHud(true);
+  return true;
+}
+
+function setNavigationFromCrosshair() {
+  updateCrosshairProjectTarget();
+  if (!flightState.crosshairNode) {
+    flightState.status = 'PUT CROSSHAIR ON PROJECT NODE TO SET NAV';
+    flightState.statusUntil = performance.now() + 2400;
+    updateFlightHud(true);
+    return;
+  }
+  setNavigationTarget(flightState.crosshairNode, 'manual');
+}
+
+function toggleAutopilot() {
+  if (!flightState.navNode) {
+    flightState.status = 'SET NAV TARGET BEFORE AUTOPILOT';
+    flightState.statusUntil = performance.now() + 2400;
+    updateFlightHud(true);
+    return;
+  }
+  flightState.autopilot = !flightState.autopilot;
+  flightState.status = flightState.autopilot ? `AUTOPILOT ENROUTE: ${getProjectNodeName(flightState.navNode).toUpperCase()}` : 'AUTOPILOT DISENGAGED';
+  flightState.statusUntil = performance.now() + 2400;
+  updateFlightHud(true);
+}
+
+function disableAutopilot(reason) {
+  if (!flightState.autopilot) return;
+  flightState.autopilot = false;
+  if (reason) {
+    flightState.status = reason;
+    flightState.statusUntil = performance.now() + 1800;
+  }
+}
+
+function updateAutopilot(dt) {
+  if (!flightState.autopilot || !flightState.navNode) return;
+  navTempVec.copy(flightState.navNode.position).sub(flightState.pos);
+  const distance = navTempVec.length();
+  const arrivalRange = landingRange * activeUniverseScale * 1.25;
+  if (distance <= arrivalRange) {
+    disableAutopilot('AUTOPILOT ARRIVAL HOLD');
+    flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
+    return;
+  }
+  navTempVec.multiplyScalar(1 / distance);
+  flightNavMatrix.lookAt(flightState.pos, flightState.navNode.position, flightUp);
+  flightNavQuat.setFromRotationMatrix(flightNavMatrix);
+  flightState.orientation.slerp(flightNavQuat, Math.min(1, dt * 0.75));
+  updateFlightBasis();
+  const alignment = flightForward.dot(navTempVec);
+  if (alignment > 0.45) {
+    const slowZone = arrivalRange * 4;
+    const thrustScale = distance < slowZone ? THREE.MathUtils.clamp(distance / slowZone, 0.22, 0.72) : 0.86;
+    flightState.vel.addScaledVector(flightForward, flightState.thrust * thrustScale * dt);
+  }
+  if (distance < arrivalRange * 3) {
+    flightState.vel.multiplyScalar(Math.pow(0.965, dt * 60));
+  }
+}
+
+function updateFlightNavLine() {
+  if (!flightNavLine) return;
+  const visible = isFlightActive && !!flightState.navNode;
+  flightNavLine.visible = visible;
+  if (!visible) return;
+  const positions = flightNavLine.geometry.attributes.position;
+  navTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.4);
+  positions.setXYZ(0, navTempVec.x, navTempVec.y, navTempVec.z);
+  positions.setXYZ(1, flightState.navNode.position.x, flightState.navNode.position.y, flightState.navNode.position.z);
+  positions.needsUpdate = true;
+  flightNavLine.geometry.computeBoundingSphere();
 }
 
 function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18 }) {
@@ -1460,6 +1638,8 @@ function setMissionStep(step) {
     });
   } else if (step === 'goLandAtProject') {
     const projectName = getMissionLandingProjectName();
+    const missionNode = projectNodeById.get(missionState.landingProjectId);
+    if (missionNode) setNavigationTarget(missionNode, 'mission');
     showGameMessage({
       type: 'MISSION UPDATE',
       source: 'USSYVERSE CONTROL',
@@ -1658,6 +1838,16 @@ function onGlobalKeyDown(event) {
   if (event.code !== 'Escape') event.preventDefault();
   if (event.code === 'KeyV') {
     event.preventDefault();
+    if (!event.repeat) setNavigationFromCrosshair();
+    return;
+  }
+  if (event.code === 'KeyP') {
+    event.preventDefault();
+    if (!event.repeat) toggleAutopilot();
+    return;
+  }
+  if (event.code === 'KeyC') {
+    event.preventDefault();
     if (!event.repeat) toggleFlightView();
     return;
   }
@@ -1671,6 +1861,7 @@ function onGlobalKeyDown(event) {
     exitFlightMode();
     return;
   }
+  if (manualFlightKeys.has(event.code)) disableAutopilot('AUTOPILOT MANUAL OVERRIDE');
   flightState.keys.add(event.code);
 }
 
@@ -1854,6 +2045,7 @@ function onSceneWheel(event) {
 
 function onMouseMove(event) {
   if (isFlightActive && flightState.pointerLocked) {
+    if (Math.abs(event.movementX) + Math.abs(event.movementY) > 4) disableAutopilot('AUTOPILOT MANUAL OVERRIDE');
     applyLocalFlightRotation(0, 1, 0, -event.movementX * flightState.mouseSensitivity);
     applyLocalFlightRotation(1, 0, 0, -event.movementY * flightState.mouseSensitivity);
     return;
@@ -1917,11 +2109,14 @@ function updateFlight(time) {
   if (flightState.landed) {
     flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
     updateProjectLandingTarget();
+    updateFlightNavigation();
     updateFlightCamera();
     updateCockpitRadar(time);
     updateFlightHud(false);
     return;
   }
+
+  updateAutopilot(dt);
 
   if (flightState.pointerLocked || isCoarsePointer) {
     if (flightState.keys.has('KeyQ')) applyLocalFlightRotation(0, 0, 1, 1.85 * dt);
@@ -1980,6 +2175,7 @@ function updateFlight(time) {
   flightState.pos.clampLength(1.8, flightBounds * activeUniverseScale);
 
   updateProjectLandingTarget();
+  updateFlightNavigation();
   updateCombatObjects(dt);
   updateFlightCamera();
   updateCockpitRadar(time);
@@ -2229,7 +2425,7 @@ function updateCockpitRadar(time, force = false) {
 
   projectNodes.forEach(node => {
     if (!node.visible) return;
-    const highlighted = node === flightState.nearestNode || node.userData.project.id === missionState.landingProjectId;
+    const highlighted = node === flightState.nearestNode || node === flightState.navNode || node.userData.project.id === missionState.landingProjectId;
     drawRadarContact(ctx, cx, cy, radius, node.position, 'project', highlighted);
   });
   enemies.forEach(enemy => {
@@ -2266,6 +2462,18 @@ function updateFlightHud(force) {
       ? `${flightState.nearestNode.userData.project.name} ${flightState.nearestDistance.toFixed(1)}u`
       : 'NONE';
   }
+  if (flightCrosshairTarget) {
+    flightCrosshairTarget.textContent = flightState.crosshairNode
+      ? `${getProjectNodeName(flightState.crosshairNode)} // PRESS V`
+      : 'NO PROJECT';
+  }
+  if (flightNavTarget) {
+    flightNavTarget.textContent = flightState.navNode
+      ? `${getProjectNodeName(flightState.navNode)} ${Math.round(flightState.navDistance)}u`
+      : 'NONE';
+  }
+  if (flightNavEta) flightNavEta.textContent = flightState.navEta;
+  if (flightAutopilot) flightAutopilot.textContent = flightState.autopilot ? 'P: ON' : 'P: OFF';
   if (flightSpeed) flightSpeed.textContent = `${speed.toFixed(1)}u/s`;
   if (flightSpeedBar) flightSpeedBar.style.width = `${Math.min(100, (speed / 38) * 100).toFixed(1)}%`;
   if (flightShieldsDetail) flightShieldsDetail.textContent = `${Math.round(flightState.shield)}%`;
@@ -2278,6 +2486,50 @@ function updateFlightHud(force) {
   if (flightAmmoBar) flightAmmoBar.style.width = `${((flightState.ammo / maxPlayerAmmo) * 100).toFixed(1)}%`;
   if (flightMissiles) flightMissiles.textContent = `${flightState.missiles}/${maxPlayerMissilesStored}`;
   if (flightMissileBar) flightMissileBar.style.width = `${((flightState.missiles / maxPlayerMissilesStored) * 100).toFixed(1)}%`;
+}
+
+function updateFlightNavMarker() {
+  if (!flightNavMarker) return;
+  if (!isFlightActive || !flightState.navNode) {
+    flightNavMarker.classList.remove('active', 'offscreen');
+    return;
+  }
+
+  navTempVec.copy(flightState.navNode.position).sub(camera.position).normalize();
+  camera.getWorldDirection(navTempVec2);
+  const inFront = navTempVec.dot(navTempVec2) > 0.05;
+  navScreenVec.copy(flightState.navNode.position).project(camera);
+  let x = (navScreenVec.x * 0.5 + 0.5) * window.innerWidth;
+  let y = (-navScreenVec.y * 0.5 + 0.5) * window.innerHeight;
+  if (!inFront) {
+    x = window.innerWidth - x;
+    y = window.innerHeight - y;
+  }
+  const margin = 76;
+  const offscreen = !inFront || x < margin || x > window.innerWidth - margin || y < margin || y > window.innerHeight - margin;
+  x = THREE.MathUtils.clamp(x, margin, window.innerWidth - margin);
+  y = THREE.MathUtils.clamp(y, margin, window.innerHeight - margin);
+  flightNavMarker.style.left = `${x}px`;
+  flightNavMarker.style.top = `${y}px`;
+  flightNavMarker.textContent = `NAV ${getProjectNodeName(flightState.navNode)}\n${Math.round(flightState.navDistance)}u // ETA ${flightState.navEta}\nAUTO ${flightState.autopilot ? 'ON' : 'OFF'}`;
+  flightNavMarker.classList.toggle('active', true);
+  flightNavMarker.classList.toggle('offscreen', offscreen);
+}
+
+function updateDeepSpaceAnchor() {
+  const scale = isFlightActive ? flightUniverseScale : 1;
+  const followCamera = isFlightActive;
+  [starField, milkyWayField, brightStarField].forEach(field => {
+    if (!field) return;
+    if (field.userData.baseSize === undefined) field.userData.baseSize = field.material.size;
+    if (followCamera) {
+      field.position.copy(camera.position);
+    } else {
+      field.position.set(0, 0, 0);
+    }
+    field.scale.setScalar(scale);
+    field.material.size = field.userData.baseSize * scale;
+  });
 }
 
 function onWindowResize() {
@@ -2455,6 +2707,8 @@ function animate(time) {
     camera.up.set(0, 1, 0);
   }
   camera.lookAt(camCurrent.lookAt);
+  updateDeepSpaceAnchor();
+  updateFlightNavMarker();
 
   // Render WebGL
   renderer.render(scene, camera);
