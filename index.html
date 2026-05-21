@@ -337,7 +337,7 @@
             <strong id="flight-target">NONE</strong>
           </div>
         </div>
-        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // SPACE fire // V view // L land // ESC unlock/exit</div>
+        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // SPACE lasers // CTRL missiles // V view // L land/restock</div>
       </div>
       <div></div> <!-- Spacer -->
     </div>
@@ -423,11 +423,47 @@
 
   </div>
 
-  <div class="cockpit-overlay" id="cockpit-overlay" aria-hidden="true">
+  <div class="game-message-system" id="game-message-system" aria-live="polite">
+    <div class="game-message-header">
+      <span id="game-message-type">MISSION</span>
+      <span id="game-message-source">USSYVERSE CONTROL</span>
+    </div>
+    <div class="game-message-body" id="game-message-body"></div>
+    <div class="game-message-choices" id="game-message-choices"></div>
+    <div class="game-message-dismiss">PRESS <kbd>E</kbd> TO DISMISS</div>
+  </div>
+
+  <div class="cockpit-overlay" id="cockpit-overlay">
     <div class="cockpit-vignette"></div>
     <div class="cockpit-reticle"></div>
-    <div class="cockpit-frame cockpit-frame-left"></div>
-    <div class="cockpit-frame cockpit-frame-right"></div>
+    <div class="cockpit-frame cockpit-frame-left">
+      <div class="cockpit-frame-content">
+        <div class="flight-resource-panel flight-resource-left" aria-live="polite">
+          <div class="resource-row"><span>SPEED</span><strong id="flight-speed">0</strong></div>
+          <div class="resource-meter"><span id="flight-speed-bar"></span></div>
+          <div class="resource-row"><span>SHIELDS</span><strong id="flight-shields-detail">100</strong></div>
+          <div class="resource-meter shield"><span id="flight-shield-bar"></span></div>
+          <div class="resource-row"><span>ENERGY</span><strong id="flight-energy">100</strong></div>
+          <div class="resource-meter energy"><span id="flight-energy-bar"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cockpit-frame cockpit-frame-right">
+      <div class="cockpit-frame-content">
+        <div class="flight-resource-panel flight-resource-right" aria-live="polite">
+          <div class="radar-module">
+            <div class="radar-title">TACTICAL RADAR</div>
+            <canvas id="cockpit-radar" class="cockpit-radar" width="220" height="220" aria-hidden="true"></canvas>
+          </div>
+          <div class="resource-row"><span>ARMOR</span><strong id="flight-armor">100</strong></div>
+          <div class="resource-meter armor"><span id="flight-armor-bar"></span></div>
+          <div class="resource-row"><span>LASER AMMO</span><strong id="flight-ammo">240</strong></div>
+          <div class="resource-meter ammo"><span id="flight-ammo-bar"></span></div>
+          <div class="resource-row"><span>MISSILES</span><strong id="flight-missiles">8</strong></div>
+          <div class="resource-meter missile"><span id="flight-missile-bar"></span></div>
+        </div>
+      </div>
+    </div>
     <div class="cockpit-dash">
       <span>COCKPIT_VIEW</span>
       <span>V_TOGGLES_CHASE_CAM</span>

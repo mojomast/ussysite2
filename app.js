@@ -33,6 +33,8 @@ const flightRight = new THREE.Vector3();
 const flightUp = new THREE.Vector3();
 const flightTempVec = new THREE.Vector3();
 const flightTempVec2 = new THREE.Vector3();
+const radarTempVec = new THREE.Vector3();
+const flightBeamAxis = new THREE.Vector3(0, 1, 0);
 const flightQuat = new THREE.Quaternion();
 const flightEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const ignoredRelationTags = new Set(['Featured', 'Active', 'Stable', 'Historical', 'Ecosystem']);
@@ -67,7 +69,7 @@ const orbitState = {
   phi: Math.PI * 0.35,
   distance: 18,
   minDistance: 7,
-  maxDistance: 30,
+  maxDistance: 82,
   rotateSpeed: 0.005,
   zoomSpeed: 0.0015
 };
@@ -83,26 +85,69 @@ const flightState = {
   pointerLocked: false,
   score: 0,
   shield: 100,
+  armor: 100,
+  energy: 100,
+  ammo: 240,
+  missiles: 8,
   lastTime: 0,
   lastShot: 0,
+  lastMissile: 0,
   nearestNode: null,
   nearestDistance: Infinity,
   status: 'TYPE USSY TO LAUNCH',
+  statusUntil: 0,
+  landed: false,
   lastHudUpdate: 0,
   mouseSensitivity: 0.0022,
   thrust: 14,
   strafe: 8,
   damping: 0.985,
   fireCooldown: 140,
+  missileCooldown: 900,
+  laserEnergyCost: 2.5,
+  missileEnergyCost: 18,
   enemyFireCooldown: 1500
 };
 
 const enemies = [];
 const playerBullets = [];
 const enemyBullets = [];
+const playerMissiles = [];
 const maxEnemies = 7;
 const maxPlayerBullets = 32;
 const maxEnemyBullets = 28;
+const maxPlayerMissiles = 8;
+const maxPlayerAmmo = 240;
+const maxPlayerMissilesStored = 8;
+const constellationScale = 2.25;
+const nodeBaseScale = 1.65;
+const landingRange = 7.2;
+const flightBounds = 135;
+const radarRange = 140;
+let radarLastUpdate = 0;
+
+const missionState = {
+  active: false,
+  step: 'idle',
+  killGoal: 5,
+  kills: 0,
+  landingProjectId: 'devussy'
+};
+
+const gameMessageState = {
+  active: false,
+  type: 'MISSION',
+  source: 'USSYVERSE CONTROL',
+  text: '',
+  shown: '',
+  index: 0,
+  nextTypeAt: 0,
+  typeSpeed: 18,
+  choices: [],
+  onDismiss: null
+};
+
+const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. MOUSELOOK TO AIM, W/S TO THRUST, A/D TO STRAFE, Q/E TO ROLL, SPACE FOR LASERS, CTRL FOR MISSILES, V FOR CHASE CAM, L TO LAND AND RESTOCK. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
 
 function getRenderPixelRatio() {
   return Math.min(window.devicePixelRatio || 1, isCoarsePointer ? 1 : 1.25);
@@ -179,6 +224,25 @@ const flightStatus = document.getElementById('flight-status');
 const flightScore = document.getElementById('flight-score');
 const flightShield = document.getElementById('flight-shield');
 const flightTarget = document.getElementById('flight-target');
+const flightSpeed = document.getElementById('flight-speed');
+const flightSpeedBar = document.getElementById('flight-speed-bar');
+const flightShieldsDetail = document.getElementById('flight-shields-detail');
+const flightShieldBar = document.getElementById('flight-shield-bar');
+const flightEnergy = document.getElementById('flight-energy');
+const flightEnergyBar = document.getElementById('flight-energy-bar');
+const flightArmor = document.getElementById('flight-armor');
+const flightArmorBar = document.getElementById('flight-armor-bar');
+const flightAmmo = document.getElementById('flight-ammo');
+const flightAmmoBar = document.getElementById('flight-ammo-bar');
+const flightMissiles = document.getElementById('flight-missiles');
+const flightMissileBar = document.getElementById('flight-missile-bar');
+const gameMessageSystem = document.getElementById('game-message-system');
+const gameMessageType = document.getElementById('game-message-type');
+const gameMessageSource = document.getElementById('game-message-source');
+const gameMessageBody = document.getElementById('game-message-body');
+const gameMessageChoices = document.getElementById('game-message-choices');
+const cockpitRadar = document.getElementById('cockpit-radar');
+const radarCtx = cockpitRadar ? cockpitRadar.getContext('2d', { alpha: true }) : null;
 
 // Hero elements
 const heroContainer = document.getElementById('hero-container');
@@ -528,35 +592,61 @@ function createFlightGameObjects() {
   playerShip.add(cockpit);
   gameRoot.add(playerShip);
 
-  const enemyGeo = new THREE.ConeGeometry(0.34, 1.1, 5);
-  const enemyMat = new THREE.MeshBasicMaterial({ color: 0xff3355, wireframe: true, transparent: true, opacity: 0.9 });
+  const enemyBodyGeo = new THREE.SphereGeometry(0.32, 10, 8);
+  const enemyBodyMat = new THREE.MeshBasicMaterial({ color: 0xff3355, wireframe: true, transparent: true, opacity: 0.95 });
+  const enemyWingGeo = new THREE.BoxGeometry(0.08, 1.05, 1.05);
+  const enemyWingMat = new THREE.MeshBasicMaterial({ color: 0xb8c4d8, wireframe: true, transparent: true, opacity: 0.78 });
+  const enemyStrutGeo = new THREE.BoxGeometry(0.78, 0.05, 0.05);
+  const enemyStrutMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true, transparent: true, opacity: 0.65 });
   for (let i = 0; i < maxEnemies; i++) {
-    const enemy = new THREE.Mesh(enemyGeo, enemyMat.clone());
-    enemy.rotation.x = Math.PI / 2;
+    const enemy = new THREE.Group();
+    const body = new THREE.Mesh(enemyBodyGeo, enemyBodyMat.clone());
+    const leftWing = new THREE.Mesh(enemyWingGeo, enemyWingMat.clone());
+    const rightWing = new THREE.Mesh(enemyWingGeo, enemyWingMat.clone());
+    const strut = new THREE.Mesh(enemyStrutGeo, enemyStrutMat.clone());
+    const antenna = new THREE.Mesh(
+      new THREE.ConeGeometry(0.05, 0.48, 5),
+      new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true, transparent: true, opacity: 0.7 })
+    );
+    leftWing.position.x = -0.55;
+    rightWing.position.x = 0.55;
+    antenna.rotation.x = -Math.PI / 2;
+    antenna.position.z = -0.42;
+    enemy.add(body, leftWing, rightWing, strut, antenna);
     enemy.visible = false;
     enemy.userData = { active: false, health: 1, cooldown: 500 + Math.random() * 1200, radius: 0.62 };
     gameRoot.add(enemy);
     enemies.push(enemy);
   }
 
-  const playerBulletGeo = new THREE.SphereGeometry(0.075, 8, 8);
-  const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.95 });
+  const playerBulletGeo = new THREE.CylinderGeometry(0.025, 0.025, 1.8, 6);
+  const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0x66ff44, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending });
   for (let i = 0; i < maxPlayerBullets; i++) {
     const bullet = new THREE.Mesh(playerBulletGeo, playerBulletMat);
     bullet.visible = false;
-    bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.16 };
+    bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.22 };
     gameRoot.add(bullet);
     playerBullets.push(bullet);
   }
 
-  const enemyBulletGeo = new THREE.SphereGeometry(0.09, 8, 8);
-  const enemyBulletMat = new THREE.MeshBasicMaterial({ color: 0xff3355, transparent: true, opacity: 0.86 });
+  const enemyBulletGeo = new THREE.CylinderGeometry(0.026, 0.026, 1.55, 6);
+  const enemyBulletMat = new THREE.MeshBasicMaterial({ color: 0xff3355, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
   for (let i = 0; i < maxEnemyBullets; i++) {
     const bullet = new THREE.Mesh(enemyBulletGeo, enemyBulletMat);
     bullet.visible = false;
-    bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.18 };
+    bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.2 };
     gameRoot.add(bullet);
     enemyBullets.push(bullet);
+  }
+
+  const missileGeo = new THREE.ConeGeometry(0.09, 0.72, 8);
+  const missileMat = new THREE.MeshBasicMaterial({ color: 0xfff2cf, wireframe: true, transparent: true, opacity: 0.95 });
+  for (let i = 0; i < maxPlayerMissiles; i++) {
+    const missile = new THREE.Mesh(missileGeo, missileMat);
+    missile.visible = false;
+    missile.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.36, target: null };
+    gameRoot.add(missile);
+    playerMissiles.push(missile);
   }
 }
 
@@ -567,8 +657,8 @@ function buildProjectNodes() {
   USSY_PROJECTS.forEach((proj, idx) => {
     // Position nodes in an expanding spiral
     const angle = (idx / count) * Math.PI * 2 * 2.5; 
-    const radius = 5.5 + (idx / count) * 8.5; 
-    const yHeight = (Math.sin(angle * 2) * 1.5) + (Math.random() * 0.5); 
+    const radius = (5.5 + (idx / count) * 8.5) * constellationScale;
+    const yHeight = ((Math.sin(angle * 2) * 1.5) + (Math.random() * 0.5)) * constellationScale;
     
     const posX = Math.cos(angle) * radius;
     const posZ = Math.sin(angle) * radius;
@@ -616,7 +706,8 @@ function buildProjectNodes() {
     
     const nodeMesh = new THREE.Mesh(nodeGeo, nodeMat);
     nodeMesh.position.set(posX, yHeight, posZ);
-    nodeMesh.userData = { project: proj };
+    nodeMesh.userData = { project: proj, baseScale: nodeBaseScale };
+    nodeMesh.scale.setScalar(nodeBaseScale);
 
     const hitGeo = new THREE.SphereGeometry(isCoarsePointer ? 0.95 : 0.7, 12, 12);
     const hitMat = new THREE.MeshBasicMaterial({
@@ -971,7 +1062,7 @@ function selectProject(projId, triggerFly = true) {
   projectNodes.forEach(node => {
     const isSelected = node.userData.project.id === projId;
     const isRelated = getRelatedEdgesForProject(projId).some(edge => edge.fromNode === node || edge.toNode === node);
-    node.scale.setScalar(isSelected ? 1.5 : 1);
+    node.scale.setScalar(node.userData.baseScale * (isSelected ? 1.5 : 1));
     node.material.opacity = isSelected ? 1.0 : (isRelated ? 0.82 : 0.5);
     node.userData.connectionLine.material.opacity = isSelected ? 0.6 : 0.15;
   });
@@ -1051,7 +1142,7 @@ function selectProject(projId, triggerFly = true) {
   if (triggerFly && selectedNode) {
     const pos = selectedNode.position;
     const dir = new THREE.Vector3().copy(pos).normalize();
-    camTarget.pos.copy(pos).add(dir.multiplyScalar(3.2)).add(new THREE.Vector3(0, 1.2, 0));
+    camTarget.pos.copy(pos).add(dir.multiplyScalar(7.2)).add(new THREE.Vector3(0, 2.4, 0));
     camTarget.lookAt.copy(pos);
     syncOrbitFromCamera();
   }
@@ -1063,7 +1154,7 @@ function activateConsoleMode() {
   document.body.classList.add('console-active');
   
   // Set camera to initial focus view
-  camTarget.pos.set(0, 4, 18);
+  camTarget.pos.set(0, 8, 38);
   camTarget.lookAt.set(0, 0, 0);
   syncOrbitFromCamera();
   
@@ -1079,7 +1170,7 @@ function deactivateConsoleMode() {
   selectedNode = null;
   
   projectNodes.forEach(node => {
-    node.scale.setScalar(1);
+    node.scale.setScalar(node.userData.baseScale);
     node.material.opacity = 0.85;
     node.userData.connectionLine.material.opacity = 0.15;
   });
@@ -1132,10 +1223,17 @@ function enterFlightMode() {
   flightState.vel.set(0, 0, 0);
   flightState.score = 0;
   flightState.shield = 100;
+  flightState.armor = 100;
+  flightState.energy = 100;
+  flightState.ammo = maxPlayerAmmo;
+  flightState.missiles = maxPlayerMissilesStored;
   flightState.lastTime = 0;
   flightState.lastShot = 0;
+  flightState.lastMissile = 0;
   flightState.nearestNode = null;
   flightState.nearestDistance = Infinity;
+  flightState.landed = false;
+  flightState.statusUntil = 0;
   flightState.status = isCoarsePointer ? 'KEYBOARD FLIGHT READY' : 'REQUESTING MOUSELOOK LOCK';
   flightState.pos.copy(camCurrent.pos.lengthSq() ? camCurrent.pos : camTarget.pos);
 
@@ -1149,9 +1247,11 @@ function enterFlightMode() {
   enemies.forEach(enemy => deactivateCombatObject(enemy));
   playerBullets.forEach(bullet => deactivateCombatObject(bullet));
   enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
-  for (let i = 0; i < maxEnemies; i++) spawnEnemy(enemies[i], i * 1.7);
+  playerMissiles.forEach(missile => deactivateCombatObject(missile));
 
+  startTutorialMission();
   updateFlightHud(true);
+  updateCockpitRadar(0, true);
   if (!isCoarsePointer && renderer.domElement.requestPointerLock) {
     const lockRequest = renderer.domElement.requestPointerLock();
     if (lockRequest && typeof lockRequest.catch === 'function') {
@@ -1170,10 +1270,13 @@ function exitFlightMode(releasePointer = true) {
   enemies.forEach(enemy => deactivateCombatObject(enemy));
   playerBullets.forEach(bullet => deactivateCombatObject(bullet));
   enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
+  playerMissiles.forEach(missile => deactivateCombatObject(missile));
   if (releasePointer && document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
     document.exitPointerLock();
   }
   syncOrbitFromCamera();
+  gameMessageState.active = false;
+  renderGameMessage();
   updateFlightHud(true);
 }
 
@@ -1182,7 +1285,12 @@ function onPointerLockChange() {
   if (!flightState.pointerLocked) clearFlightInput();
   document.body.classList.toggle('pointer-unlocked', isFlightActive && !flightState.pointerLocked);
   if (isFlightActive) {
-    flightState.status = flightState.pointerLocked ? `MOUSELOOK ${flightState.view.toUpperCase()} VIEW` : 'CLICK VIEWPORT TO RECAPTURE';
+    if (flightState.pointerLocked) {
+      flightState.landed = false;
+      flightState.status = `MOUSELOOK ${flightState.view.toUpperCase()} VIEW`;
+    } else if (performance.now() > flightState.statusUntil) {
+      flightState.status = 'CLICK VIEWPORT TO RECAPTURE';
+    }
     updateFlightHud(true);
   }
 }
@@ -1206,18 +1314,207 @@ function toggleFlightView() {
   document.body.classList.toggle('flight-third-person', flightState.view === 'third');
   flightState.status = `${flightState.view.toUpperCase()} VIEW ACTIVE`;
   updateFlightHud(true);
+  updateCockpitRadar(0, true);
+}
+
+function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18 }) {
+  gameMessageState.active = true;
+  gameMessageState.type = type;
+  gameMessageState.source = source;
+  gameMessageState.text = text;
+  gameMessageState.shown = '';
+  gameMessageState.index = 0;
+  gameMessageState.nextTypeAt = 0;
+  gameMessageState.typeSpeed = typeSpeed;
+  gameMessageState.choices = choices;
+  gameMessageState.onDismiss = onDismiss;
+  renderGameMessage();
+}
+
+function renderGameMessage() {
+  if (!gameMessageSystem) return;
+  gameMessageSystem.classList.toggle('active', gameMessageState.active);
+  if (gameMessageType) gameMessageType.textContent = gameMessageState.type;
+  if (gameMessageSource) gameMessageSource.textContent = gameMessageState.source;
+  if (gameMessageBody) {
+    gameMessageBody.textContent = gameMessageState.active && gameMessageState.index < gameMessageState.text.length
+      ? `${gameMessageState.shown}_`
+      : gameMessageState.text;
+  }
+  if (gameMessageChoices) {
+    gameMessageChoices.innerHTML = '';
+    gameMessageState.choices.forEach(choice => {
+      const item = document.createElement('div');
+      item.className = 'game-message-choice';
+      item.innerHTML = `<kbd>${choice.key}</kbd><span>${choice.label}</span>`;
+      gameMessageChoices.appendChild(item);
+    });
+  }
+}
+
+function updateGameMessage(time) {
+  if (!gameMessageState.active || gameMessageState.index >= gameMessageState.text.length) return;
+  if (time < gameMessageState.nextTypeAt) return;
+  const chunk = gameMessageState.text.slice(gameMessageState.index, gameMessageState.index + 2);
+  gameMessageState.shown += chunk;
+  gameMessageState.index += chunk.length;
+  gameMessageState.nextTypeAt = time + gameMessageState.typeSpeed;
+  renderGameMessage();
+}
+
+function dismissGameMessage() {
+  if (!gameMessageState.active) return false;
+  const callback = gameMessageState.onDismiss;
+  gameMessageState.active = false;
+  gameMessageState.onDismiss = null;
+  renderGameMessage();
+  if (callback) callback();
+  return true;
+}
+
+function handleGameMessageChoice(event) {
+  if (!gameMessageState.active || gameMessageState.choices.length === 0) return false;
+  const key = event.key.toLowerCase();
+  const code = event.code.toLowerCase();
+  const choice = gameMessageState.choices.find(item => item.key.toLowerCase() === key || item.code?.toLowerCase() === code);
+  if (!choice) return false;
+  gameMessageState.active = false;
+  renderGameMessage();
+  if (choice.action) choice.action();
+  return true;
+}
+
+function startTutorialMission() {
+  missionState.active = true;
+  missionState.kills = 0;
+  missionState.step = 'introTyping';
+  showGameMessage({
+    type: 'EASTER EGG DISCOVERED',
+    source: 'USSYVERSE CONTROL',
+    text: missionIntroText,
+    onDismiss: () => setMissionStep('killTutorialBogeys')
+  });
+  flightState.status = 'MISSION BRIEFING OPEN';
+  flightState.statusUntil = performance.now() + 3500;
+}
+
+function setMissionStep(step) {
+  missionState.step = step;
+  if (step === 'killTutorialBogeys') {
+    flightState.landed = false;
+    flightState.status = 'TUTORIAL BOGEYS TELEPORTING IN';
+    flightState.statusUntil = performance.now() + 2500;
+    spawnTutorialBogeys();
+    showGameMessage({
+      type: 'MISSION OBJECTIVE',
+      source: 'USSYVERSE CONTROL',
+      text: `OBJECTIVE: SPLASH TUTORIAL BOGEYS 0/${missionState.killGoal}. THEY WILL TELEPORT IN FROM LONG RANGE. USE RADAR CONTACTS TO ACQUIRE THEM, THEN FIRE LASERS OR MISSILES.`
+    });
+  } else if (step === 'goLandAtProject') {
+    const projectName = getMissionLandingProjectName();
+    showGameMessage({
+      type: 'MISSION UPDATE',
+      source: 'USSYVERSE CONTROL',
+      text: `OBJECTIVE COMPLETE. NAVIGATE TO ${projectName.toUpperCase()} AND LAND WITH L TO RECEIVE YOUR NEXT MISSION PACKAGE.`
+    });
+    flightState.status = `LAND AT ${projectName.toUpperCase()}`;
+    flightState.statusUntil = performance.now() + 3000;
+  } else if (step === 'landedHandoff') {
+    showGameMessage({
+      type: 'INCOMING COMMUNICATION',
+      source: 'DEVUSSY DOCK CONTROL',
+      text: 'DOCKING CONFIRMED. DEVUSSY HAS REARMED YOUR SHIP AND DELIVERED THE NEXT CONTRACT. THE FULL GAME LOOP IS ONLINE: HUNT BOGEYS, LAND ON PROJECTS, LEARN THE SYSTEM, RESTOCK, AND KEEP MOVING.',
+      choices: [
+        { key: '1', code: 'Digit1', label: 'ACKNOWLEDGE AND FREE ROAM', action: () => showGameMessage({ type: 'SYSTEM UPDATE', source: 'USSYVERSE CONTROL', text: 'FREE ROAM ENABLED. LAND ON PROJECT NODES TO INSPECT SYSTEMS AND RESTOCK BETWEEN ENGAGEMENTS.' }) },
+        { key: '2', code: 'Digit2', label: 'REQUEST MORE CONTRACTS', action: () => showGameMessage({ type: 'FACTION COMMS', source: 'DEVUSSY DOCK CONTROL', text: 'CONTRACT BOARD IS BEING ASSEMBLED. FOR NOW, KEEP THE CONSTELLATION CLEAR AND MAP PROJECT NODES.' }) }
+      ]
+    });
+    flightState.status = 'MISSION HANDOFF RECEIVED';
+    flightState.statusUntil = performance.now() + 3000;
+  }
+}
+
+function updateMission(time) {
+  if (!missionState.active) return;
+  updateGameMessage(time);
+}
+
+function registerMissionKill() {
+  if (!missionState.active || missionState.step !== 'killTutorialBogeys') return;
+  missionState.kills = Math.min(missionState.killGoal, missionState.kills + 1);
+  if (missionState.kills >= missionState.killGoal) {
+    enemies.forEach(enemy => deactivateCombatObject(enemy));
+    setMissionStep('goLandAtProject');
+  } else {
+    showGameMessage({
+      type: 'MISSION PROGRESS',
+      source: 'USSYVERSE CONTROL',
+      text: `BOGEY DESTROYED. OBJECTIVE PROGRESS: ${missionState.kills}/${missionState.killGoal}. CONTINUE SWEEPING RADAR.`
+    });
+  }
+}
+
+function handleMissionLanding(project) {
+  if (!missionState.active || missionState.step !== 'goLandAtProject') return true;
+  if (project.id !== missionState.landingProjectId) {
+    flightState.status = `WRONG DOCK // LAND AT ${getMissionLandingProjectName().toUpperCase()}`;
+    flightState.statusUntil = performance.now() + 2500;
+    updateFlightHud(true);
+    return false;
+  }
+  setMissionStep('landedHandoff');
+  return true;
+}
+
+function spawnTutorialBogeys() {
+  enemies.forEach(enemy => deactivateCombatObject(enemy));
+  const tutorialCount = Math.min(3, enemies.length);
+  for (let i = 0; i < tutorialCount; i++) spawnEnemy(enemies[i], i * 2.2, i * 0.8);
+}
+
+function handleEnemyDestroyed(enemy) {
+  registerMissionKill();
+  if (missionState.active && missionState.step === 'killTutorialBogeys' && missionState.kills < missionState.killGoal) {
+    spawnEnemy(enemy, flightState.score + missionState.kills, 1.2 + Math.random() * 1.6);
+  } else if (missionState.active && missionState.step !== 'killTutorialBogeys') {
+    deactivateCombatObject(enemy);
+  } else {
+    spawnEnemy(enemy, flightState.score, 1.2 + Math.random() * 2.2);
+  }
+}
+
+function getMissionLandingProjectName() {
+  const project = USSY_PROJECTS.find(p => p.id === missionState.landingProjectId);
+  return project ? project.name : 'Devussy';
 }
 
 function landOnNearestProject() {
   updateProjectLandingTarget();
-  if (!flightState.nearestNode || flightState.nearestDistance > 3.2) {
+  if (!flightState.nearestNode || flightState.nearestDistance > landingRange) {
     flightState.status = 'APPROACH PROJECT NODE TO LAND';
     updateFlightHud(true);
     return;
   }
   const project = flightState.nearestNode.userData.project;
-  exitFlightMode();
-  selectProject(project.id, true);
+  if (!handleMissionLanding(project)) return;
+  restockAtProject(project);
+  flightState.landed = true;
+  flightState.vel.set(0, 0, 0);
+  selectProject(project.id, false);
+  if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
+    document.exitPointerLock();
+  }
+}
+
+function restockAtProject(project) {
+  flightState.shield = 100;
+  flightState.armor = 100;
+  flightState.ammo = maxPlayerAmmo;
+  flightState.missiles = maxPlayerMissilesStored;
+  flightState.energy = 100;
+  flightState.status = `RESTOCKED AT ${project.name.toUpperCase()}`;
+  flightState.statusUntil = performance.now() + 2500;
+  updateFlightHud(true);
 }
 
 function deactivateCombatObject(object) {
@@ -1227,11 +1524,11 @@ function deactivateCombatObject(object) {
   object.userData.life = 0;
 }
 
-function spawnEnemy(enemy, offset = 0) {
+function spawnEnemy(enemy, offset = 0, delay = 0) {
   if (!enemy) return;
   const angle = Math.random() * Math.PI * 2 + offset;
-  const height = (Math.random() - 0.5) * 12;
-  const radius = 18 + Math.random() * 16;
+  const height = (Math.random() - 0.5) * 54;
+  const radius = 92 + Math.random() * 58;
   enemy.position.set(
     flightState.pos.x + Math.cos(angle) * radius,
     flightState.pos.y + height,
@@ -1239,22 +1536,54 @@ function spawnEnemy(enemy, offset = 0) {
   );
   enemy.userData.active = true;
   enemy.userData.health = 1;
-  enemy.userData.cooldown = 600 + Math.random() * flightState.enemyFireCooldown;
-  enemy.visible = true;
+  enemy.userData.spawnDelay = delay;
+  enemy.userData.cooldown = 2400 + delay * 1000 + Math.random() * flightState.enemyFireCooldown;
+  enemy.visible = delay <= 0;
 }
 
 function fireBullet(pool, origin, direction, speed, life) {
   const bullet = pool.find(item => !item.userData.active);
-  if (!bullet) return;
+  if (!bullet) return false;
   bullet.position.copy(origin);
   bullet.userData.velocity.copy(direction).multiplyScalar(speed);
   bullet.userData.life = life;
   bullet.userData.active = true;
+  bullet.quaternion.setFromUnitVectors(flightBeamAxis, direction);
   bullet.visible = true;
+  return true;
+}
+
+function fireMissile(origin, direction) {
+  const missile = playerMissiles.find(item => !item.userData.active);
+  if (!missile) return false;
+  missile.position.copy(origin);
+  missile.userData.velocity.copy(direction).multiplyScalar(17);
+  missile.userData.life = 4.2;
+  missile.userData.target = findNearestEnemy();
+  missile.userData.active = true;
+  missile.quaternion.setFromUnitVectors(flightBeamAxis, direction);
+  missile.visible = true;
+  return true;
+}
+
+function findNearestEnemy() {
+  let nearest = null;
+  let nearestDist = Infinity;
+  enemies.forEach(enemy => {
+    if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0) return;
+    const dist = enemy.position.distanceToSquared(flightState.pos);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = enemy;
+    }
+  });
+  return nearest;
 }
 
 function onGlobalKeyDown(event) {
-  if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+  const isControlKey = event.code === 'ControlLeft' || event.code === 'ControlRight';
+  if (isTypingTarget(event.target) || event.metaKey || event.altKey) return;
+  if (!isFlightActive && event.ctrlKey) return;
 
   if (event.key.length === 1 && !isFlightActive) {
     launchCodeBuffer = (launchCodeBuffer + event.key.toLowerCase()).slice(-4);
@@ -1268,7 +1597,16 @@ function onGlobalKeyDown(event) {
 
   if (!isFlightActive) return;
 
-  if (event.code === 'Space') event.preventDefault();
+  if (handleGameMessageChoice(event)) {
+    event.preventDefault();
+    return;
+  }
+  if (event.code === 'KeyE' && dismissGameMessage()) {
+    event.preventDefault();
+    return;
+  }
+
+  if (event.code !== 'Escape') event.preventDefault();
   if (event.code === 'KeyV') {
     event.preventDefault();
     if (!event.repeat) toggleFlightView();
@@ -1354,7 +1692,7 @@ function resetCameraView() {
   selectedNode = null;
   
   projectNodes.forEach(node => {
-    node.scale.setScalar(1);
+    node.scale.setScalar(node.userData.baseScale);
     node.material.opacity = 0.85;
     node.userData.connectionLine.material.opacity = 0.15;
   });
@@ -1501,6 +1839,17 @@ function updateFlight(time) {
   const dt = Math.min(((time - flightState.lastTime) / 1000) || 0.016, 0.05);
   flightState.lastTime = time;
   updateFlightBasis();
+  updateMission(time);
+  flightState.energy = Math.min(100, flightState.energy + 18 * dt);
+
+  if (flightState.landed) {
+    flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
+    updateProjectLandingTarget();
+    updateFlightCamera();
+    updateCockpitRadar(time);
+    updateFlightHud(false);
+    return;
+  }
 
   if (flightState.pointerLocked || isCoarsePointer) {
     const boost = flightState.keys.has('ShiftLeft') || flightState.keys.has('ShiftRight') ? 1.75 : 1;
@@ -1523,9 +1872,33 @@ function updateFlight(time) {
     const maxSpeed = 22 * boost;
     if (flightState.vel.lengthSq() > maxSpeed * maxSpeed) flightState.vel.setLength(maxSpeed);
     if (flightState.keys.has('Space') && time - flightState.lastShot > flightState.fireCooldown) {
-      flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 0.85);
-      fireBullet(playerBullets, flightTempVec, flightForward, 44, 1.5);
+      if (flightState.ammo <= 0) {
+        flightState.status = 'LASER AMMO EMPTY // LAND TO RESTOCK';
+      } else if (flightState.energy < flightState.laserEnergyCost) {
+        flightState.status = 'ENERGY LOW';
+      } else {
+        flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 0.85);
+        if (fireBullet(playerBullets, flightTempVec, flightForward, 46, 1.35)) {
+          flightState.ammo -= 1;
+          flightState.energy = Math.max(0, flightState.energy - flightState.laserEnergyCost);
+        }
+      }
       flightState.lastShot = time;
+    }
+    if ((flightState.keys.has('ControlLeft') || flightState.keys.has('ControlRight')) && time - flightState.lastMissile > flightState.missileCooldown) {
+      if (flightState.missiles <= 0) {
+        flightState.status = 'MISSILES EMPTY // LAND TO RESTOCK';
+      } else if (flightState.energy < flightState.missileEnergyCost) {
+        flightState.status = 'MISSILE ENERGY LOW';
+      } else {
+        flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.05);
+        if (fireMissile(flightTempVec, flightForward)) {
+          flightState.missiles -= 1;
+          flightState.energy = Math.max(0, flightState.energy - flightState.missileEnergyCost);
+          flightState.status = 'MISSILE AWAY';
+        }
+      }
+      flightState.lastMissile = time;
     }
   } else {
     flightState.roll *= Math.pow(0.92, dt * 60);
@@ -1533,11 +1906,12 @@ function updateFlight(time) {
 
   flightState.vel.multiplyScalar(Math.pow(flightState.damping, dt * 60));
   flightState.pos.addScaledVector(flightState.vel, dt);
-  flightState.pos.clampLength(1.8, 58);
+  flightState.pos.clampLength(1.8, flightBounds);
 
   updateProjectLandingTarget();
   updateCombatObjects(dt);
   updateFlightCamera();
+  updateCockpitRadar(time);
   updateFlightHud(false);
 }
 
@@ -1554,47 +1928,56 @@ function updateProjectLandingTarget() {
   });
   if (flightState.nearestNode) {
     const projectName = flightState.nearestNode.userData.project.name;
-    flightState.status = flightState.nearestDistance <= 3.2
-      ? `LANDING RANGE: ${projectName}`
-      : `${flightState.view.toUpperCase()} VIEW // ${flightState.pointerLocked || isCoarsePointer ? 'MOUSELOOK ARMED' : 'CLICK TO RECAPTURE'}`;
+    if (performance.now() > flightState.statusUntil) {
+      flightState.status = flightState.nearestDistance <= landingRange
+        ? `LANDING RANGE: ${projectName}`
+        : `${flightState.view.toUpperCase()} VIEW // ${flightState.pointerLocked || isCoarsePointer ? 'MOUSELOOK ARMED' : 'CLICK TO RECAPTURE'}`;
+    }
   }
 }
 
 function updateCombatObjects(dt) {
   playerBullets.forEach(bullet => updateBullet(bullet, dt));
   enemyBullets.forEach(bullet => updateBullet(bullet, dt));
+  playerMissiles.forEach(missile => updateMissile(missile, dt));
 
   enemies.forEach(enemy => {
     if (!enemy.userData.active) return;
+    if (enemy.userData.spawnDelay > 0) {
+      enemy.userData.spawnDelay -= dt;
+      if (enemy.userData.spawnDelay <= 0) enemy.visible = true;
+      return;
+    }
     flightTempVec.copy(flightState.pos).sub(enemy.position);
     const dist = flightTempVec.length();
     if (dist > 0.001) flightTempVec.multiplyScalar(1 / dist);
-    enemy.position.addScaledVector(flightTempVec, (3.3 + Math.min(flightState.score * 0.06, 1.8)) * dt);
+    const approachSpeed = dist > 46 ? 18 : (4.2 + Math.min(flightState.score * 0.08, 2.2));
+    enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
     enemy.lookAt(flightState.pos);
     enemy.userData.cooldown -= dt * 1000;
 
-    if (enemy.userData.cooldown <= 0 && dist < 38) {
+    if (enemy.userData.cooldown <= 0 && dist < 46) {
       flightTempVec2.copy(flightState.pos).sub(enemy.position).normalize();
       fireBullet(enemyBullets, enemy.position, flightTempVec2, 18, 2.1);
       enemy.userData.cooldown = 900 + Math.random() * flightState.enemyFireCooldown;
     }
 
     if (dist < 1.15) {
-      flightState.shield = Math.max(0, flightState.shield - 12);
-      spawnEnemy(enemy, flightState.score);
+      applyPlayerDamage(14);
+      spawnEnemy(enemy, flightState.score, 1.4 + Math.random() * 2);
     }
   });
 
   playerBullets.forEach(bullet => {
     if (!bullet.userData.active) return;
-    enemies.forEach(enemy => {
-      if (!enemy.userData.active || !bullet.userData.active) return;
+  enemies.forEach(enemy => {
+    if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0 || !bullet.userData.active) return;
       const radius = enemy.userData.radius + bullet.userData.radius;
       if (bullet.position.distanceToSquared(enemy.position) < radius * radius) {
         deactivateCombatObject(bullet);
         flightState.score += 1;
         flightState.status = 'BOGEY SPLASHED';
-        spawnEnemy(enemy, flightState.score);
+        handleEnemyDestroyed(enemy);
       }
     });
   });
@@ -1603,17 +1986,44 @@ function updateCombatObjects(dt) {
     if (!bullet.userData.active) return;
     if (bullet.position.distanceToSquared(flightState.pos) < 0.55) {
       deactivateCombatObject(bullet);
-      flightState.shield = Math.max(0, flightState.shield - 8);
+      applyPlayerDamage(8);
     }
   });
 
-  if (flightState.shield <= 0) {
-    flightState.status = 'SHIELDS REBOOTED // SCORE PENALTY';
-    flightState.shield = 100;
-    flightState.score = Math.max(0, flightState.score - 3);
+  playerMissiles.forEach(missile => {
+    if (!missile.userData.active) return;
+    enemies.forEach(enemy => {
+      if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0 || !missile.userData.active) return;
+      const radius = enemy.userData.radius + missile.userData.radius;
+      if (missile.position.distanceToSquared(enemy.position) < radius * radius) {
+        deactivateCombatObject(missile);
+        flightState.score += 2;
+        flightState.status = 'MISSILE KILL';
+        handleEnemyDestroyed(enemy);
+      }
+    });
+  });
+
+  if (flightState.armor <= 0) {
+    flightState.status = 'HULL BREACH // LAND FOR REPAIRS';
+    flightState.armor = 25;
+    flightState.shield = 0;
+    flightState.score = Math.max(0, flightState.score - 4);
     flightState.vel.set(0, 0, 0);
     flightState.pos.set(0, 2.2, 16);
-    enemies.forEach((enemy, idx) => spawnEnemy(enemy, idx * 1.7));
+    enemies.forEach((enemy, idx) => spawnEnemy(enemy, idx * 1.7, idx * 0.9));
+  }
+}
+
+function applyPlayerDamage(amount) {
+  let remaining = amount;
+  if (flightState.shield > 0) {
+    const absorbed = Math.min(flightState.shield, remaining);
+    flightState.shield -= absorbed;
+    remaining -= absorbed;
+  }
+  if (remaining > 0) {
+    flightState.armor = Math.max(0, flightState.armor - remaining);
   }
 }
 
@@ -1623,6 +2033,25 @@ function updateBullet(bullet, dt) {
   bullet.userData.life -= dt;
   if (bullet.userData.life <= 0 || bullet.position.distanceToSquared(flightState.pos) > 3600) {
     deactivateCombatObject(bullet);
+  }
+}
+
+function updateMissile(missile, dt) {
+  if (!missile.userData.active) return;
+  const target = missile.userData.target && missile.userData.target.userData.active ? missile.userData.target : findNearestEnemy();
+  missile.userData.target = target;
+  if (target) {
+    flightTempVec.copy(target.position).sub(missile.position).normalize();
+    missile.userData.velocity.lerp(flightTempVec.multiplyScalar(24), 0.045);
+  }
+  missile.position.addScaledVector(missile.userData.velocity, dt);
+  if (missile.userData.velocity.lengthSq() > 0.001) {
+    flightTempVec.copy(missile.userData.velocity).normalize();
+    missile.quaternion.setFromUnitVectors(flightBeamAxis, flightTempVec);
+  }
+  missile.userData.life -= dt;
+  if (missile.userData.life <= 0 || missile.position.distanceToSquared(flightState.pos) > 4900) {
+    deactivateCombatObject(missile);
   }
 }
 
@@ -1643,10 +2072,119 @@ function updateFlightCamera() {
   }
 }
 
+function mapRadarPoint(targetPos, radius) {
+  radarTempVec.copy(targetPos).sub(flightState.pos);
+  const right = radarTempVec.dot(flightRight);
+  const forward = radarTempVec.dot(flightForward);
+  const up = radarTempVec.dot(flightUp);
+  const distance = Math.max(0.001, Math.sqrt(right * right + forward * forward + up * up));
+  const scale = Math.min(distance, radarRange) / radarRange;
+  const angle = Math.atan2(right, forward);
+  return {
+    x: Math.sin(angle) * scale * radius,
+    y: -Math.cos(angle) * scale * radius,
+    distance,
+    above: up > 8,
+    below: up < -8,
+    edge: distance > radarRange
+  };
+}
+
+function drawRadarContact(ctx, cx, cy, radius, targetPos, type, highlighted = false) {
+  const point = mapRadarPoint(targetPos, radius);
+  const x = cx + point.x;
+  const y = cy + point.y;
+  const alpha = point.edge ? 0.48 : 0.92;
+  const color = type === 'enemy' ? `rgba(255, 51, 85, ${alpha})` : (highlighted ? `rgba(255, 204, 0, ${alpha})` : `rgba(0, 240, 255, ${alpha * 0.72})`);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = highlighted ? 2 : 1;
+  if (type === 'enemy') {
+    ctx.beginPath();
+    ctx.moveTo(0, -5);
+    ctx.lineTo(5, 5);
+    ctx.lineTo(-5, 5);
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(-4, -4, 8, 8);
+    if (highlighted) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  if (point.above || point.below) {
+    ctx.font = '10px monospace';
+    ctx.fillText(point.above ? '+' : '-', 8, -7);
+  }
+  ctx.restore();
+}
+
+function updateCockpitRadar(time, force = false) {
+  if (!radarCtx || !cockpitRadar || !isFlightActive) return;
+  const interval = isCoarsePointer ? 160 : 95;
+  if (!force && time - radarLastUpdate < interval) return;
+  radarLastUpdate = time;
+
+  const ctx = radarCtx;
+  const width = cockpitRadar.width;
+  const height = cockpitRadar.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(width, height) * 0.42;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.fillStyle = 'rgba(3, 6, 15, 0.72)';
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.42)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.16)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.55, 0, Math.PI * 2);
+  ctx.moveTo(cx, cy - radius);
+  ctx.lineTo(cx, cy + radius);
+  ctx.moveTo(cx - radius, cy);
+  ctx.lineTo(cx + radius, cy);
+  ctx.stroke();
+
+  projectNodes.forEach(node => {
+    if (!node.visible) return;
+    const highlighted = node === flightState.nearestNode || node.userData.project.id === missionState.landingProjectId;
+    drawRadarContact(ctx, cx, cy, radius, node.position, 'project', highlighted);
+  });
+  enemies.forEach(enemy => {
+    if (!enemy.userData.active || !enemy.visible) return;
+    drawRadarContact(ctx, cx, cy, radius, enemy.position, 'enemy');
+  });
+
+  ctx.fillStyle = 'rgba(255, 204, 0, 0.95)';
+  ctx.strokeStyle = 'rgba(255, 204, 0, 0.95)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 9);
+  ctx.lineTo(cx + 7, cy + 8);
+  ctx.lineTo(cx, cy + 4);
+  ctx.lineTo(cx - 7, cy + 8);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.font = '11px monospace';
+  ctx.fillStyle = 'rgba(125, 252, 255, 0.78)';
+  ctx.fillText(`RANGE ${radarRange}`, 10, height - 12);
+  ctx.restore();
+}
+
 function updateFlightHud(force) {
   const now = performance.now();
   if (!force && now - flightState.lastHudUpdate < 120) return;
   flightState.lastHudUpdate = now;
+  const speed = flightState.vel.length();
   if (flightStatus) flightStatus.textContent = isFlightActive ? flightState.status : 'TYPE USSY TO LAUNCH';
   if (flightScore) flightScore.textContent = String(flightState.score);
   if (flightShield) flightShield.textContent = String(Math.round(flightState.shield));
@@ -1655,6 +2193,18 @@ function updateFlightHud(force) {
       ? `${flightState.nearestNode.userData.project.name} ${flightState.nearestDistance.toFixed(1)}u`
       : 'NONE';
   }
+  if (flightSpeed) flightSpeed.textContent = `${speed.toFixed(1)}u/s`;
+  if (flightSpeedBar) flightSpeedBar.style.width = `${Math.min(100, (speed / 38) * 100).toFixed(1)}%`;
+  if (flightShieldsDetail) flightShieldsDetail.textContent = `${Math.round(flightState.shield)}%`;
+  if (flightShieldBar) flightShieldBar.style.width = `${Math.max(0, flightState.shield).toFixed(1)}%`;
+  if (flightEnergy) flightEnergy.textContent = `${Math.round(flightState.energy)}%`;
+  if (flightEnergyBar) flightEnergyBar.style.width = `${Math.max(0, flightState.energy).toFixed(1)}%`;
+  if (flightArmor) flightArmor.textContent = `${Math.round(flightState.armor)}%`;
+  if (flightArmorBar) flightArmorBar.style.width = `${Math.max(0, flightState.armor).toFixed(1)}%`;
+  if (flightAmmo) flightAmmo.textContent = `${flightState.ammo}/${maxPlayerAmmo}`;
+  if (flightAmmoBar) flightAmmoBar.style.width = `${((flightState.ammo / maxPlayerAmmo) * 100).toFixed(1)}%`;
+  if (flightMissiles) flightMissiles.textContent = `${flightState.missiles}/${maxPlayerMissilesStored}`;
+  if (flightMissileBar) flightMissileBar.style.width = `${((flightState.missiles / maxPlayerMissilesStored) * 100).toFixed(1)}%`;
 }
 
 function onWindowResize() {
@@ -1783,7 +2333,7 @@ function animate(time) {
       const node = intersects[0].object.userData.node || intersects[0].object;
       if (hoveredNode !== node) {
         if (hoveredNode && hoveredNode !== selectedNode) {
-          hoveredNode.scale.setScalar(1);
+          hoveredNode.scale.setScalar(hoveredNode.userData.baseScale);
           hoveredNode.material.opacity = 0.85;
         }
         
@@ -1791,14 +2341,14 @@ function animate(time) {
         customCursor.classList.add('hovering');
         
         if (node !== selectedNode) {
-          node.scale.setScalar(1.25);
+          node.scale.setScalar(node.userData.baseScale * 1.25);
           node.material.opacity = 1.0;
         }
       }
     } else {
       if (hoveredNode) {
         if (hoveredNode !== selectedNode) {
-          hoveredNode.scale.setScalar(1);
+          hoveredNode.scale.setScalar(hoveredNode.userData.baseScale);
           hoveredNode.material.opacity = 0.85;
         }
         hoveredNode = null;
