@@ -35,7 +35,8 @@ export const combatState = {
   bountyPending: 0,
   overchargeUsed: false,
   lastAdrenalineBarkAt: 0,
-  lastAdrenalineFrame: 0
+  lastAdrenalineFrame: 0,
+  resources: null
 };
 
 export const COMBAT_PHASES = {
@@ -129,13 +130,20 @@ export function awardXp(amount) {
 
 export function serializeCombatState() {
   return btoa(JSON.stringify({
+    v: 2,
     xp: combatState.xp,
     xpToNextPoint: combatState.xpToNextPoint,
     skillPoints: combatState.skillPoints,
     unlocked: [...combatState.unlocked],
     primaryWeapon: combatState.primaryWeapon,
     secondaryWeapon: combatState.secondaryWeapon,
-    ownedWeapons: [...combatState.ownedWeapons]
+    ownedWeapons: [...combatState.ownedWeapons],
+    resources: {
+      ammo: activeFlightState.ammo,
+      missiles: activeFlightState.missiles,
+      fuel: activeFlightState.fuel,
+      fuelDepleted: Boolean(activeFlightState.fuelDepleted)
+    }
   }));
 }
 
@@ -154,6 +162,25 @@ export function deserializeCombatState(encoded) {
     if (typeof data.skillPoints === 'number') combatState.skillPoints = data.skillPoints;
     if (data.primaryWeapon) combatState.primaryWeapon = data.primaryWeapon;
     if (data.secondaryWeapon) combatState.secondaryWeapon = data.secondaryWeapon;
+    const resources = data.resources || data;
+    const restoredResources = {};
+    if (Number.isFinite(resources.ammo)) {
+      restoredResources.ammo = Math.max(0, Math.floor(resources.ammo));
+      activeFlightState.ammo = restoredResources.ammo;
+    }
+    if (Number.isFinite(resources.missiles)) {
+      restoredResources.missiles = Math.max(0, Math.floor(resources.missiles));
+      activeFlightState.missiles = restoredResources.missiles;
+    }
+    if (Number.isFinite(resources.fuel)) {
+      restoredResources.fuel = Math.max(0, Math.min(activeFlightState.maxFuel ?? 100, resources.fuel));
+      activeFlightState.fuel = restoredResources.fuel;
+    }
+    if (typeof resources.fuelDepleted === 'boolean') {
+      restoredResources.fuelDepleted = resources.fuelDepleted;
+      activeFlightState.fuelDepleted = resources.fuelDepleted;
+    }
+    combatState.resources = Object.keys(restoredResources).length ? restoredResources : null;
     reapplySkills();
     return true;
   } catch {

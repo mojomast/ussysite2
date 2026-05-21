@@ -12,10 +12,14 @@ globalThis.THREE = {
 
 const {
   abandonMission,
+  applyMissionProgress,
   checkMissionExpiry,
+  cloneMissionContracts,
   completeMissionObjective,
+  createMissionState,
   createMissionFromGameState,
-  resolveMissionReward
+  resolveMissionReward,
+  serializeMissionProgress
 } = await import('../js/flight/mission.js');
 
 describe('mission unit helpers', () => {
@@ -70,5 +74,50 @@ describe('mission expiry', () => {
     const checked = checkMissionExpiry(complete, 16);
 
     assert.equal(checked.status, 'complete', 'completed missions should not be overwritten by expiry checks');
+  });
+});
+
+describe('mission persistence helpers', () => {
+  it('serializes and restores active contract progress', () => {
+    const missionState = createMissionState();
+    const missionContracts = cloneMissionContracts();
+    const gameOrchestrator = { tutorialComplete: true };
+
+    missionState.active = true;
+    missionState.contractId = 'patrol-sweep';
+    missionState.contractTitle = 'Patrol Sweep';
+    missionState.contractStepIndex = 1;
+    missionState.contractProgress = 2;
+    missionState.contractStartStationId = 'devussy';
+    missionState.currentObjective = { id: 'patrol-sweep:patrol-dock', title: 'Dock For Bounty' };
+
+    const saved = serializeMissionProgress({ missionState, missionContracts, gameOrchestrator });
+    const restoredState = createMissionState();
+    const restoredOrchestrator = { tutorialComplete: false };
+
+    assert.equal(applyMissionProgress(saved, { missionState: restoredState, missionContracts, gameOrchestrator: restoredOrchestrator }), true);
+    assert.equal(restoredState.active, true);
+    assert.equal(restoredState.contractId, 'patrol-sweep');
+    assert.equal(restoredState.contractStepIndex, 1);
+    assert.equal(restoredState.contractProgress, 2);
+    assert.equal(restoredState.contractStartStationId, 'devussy');
+    assert.equal(restoredOrchestrator.tutorialComplete, true);
+  });
+
+  it('persists dynamic faction contract definitions', () => {
+    const missionState = createMissionState();
+    const dynamicContract = { id: 'faction-devussy-1', title: 'Faction Run', description: 'Generated', steps: [{ id: 'step-1', type: 'land', label: 'Dock', detail: 'Dock somewhere' }] };
+    const missionContracts = [dynamicContract];
+
+    missionState.active = true;
+    missionState.contractId = dynamicContract.id;
+    missionState.contractTitle = dynamicContract.title;
+
+    const saved = serializeMissionProgress({ missionState, missionContracts, gameOrchestrator: { tutorialComplete: true } });
+    const restoredContracts = [];
+
+    applyMissionProgress(saved, { missionState: createMissionState(), missionContracts: restoredContracts, gameOrchestrator: {} });
+    assert.equal(restoredContracts.length, 1);
+    assert.equal(restoredContracts[0].id, dynamicContract.id);
   });
 });

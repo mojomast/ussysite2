@@ -33,6 +33,11 @@ import {
 } from './flight/combat-state.js';
 import { showCreditGain } from './flight/hud.js';
 import { activateEnemyWave, buildOrchestratorGameState } from './flight/orchestrator.js';
+import { MISSION_INTRO_TEXT, applyMissionProgress, cloneMissionContracts, createMissionState, serializeMissionProgress } from './flight/mission.js';
+import { animateHolographicCore, createHolographicCore as createEngineHolographicCore } from './engine/core.js';
+import { projectHitTargets as engineProjectHitTargets, projectLabels as engineProjectLabels, projectNodeById as engineProjectNodeById, projectNodes as engineProjectNodes, relationshipEdges as engineRelationshipEdges } from './engine/nodes.js';
+import { createAmbientLighting as createEngineAmbientLighting, initScene as initEngineScene, resizeScene } from './engine/scene.js';
+import { animateDeepSpaceEffects, createDeepSpaceEffects as createEngineDeepSpaceEffects, createRadialGlowTexture as createEngineRadialGlowTexture, updateDeepSpaceAnchor as updateEngineDeepSpaceAnchor } from './engine/starfield.js';
 
 const USSY_PROJECTS = window.USSY_PROJECTS || [];
 const USSY_CATEGORIES = window.USSY_CATEGORIES || {};
@@ -57,9 +62,9 @@ let gameRoot, playerShip, flightNavLine;
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
-const projectHitTargets = [];
-const projectNodeById = new Map();
-const relationshipEdges = [];
+const projectHitTargets = engineProjectHitTargets;
+const projectNodeById = engineProjectNodeById;
+const relationshipEdges = engineRelationshipEdges;
 const selectedEdgeLimit = 8;
 const labelTempVec = new THREE.Vector3();
 const tempCamBase = new THREE.Vector3();
@@ -292,20 +297,7 @@ configureCombat({
   onMissionComplete: () => awardXp(100)
 });
 
-const missionState = {
-  active: false,
-  step: 'idle',
-  killGoal: 5,
-  kills: 0,
-  landingProjectId: 'devussy',
-  contractId: null,
-  contractTitle: '',
-  contractStepIndex: 0,
-  contractProgress: 0,
-  contractStartStationId: null,
-  currentObjective: null,
-  objectiveView: 'current'
-};
+const missionState = createMissionState();
 
 const gameOrchestrator = {
   enabled: true,
@@ -335,41 +327,9 @@ const gameMessageState = {
   onDismiss: null
 };
 
-const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. CONTROL REFERENCE IS LIVE ON YOUR HUD. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
-
-const missionContracts = [
-  {
-    id: 'patrol-sweep',
-    title: 'Patrol Sweep',
-    description: 'Clear a pirate scout wing, then dock at any project station for a 300cr bounty.',
-    rewardCredits: 300,
-    steps: [
-      { id: 'patrol-clear', type: 'kills', label: 'Clear Pirate Scouts', detail: 'Destroy 3 hostile contacts before they push into the project graph.', target: 3, spawnEnemies: 3 },
-      { id: 'patrol-dock', type: 'land', label: 'Dock For Bounty', detail: 'Land at any project station to transmit proof of sweep completion.' }
-    ]
-  },
-  {
-    id: 'market-proving-run',
-    title: 'Market Proving Run',
-    description: 'Buy any cargo, fly to a different station, sell cargo, and pocket a 150cr route bonus.',
-    rewardCredits: 150,
-    steps: [
-      { id: 'market-buy', type: 'trade', action: 'buy', label: 'Buy Cargo', detail: 'Open a cargo market and buy at least 1 unit of any commodity.', target: 1 },
-      { id: 'market-dock-away', type: 'landDifferent', label: 'Change Markets', detail: 'Fly to a different project station before selling.', target: 1 },
-      { id: 'market-sell', type: 'trade', action: 'sell', label: 'Sell Cargo', detail: 'Sell at least 1 unit from your hold to complete the run.', target: 1 }
-    ]
-  },
-  {
-    id: 'constellation-survey',
-    title: 'Constellation Survey',
-    description: 'Visit two different project stations and transmit survey telemetry for 200cr.',
-    rewardCredits: 200,
-    steps: [
-      { id: 'survey-first', type: 'land', label: 'Survey First Node', detail: 'Land at any project node to capture local telemetry.', target: 1 },
-      { id: 'survey-second', type: 'landDifferent', label: 'Survey Second Node', detail: 'Land at a different project node to complete the route.', target: 1 }
-    ]
-  }
-];
+const missionIntroText = MISSION_INTRO_TEXT;
+const missionContracts = cloneMissionContracts();
+let persistedMissionProgress = null;
 
 function numToWord(value) {
   const words = [
@@ -795,13 +755,23 @@ const combatAudio = {
     const radioText = preprocessRadioText(text);
     if (!radioText) return;
     const blob = await fetchTTSSpeech(radioText, persona);
-    if (!blob) return;
+    if (!blob) {
+      await radioChain.processSpeechSynthesis(radioText, {
+        ...persona,
+        volume: clampVolume(persona.volume ?? gameSettings.chatterVolume)
+      });
+      return;
+    }
 
     const arrayBuffer = await blob.arrayBuffer();
     let audioBuffer;
     try {
       audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
     } catch {
+      await radioChain.processSpeechSynthesis(radioText, {
+        ...persona,
+        volume: clampVolume(persona.volume ?? gameSettings.chatterVolume)
+      });
       return;
     }
 
@@ -874,8 +844,11 @@ async function fetchTTSSpeech(text, persona = {}, signal = null) {
     const response = await fetch(request.url, request.options);
     if (!response.ok) return null;
 
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.startsWith('audio/')) return await response.blob();
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (contentType.startsWith('audio/') || contentType === 'application/octet-stream') {
+      const blob = await response.blob();
+      return blob.size ? blob : null;
+    }
     return null;
   } catch {
     return null;
@@ -966,8 +939,8 @@ const PROJECT_HOW_COPY = {
 };
 
 // Node object maps
-const projectNodes = [];
-const projectLabels = [];
+const projectNodes = engineProjectNodes;
+const projectLabels = engineProjectLabels;
 
 // DOM Elements
 const canvasContainer = document.getElementById('canvas-container');
@@ -1049,7 +1022,10 @@ let inspectHowLabel, inspectHowBody;
 
 function restoreCombatStateFromHash() {
   const hashMatch = location.hash.match(/#save:([A-Za-z0-9+/=]+)/);
-  if (hashMatch) deserializeCombatState(hashMatch[1]);
+  if (hashMatch) {
+    deserializeCombatState(hashMatch[1]);
+    applyPersistedFlightResources();
+  }
   const creditsMatch = location.hash.match(/cr:(\d+)/);
   if (creditsMatch) traderState.credits = parseInt(creditsMatch[1], 10);
   const reputationMatch = location.hash.match(/rep:([A-Za-z0-9+/=]+)/);
@@ -1063,13 +1039,46 @@ function restoreCombatStateFromHash() {
       // Ignore malformed shared save URLs.
     }
   }
+  const missionMatch = location.hash.match(/ms:([A-Za-z0-9+/=]+)/);
+  if (missionMatch) restoreMissionProgress(missionMatch[1]);
   syncCombatCreditsFromTrader();
 }
 
 function saveCombatStateToHash() {
   const encoded = serializeCombatState();
   const reputationEncoded = btoa(JSON.stringify(reputationState.scores));
-  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}`);
+  const missionEncoded = btoa(JSON.stringify(serializeMissionProgress({ missionState, missionContracts, gameOrchestrator })));
+  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}:ms:${missionEncoded}`);
+}
+
+function restoreMissionProgress(encoded) {
+  try {
+    const data = JSON.parse(atob(encoded));
+    if (data && typeof data === 'object') persistedMissionProgress = data;
+  } catch {
+    // Ignore malformed shared save URLs.
+  }
+}
+
+function applyPersistedFlightResources() {
+  const resources = combatState.resources;
+  if (!resources) return;
+  if (Number.isFinite(resources.ammo)) flightState.ammo = Math.min(maxPlayerAmmo, Math.max(0, Math.floor(resources.ammo)));
+  if (Number.isFinite(resources.missiles)) flightState.missiles = Math.min(maxPlayerMissilesStored, Math.max(0, Math.floor(resources.missiles)));
+  if (Number.isFinite(resources.fuel)) {
+    traderState.fuel = Math.min(traderState.maxFuel, Math.max(0, resources.fuel));
+    flightState.fuel = traderState.fuel;
+  }
+  if (typeof resources.fuelDepleted === 'boolean') flightState.fuelDepleted = resources.fuelDepleted;
+}
+
+function applyPersistedMissionProgress() {
+  if (!persistedMissionProgress) return;
+  if (applyMissionProgress(persistedMissionProgress, { missionState, missionContracts, gameOrchestrator })) {
+    if (missionState.active && missionState.contractId && getActiveContractStep()) updateContractObjectiveProgress();
+    else renderObjectivesPanel();
+  }
+  persistedMissionProgress = null;
 }
 
 // Init application
@@ -1087,19 +1096,7 @@ function init() {
   renderObjectivesPanel();
 
   // Initialize Three.js Scene
-  scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x03060f, 0.02);
-
-  // Camera Setup
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-  
-  // Renderer Setup
-  renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(getRenderPixelRatio());
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
-  canvasContainer.appendChild(renderer.domElement);
-  renderer.domElement.className = 'webgl-viewport';
+  ({ scene, camera, renderer } = initEngineScene(canvasContainer, { THREE, isCoarsePointer }));
 
   // Groups
   coreGroup = new THREE.Group();
@@ -1165,282 +1162,31 @@ function init() {
 
 // 1. Holographic Core
 function createHolographicCore() {
-  // Inner Core: Wireframe Icosahedron
-  const innerGeo = new THREE.IcosahedronGeometry(2, 2);
-  const innerMat = new THREE.MeshBasicMaterial({
-    color: 0x00f0ff,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.35
-  });
-  coreMesh = new THREE.Mesh(innerGeo, innerMat);
-  coreGroup.add(coreMesh);
-
-  // Outer Core: Glowing Particle Field
-  const particleGeo = new THREE.BufferGeometry();
-  const particleCount = prefersReducedMotion || isCoarsePointer ? 260 : 380;
-  const positions = new Float32Array(particleCount * 3);
-  
-  for(let i = 0; i < particleCount; i++) {
-    // Generate spherical coordinates
-    const u = Math.random();
-    const v = Math.random();
-    const theta = u * 2.0 * Math.PI;
-    const phi = Math.acos(2.0 * v - 1.0);
-    const r = 2.2 + Math.random() * 0.5; // Radius
-    
-    positions[i*3] = r * Math.sin(phi) * Math.cos(theta);
-    positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
-    positions[i*3+2] = r * Math.cos(phi);
-  }
-  
-  particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  
-  // Create a canvas texture for glowing particles
-  const pCanvas = document.createElement('canvas');
-  pCanvas.width = 16;
-  pCanvas.height = 16;
-  const pCtx = pCanvas.getContext('2d');
-  const grad = pCtx.createRadialGradient(8, 8, 0, 8, 8, 8);
-  grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  grad.addColorStop(0.3, 'rgba(0, 240, 255, 0.8)');
-  grad.addColorStop(1, 'rgba(0, 240, 255, 0)');
-  pCtx.fillStyle = grad;
-  pCtx.fillRect(0, 0, 16, 16);
-  const pTexture = new THREE.CanvasTexture(pCanvas);
-
-  const particleMat = new THREE.PointsMaterial({
-    color: 0x00f0ff,
-    size: 0.15,
-    transparent: true,
-    opacity: 0.55,
-    map: pTexture,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  });
-
-  coreOuterParticles = new THREE.Points(particleGeo, particleMat);
-  coreGroup.add(coreOuterParticles);
-
-  const ringGeo = new THREE.TorusGeometry(1.05, 0.018, 8, 96);
-  const ringMat = new THREE.MeshBasicMaterial({
-    color: 0xff0055,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  });
-  selectionRing = new THREE.Mesh(ringGeo, ringMat);
-  selectionRing.visible = false;
-  scene.add(selectionRing);
+  ({ coreMesh, coreOuterParticles, selectionRing } = createEngineHolographicCore({
+    THREE,
+    documentRef: document,
+    scene,
+    coreGroup,
+    prefersReducedMotion,
+    isCoarsePointer
+  }));
 }
 
 function createRadialGlowTexture({ inner = 'rgba(255,255,255,0.95)', mid = 'rgba(0,240,255,0.35)', outer = 'rgba(0,0,0,0)', size = 256 } = {}) {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const center = size / 2;
-  const grad = ctx.createRadialGradient(center, center, 0, center, center, center);
-  grad.addColorStop(0, inner);
-  grad.addColorStop(0.38, mid);
-  grad.addColorStop(1, outer);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  return new THREE.CanvasTexture(canvas);
-}
-
-function createNebulaSprite(texture, color, opacity, position, scale) {
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: texture,
-    color,
-    transparent: true,
-    opacity,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    fog: false
-  }));
-  sprite.position.copy(position);
-  sprite.scale.setScalar(scale);
-  scene.add(sprite);
-  return sprite;
+  return createEngineRadialGlowTexture({ THREE, documentRef: document, inner, mid, outer, size });
 }
 
 function createDeepSpaceEffects() {
-  const starCount = prefersReducedMotion ? 900 : (isCoarsePointer ? 1100 : 2400);
-  const starGeo = new THREE.BufferGeometry();
-  const positions = new Float32Array(starCount * 3);
-  const colors = new Float32Array(starCount * 3);
-  const starCanvas = document.createElement('canvas');
-  starCanvas.width = 32;
-  starCanvas.height = 32;
-  const starCtx = starCanvas.getContext('2d');
-  const starGrad = starCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  starGrad.addColorStop(0, 'rgba(255,255,255,1)');
-  starGrad.addColorStop(0.22, 'rgba(255,255,255,0.85)');
-  starGrad.addColorStop(1, 'rgba(255,255,255,0)');
-  starCtx.fillStyle = starGrad;
-  starCtx.fillRect(0, 0, 32, 32);
-  const starTexture = new THREE.CanvasTexture(starCanvas);
-  const colorPalette = [
-    new THREE.Color(0xdce7ff),
-    new THREE.Color(0xf4f0df),
-    new THREE.Color(0xb8caff),
-    new THREE.Color(0xffdfb0)
-  ];
-
-  for (let i = 0; i < starCount; i++) {
-    const radius = 28 + Math.pow(Math.random(), 0.45) * 92;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-    positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-    positions[i * 3 + 2] = radius * Math.cos(phi);
-
-    const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-    const intensity = 0.45 + Math.pow(Math.random(), 3) * 0.55;
-    colors[i * 3] = color.r * intensity;
-    colors[i * 3 + 1] = color.g * intensity;
-    colors[i * 3 + 2] = color.b * intensity;
-  }
-
-  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  starField = new THREE.Points(
-    starGeo,
-    new THREE.PointsMaterial({
-      size: isCoarsePointer ? 0.55 : 0.42,
-      vertexColors: true,
-      map: starTexture,
-      transparent: true,
-      opacity: 0.95,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      fog: false
-    })
-  );
-  starField.userData.parallax = 0.12;
-  scene.add(starField);
-
-  const bandCount = prefersReducedMotion ? 360 : (isCoarsePointer ? 520 : 1200);
-  const bandGeo = new THREE.BufferGeometry();
-  const bandPositions = new Float32Array(bandCount * 3);
-  const bandColors = new Float32Array(bandCount * 3);
-  const bandColorA = new THREE.Color(0x9fb2df);
-  const bandColorB = new THREE.Color(0xf0d4aa);
-
-  for (let i = 0; i < bandCount; i++) {
-    const spread = (Math.random() - 0.5) * 86;
-    const thickness = (Math.random() - 0.5) * (5 + Math.random() * 9);
-    const depth = -58 - Math.random() * 36;
-    bandPositions[i * 3] = spread;
-    bandPositions[i * 3 + 1] = thickness + Math.sin(spread * 0.08) * 3.5;
-    bandPositions[i * 3 + 2] = depth + (Math.random() - 0.5) * 18;
-
-    const color = Math.random() > 0.72 ? bandColorB : bandColorA;
-    const intensity = 0.18 + Math.pow(Math.random(), 2) * 0.34;
-    bandColors[i * 3] = color.r * intensity;
-    bandColors[i * 3 + 1] = color.g * intensity;
-    bandColors[i * 3 + 2] = color.b * intensity;
-  }
-
-  bandGeo.setAttribute('position', new THREE.BufferAttribute(bandPositions, 3));
-  bandGeo.setAttribute('color', new THREE.BufferAttribute(bandColors, 3));
-  milkyWayField = new THREE.Points(
-    bandGeo,
-    new THREE.PointsMaterial({
-      size: isCoarsePointer ? 0.85 : 0.7,
-      vertexColors: true,
-      map: starTexture,
-      transparent: true,
-      opacity: 0.42,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      fog: false
-    })
-  );
-  milkyWayField.rotation.z = -0.38;
-  milkyWayField.rotation.y = 0.18;
-  milkyWayField.userData.parallax = 0.4;
-  scene.add(milkyWayField);
-
-  const brightCount = prefersReducedMotion ? 10 : (isCoarsePointer ? 14 : 30);
-  const brightGeo = new THREE.BufferGeometry();
-  const brightPositions = new Float32Array(brightCount * 3);
-  const brightColors = new Float32Array(brightCount * 3);
-
-  for (let i = 0; i < brightCount; i++) {
-    const radius = 42 + Math.random() * 76;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    brightPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-    brightPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-    brightPositions[i * 3 + 2] = radius * Math.cos(phi);
-
-    const color = Math.random() > 0.5 ? new THREE.Color(0xfff2cf) : new THREE.Color(0xd9e7ff);
-    brightColors[i * 3] = color.r;
-    brightColors[i * 3 + 1] = color.g;
-    brightColors[i * 3 + 2] = color.b;
-  }
-
-  brightGeo.setAttribute('position', new THREE.BufferAttribute(brightPositions, 3));
-  brightGeo.setAttribute('color', new THREE.BufferAttribute(brightColors, 3));
-  brightStarField = new THREE.Points(
-    brightGeo,
-    new THREE.PointsMaterial({
-      size: isCoarsePointer ? 1.65 : 1.25,
-      vertexColors: true,
-      map: starTexture,
-      transparent: true,
-      opacity: 0.86,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      fog: false
-    })
-  );
-  brightStarField.userData.parallax = 1.0;
-  scene.add(brightStarField);
-
-  const nebulaTextureA = createRadialGlowTexture({
-    inner: 'rgba(255,255,255,0.6)',
-    mid: 'rgba(138,80,255,0.28)',
-    outer: 'rgba(0,0,0,0)',
-    size: 512
-  });
-  const nebulaTextureB = createRadialGlowTexture({
-    inner: 'rgba(255,255,255,0.5)',
-    mid: 'rgba(0,240,255,0.22)',
-    outer: 'rgba(0,0,0,0)',
-    size: 512
-  });
-  createNebulaSprite(nebulaTextureA, 0xb026ff, 0.12, flightTempVec.set(-54, 24, -78), 96);
-  createNebulaSprite(nebulaTextureB, 0x00f0ff, 0.09, flightTempVec.set(68, -18, -92), 124);
-
-  createDebrisField();
-  createDustField();
-
-  dataRibbonGroup = new THREE.Group();
-  const ribbonCount = prefersReducedMotion || isCoarsePointer ? 0 : 1;
-  for (let i = 0; i < ribbonCount; i++) {
-    const points = [];
-    const radius = 4.5 + i * 2.2;
-    for (let step = 0; step <= 180; step++) {
-      const angle = step * 0.08 + i;
-      points.push(new THREE.Vector3(
-        Math.cos(angle) * radius,
-        Math.sin(step * 0.12 + i) * 0.7,
-        Math.sin(angle) * radius
-      ));
-    }
-    const ribbonGeo = new THREE.BufferGeometry().setFromPoints(points);
-    const ribbonMat = new THREE.LineBasicMaterial({
-      color: i % 2 ? 0xff0055 : 0x00f0ff,
-      transparent: true,
-      opacity: 0.025
-    });
-    dataRibbonGroup.add(new THREE.Line(ribbonGeo, ribbonMat));
-  }
-  scene.add(dataRibbonGroup);
+  ({ starField, milkyWayField, brightStarField, dataRibbonGroup } = createEngineDeepSpaceEffects({
+    THREE,
+    documentRef: document,
+    scene,
+    prefersReducedMotion,
+    isCoarsePointer,
+    flightTempVec,
+    createDebrisField,
+    createDustField
+  }));
 }
 
 function randomizeDebrisInstance(index, ahead = false) {
@@ -2138,16 +1884,7 @@ function getProjectHowCopy(proj) {
 
 // Lighting Setup
 function createAmbientLighting() {
-  const ambientLight = new THREE.AmbientLight(0x0e172e, 1.5);
-  scene.add(ambientLight);
-  
-  pointLight1 = new THREE.PointLight(0x00f0ff, 2.5, 30);
-  pointLight1.position.set(0, 0, 0);
-  scene.add(pointLight1);
-  
-  pointLight2 = new THREE.PointLight(0xff0055, 1.5, 40);
-  pointLight2.position.set(10, 10, 10);
-  scene.add(pointLight2);
+  ({ pointLight1, pointLight2 } = createEngineAmbientLighting(scene, { THREE }));
 }
 
 // 3. UI Syncing
@@ -2469,6 +2206,7 @@ function enterFlightMode() {
   syncCombatCreditsFromTrader();
   skillTree.applyAll();
   traderState.fuel = traderState.maxFuel;
+  applyPersistedFlightResources();
   traderState.docked = false;
   traderState.dockedStation = null;
   gameOrchestrator.tutorialComplete = false;
@@ -2477,6 +2215,7 @@ function enterFlightMode() {
   gameOrchestrator.nextPollAt = 0;
   gameOrchestrator.lastEventTime = 0;
   gameOrchestrator.lastEventId = null;
+  applyPersistedMissionProgress();
   flightState.lastTime = 0;
   flightState.lastShot = 0;
   flightState.lastMissile = 0;
@@ -5295,20 +5034,7 @@ function updateFlightNavMarker() {
 }
 
 function updateDeepSpaceAnchor() {
-  const scale = isFlightActive ? flightUniverseScale : 1;
-  const followCamera = isFlightActive;
-  [starField, milkyWayField, brightStarField].forEach(field => {
-    if (!field) return;
-    if (field.userData.baseSize === undefined) field.userData.baseSize = field.material.size;
-    if (followCamera) {
-      const parallax = field.userData.parallax ?? 1;
-      field.position.copy(camera.position).addScaledVector(flightState.pos, -(1 - parallax));
-    } else {
-      field.position.set(0, 0, 0);
-    }
-    field.scale.setScalar(scale);
-    field.material.size = field.userData.baseSize * scale;
-  });
+  updateEngineDeepSpaceAnchor({ starField, milkyWayField, brightStarField, camera, flightState, isFlightActive, flightUniverseScale });
 }
 
 function updateSpaceEnvironment(dt) {
@@ -5362,10 +5088,7 @@ function updateDustField(dt) {
 }
 
 function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setPixelRatio(getRenderPixelRatio());
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  resizeScene({ camera, renderer, isCoarsePointer });
 }
 
 // 5. Engine Animation Loop
@@ -5383,29 +5106,8 @@ function animate(time) {
     combatState.lastAdrenalineBarkAt = time;
   }
   
-  // Slow background rotation for holographic core
-  if (!prefersReducedMotion) {
-    coreMesh.rotation.y += 0.002;
-    coreMesh.rotation.x += 0.0008;
-    coreOuterParticles.rotation.y -= 0.0006;
-    coreOuterParticles.rotation.x -= 0.0003;
-  }
-  if (starField && !prefersReducedMotion) {
-    starField.rotation.y += 0.00008;
-    starField.rotation.x += 0.00003;
-  }
-  if (milkyWayField && !prefersReducedMotion) {
-    milkyWayField.rotation.y += 0.000025;
-  }
-  if (brightStarField && !prefersReducedMotion) {
-    brightStarField.rotation.y -= 0.000045;
-  }
-  if (dataRibbonGroup && !prefersReducedMotion) {
-    dataRibbonGroup.rotation.y -= 0.00018;
-  }
-  
-  const pulseScale = prefersReducedMotion ? 1 : 1 + Math.sin(time * 0.0015) * 0.04;
-  coreMesh.scale.setScalar(pulseScale);
+  animateHolographicCore({ coreMesh, coreOuterParticles, time, prefersReducedMotion });
+  animateDeepSpaceEffects({ starField, milkyWayField, brightStarField, dataRibbonGroup, prefersReducedMotion });
 
   // Floating nodes orbits (slow drift)
   const orbitSpeed = isConsoleActive ? 0.0003 : 0.00012;

@@ -6,9 +6,14 @@
 index.html
   -> projects.js
   -> js/main.js
-       -> js/economy/trader.js
-       -> js/flight/orchestrator.js
-            -> js/tts/engine.js
+       -> js/engine/core.js
+       -> js/engine/nodes.js
+       -> js/engine/scene.js
+       -> js/engine/starfield.js
+        -> js/economy/trader.js
+        -> js/flight/mission.js
+        -> js/flight/orchestrator.js
+             -> js/tts/engine.js
 
 js/flight/state.js
   -> pure flight, mission, and message state
@@ -17,7 +22,7 @@ js/engine/*, js/flight/*, js/ui/*
   -> module boundaries for scene, flight, HUD, mission, messages, and UI code
 ```
 
-`main.js` is the integration point. It initializes Three.js, binds DOM input, runs animation, and wires the trader economy into the existing flight loop.
+`main.js` is the integration point. It binds DOM input, runs animation, and wires modular scene, node registry, mission, trader, combat, and orchestrator systems into the existing flight loop.
 
 ## Flight Data Flow
 
@@ -29,7 +34,7 @@ Keyboard and mouse events mutate `flightState`. The animation loop applies physi
 
 ## Space Visuals
 
-`main.js` keeps the flight visuals browser-local and allocation-stable. Project nodes render as planet-scale `THREE.LOD` objects with high-detail icosphere, medium icosphere, far sprite impostor, additive BackSide glow shells, and flight-only distant halo sprites. Flight mode switches from the console spiral to a deterministic 3D shell layout with much larger planet spacing, then applies an additional visual multiplier so bodies read at planetary scale while console mode remains readable. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
+`js/engine/scene.js`, `js/engine/core.js`, `js/engine/starfield.js`, and `js/engine/nodes.js` own scene construction, holographic core visuals, deep-space backgrounds, and shared node registries. `main.js` still orchestrates flight-specific updates and project graph behavior. Project nodes render as planet-scale `THREE.LOD` objects with high-detail icosphere, medium icosphere, far sprite impostor, additive BackSide glow shells, and flight-only distant halo sprites. Flight mode switches from the console spiral to a deterministic 3D shell layout with much larger planet spacing, then applies an additional visual multiplier so bodies read at planetary scale while console mode remains readable. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
 
 Flight mode adds camera-relative depth cues only while `isFlightActive` is true: three existing `THREE.Points` star layers use different parallax factors, one `InstancedMesh` debris field recycles up to 300 low-poly rocks around the ship, and one `BufferGeometry` dust stream recycles up to 600 particles ahead of the camera. Nebula sprites are static additive canvas-gradient backdrops.
 
@@ -49,15 +54,19 @@ Fuel drains while thrusting or using autopilot. Landing calls restock/refuel beh
 /api/tts audio -> ttsEngine.speak() or combatAudio.bark() -> Web Audio radio chain -> speakers
 ```
 
-Mission comms and short barks use separate scheduling channels, but both route through the same radio filter chain before playback. The app does not fall back to clean browser speech when the radio chain is unavailable, which keeps the voice treatment consistent. The in-flight audio settings menu is opened with `M`; `Shift+M` keeps the quick TTS mute toggle.
+Mission comms and short barks use separate scheduling channels, but both route through the same radio filter chain before playback. Backend TTS accepts `audio/*` and Kokoro-compatible `application/octet-stream` responses; combat barks fall back to browser speech synthesis if backend audio is unavailable or cannot be decoded. The in-flight audio settings menu is opened with `M`; `Shift+M` keeps the quick TTS mute toggle.
 
 ## Objectives And Missions
 
-The flight HUD has a persistent objectives panel with `Current` and `Available` tabs. `O` toggles those tabs while flying. The current objective is stored in `missionState.currentObjective`; available multi-step contracts are defined in `missionContracts` inside `main.js` until the mission extraction is completed.
+The flight HUD has a persistent objectives panel with `Current` and `Available` tabs. `O` toggles those tabs while flying. The current objective is stored in `missionState.currentObjective`; built-in multi-step contracts, mission state creation, and mission persistence helpers live in `js/flight/mission.js`.
 
 Tutorial startup is choice-based. The player can run the guided tutorial or enter free roam immediately with the director enabled. The tutorial sequence is combat, landing, buy cargo, fly to a second market, then sell cargo. Free roam enables optional contracts such as patrol, trade route, and survey objectives.
 
 Objective progression is browser-authoritative. Kills advance kill objectives, landing advances route objectives, and trader callbacks advance buy/sell objectives. The director may add temporary current objectives for distress, bounty, or combat events, but the local game loop remains responsible for resolving them.
+
+## Persistence
+
+The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions.
 
 ## AI Gameplay Loop
 
@@ -95,4 +104,4 @@ Choice resolution dismisses the current message, applies any choice-1 credit/fue
 
 ## Extending
 
-Add optional contracts by adding entries to `missionContracts` with local completion types such as `kills`, `land`, `landDifferent`, and `trade`. Add tutorial-only steps in `setMissionStep()` when they need bespoke messaging. Add commodities in `COMMODITIES` and update `getStationProfile()` rules. Add station profile behavior by mapping project categories or project IDs to production and demand arrays.
+Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/flight/mission.js` with local completion types such as `kills`, `land`, `landDifferent`, and `trade`. Add tutorial-only steps in `setMissionStep()` when they need bespoke messaging. Add commodities in `COMMODITIES` and update `getStationProfile()` rules. Add station profile behavior by mapping project categories or project IDs to production and demand arrays.

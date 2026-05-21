@@ -12,8 +12,12 @@ globalThis.THREE = {
 
 const {
   COMBAT_PHASES,
+  combatState,
+  deserializeCombatState,
   isPlayerDead,
   respawnFlightState,
+  serializeCombatState,
+  setCombatFlightState,
   transitionCombatPhase
 } = await import('../js/flight/combat-state.js');
 
@@ -45,6 +49,24 @@ describe('combat state transitions', () => {
     assert.equal(state.fuel, 80, 'respawn should restore max fuel');
     assert.equal(state.fuelDepleted, false, 'respawn should clear fuel depleted flag');
     assert.equal(state.combatPhase, COMBAT_PHASES.IDLE, 'respawn should return combat phase to idle');
+  });
+});
+
+describe('combat state persistence', () => {
+  it('serializes and restores flight resources with combat state', () => {
+    const sourceFlightState = { ammo: 17, missiles: 2, fuel: 42, maxFuel: 100, fuelDepleted: true, shield: 100 };
+    setCombatFlightState(sourceFlightState);
+    const encoded = serializeCombatState();
+
+    const targetFlightState = { ammo: 0, missiles: 0, fuel: 0, maxFuel: 100, fuelDepleted: false, shield: 100 };
+    setCombatFlightState(targetFlightState);
+    assert.equal(deserializeCombatState(encoded), true);
+
+    assert.equal(targetFlightState.ammo, 17);
+    assert.equal(targetFlightState.missiles, 2);
+    assert.equal(targetFlightState.fuel, 42);
+    assert.equal(targetFlightState.fuelDepleted, true);
+    assert.deepEqual(combatState.resources, { ammo: 17, missiles: 2, fuel: 42, fuelDepleted: true });
   });
 });
 
