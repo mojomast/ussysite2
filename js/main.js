@@ -1,7 +1,7 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
-import { configureTrader, openTradeMenu, refuelAt, tickPriceDrift, traderState, updateFuelDrain } from './economy/trader.js';
-import { gainReputation, getEnemyAggressionMultiplier, reputationState } from './economy/reputation.js';
+import { COMMODITIES, configureTrader, openTradeMenu, refuelAt, tickPriceDrift, traderState, updateFuelDrain } from './economy/trader.js';
+import { gainReputation, getEnemyAggressionMultiplier, loseReputation, normalizeCategory, reputationState } from './economy/reputation.js';
 import { toggleInventoryPanel } from './ui/inventory-panel.js';
 import {
   ENEMY_CLASSES,
@@ -251,9 +251,10 @@ const skillTree = {
 
 setCombatFlightState(flightState);
 configureCombat({
-  onEnemyKill: ({ classId } = {}) => {
+  onEnemyKill: ({ classId, pos } = {}) => {
     const cls = getEnemyClass(classId || 'scout');
     awardXp(cls.xpReward ?? 25);
+    loseReputation(getNearestStationFaction(pos), 1);
   },
   onPlayerHit: () => awardXp(5),
   onMissionComplete: () => awardXp(100)
@@ -1046,7 +1047,8 @@ function init() {
     dismissGameMessage,
     updateFlightHud,
     getVoicePersona,
-    onTrade: handleTradeCompleted
+    onTrade: handleTradeCompleted,
+    showFactionMission
   });
   restoreCombatStateFromHash();
   if (objectivesPanel) objectivesPanel.addEventListener('click', handleObjectivesPanelClick);
@@ -2984,6 +2986,96 @@ function spawnTutorialBogeys() {
   for (let i = 0; i < tutorialCount; i++) spawnEnemy(enemies[i], i * 2.2, i * 0.8);
 }
 
+function seededRange(seed, min, max) {
+  return min + (Math.abs(seed) % (max - min + 1));
+}
+
+function getFactionMissionDestination(projectId, seed) {
+  const candidates = USSY_PROJECTS.filter(project => project.id !== projectId);
+  return candidates[seed % Math.max(1, candidates.length)] || USSY_PROJECTS.find(project => project.id === projectId) || null;
+}
+
+function upsertFactionMissionContract(projectId) {
+  const project = USSY_PROJECTS.find(item => item.id === projectId) || { id: projectId, name: stationName(projectId), category: 'tools' };
+  const seed = Array.from(projectId).reduce((sum, char) => sum + char.charCodeAt(0), 0) + new Date().getDay();
+  const missionType = ['escort', 'delivery', 'bounty'][seed % 3];
+  const destination = getFactionMissionDestination(projectId, seed + 1) || project;
+  const faction = normalizeCategory(project.category);
+  const id = `faction-${projectId}-${new Date().getDay()}`;
+  const existing = getMissionContract(id);
+  if (existing) return existing;
+  const commodityPool = COMMODITIES.filter(commodity => !commodity.blackMarketOnly && !commodity.restricted);
+  const commodity = commodityPool[seed % commodityPool.length] || COMMODITIES[0];
+  let contract;
+
+  if (missionType === 'escort') {
+    const rewardCredits = seededRange(seed * 7, 50, 300);
+    contract = {
+      id,
+      title: `${project.name} Escort Sweep`,
+      description: `Destroy 2 hostiles near ${destination.name}. Reward: ${rewardCredits}cr + 5 rep.`,
+      rewardCredits,
+      rewardRep: 5,
+      rewardFaction: faction,
+      steps: [
+        { id: `${id}-rally`, type: 'land', label: `Rally At ${destination.name}`, detail: `Fly to ${destination.name} to draw out the escort raiders.`, targetProjectId: destination.id },
+        { id: `${id}-sweep`, type: 'kills', label: `Clear ${destination.name} Hostiles`, detail: `Destroy 2 hostiles near ${destination.name}.`, target: 2, spawnEnemies: 2 }
+      ]
+    };
+  } else if (missionType === 'delivery') {
+    const rewardCredits = seededRange(seed * 11, 100, 200);
+    contract = {
+      id,
+      title: `${project.name} Delivery Run`,
+      description: `Buy 1 ${commodity.name} here, sell at ${destination.name}. Bonus: ${rewardCredits}cr + 8 rep.`,
+      rewardCredits,
+      rewardRep: 8,
+      rewardFaction: faction,
+      steps: [
+        { id: `${id}-buy`, type: 'trade', action: 'buy', commodityId: commodity.id, stationId: projectId, label: `Buy ${commodity.name}`, detail: `Buy 1 ${commodity.name} at ${project.name}.`, target: 1 },
+        { id: `${id}-travel`, type: 'land', label: `Dock At ${destination.name}`, detail: `Deliver the cargo to ${destination.name}.`, targetProjectId: destination.id },
+        { id: `${id}-sell`, type: 'trade', action: 'sell', commodityId: commodity.id, stationId: destination.id, label: `Sell ${commodity.name}`, detail: `Sell 1 ${commodity.name} at ${destination.name}.`, target: 1 }
+      ]
+    };
+  } else {
+    const rewardCredits = seededRange(seed * 13, 150, 350);
+    contract = {
+      id,
+      title: `${project.name} Bounty Packet`,
+      description: `Destroy 3 enemies. Reward: ${rewardCredits}cr + 6 rep.`,
+      rewardCredits,
+      rewardRep: 6,
+      rewardFaction: faction,
+      steps: [
+        { id: `${id}-bounty`, type: 'kills', label: 'Destroy Bounty Targets', detail: 'Destroy 3 enemies marked by station control.', target: 3, spawnEnemies: 3 }
+      ]
+    };
+  }
+
+  missionContracts.push(contract);
+  renderObjectivesPanel();
+  return contract;
+}
+
+function showFactionMission(projectId) {
+  const contract = upsertFactionMissionContract(projectId);
+  const choices = [
+    { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
+  ];
+  if (!missionState.active && gameOrchestrator.tutorialComplete) {
+    choices.unshift({ key: '1', code: 'Digit1', label: 'ACCEPT MISSION', action: () => startMissionContract(contract.id) });
+  }
+  showGameMessage({
+    type: 'FACTION MISSION',
+    source: `${stationName(projectId).toUpperCase()} CONTRACT BOARD`,
+    text: missionState.active
+      ? 'MISSION BOARD LOCKED. COMPLETE CURRENT OBJECTIVE FIRST.'
+      : `${contract.title.toUpperCase()}. ${contract.description}`,
+    choices,
+    ttsPriority: 'normal'
+  });
+}
+
 function startMissionContract(contractId) {
   if (missionState.active || !gameOrchestrator.tutorialComplete) return;
   const contract = getMissionContract(contractId);
@@ -3005,6 +3097,10 @@ function beginContractStep() {
   missionState.step = step.id;
   missionState.contractProgress = 0;
   updateContractObjectiveProgress();
+  if ((step.type === 'land' || step.type === 'landDifferent') && step.targetProjectId) {
+    const targetNode = projectNodeById.get(step.targetProjectId);
+    if (targetNode) setNavigationTarget(targetNode, 'mission');
+  }
   if (step.type === 'kills') {
     enemies.forEach(enemy => deactivateCombatObject(enemy));
     const count = Math.min(step.spawnEnemies || step.target || 1, enemies.length);
@@ -3044,9 +3140,11 @@ function advanceContractStep() {
 function completeMissionContract() {
   const contract = getMissionContract(missionState.contractId);
   const reward = contract?.rewardCredits || 0;
+  const rewardRep = contract?.rewardRep ?? 5;
+  const rewardFaction = normalizeCategory(contract?.rewardFaction || getStationCategory(traderState.dockedStation || missionState.contractStartStationId || 'devussy'));
   emitCombatMissionComplete({ type: 'contract', contractId: contract?.id });
   if (reward > 0) addCombatCredits(reward);
-  gainReputation(getStationCategory(traderState.dockedStation || 'devussy'), 5);
+  if (rewardRep > 0) gainReputation(rewardFaction, rewardRep);
   const title = contract?.title || 'Objective';
   missionState.active = false;
   missionState.step = 'idle';
@@ -3065,6 +3163,12 @@ function completeMissionContract() {
 function handleContractLanding(project) {
   const step = getActiveContractStep();
   if (!step || (step.type !== 'land' && step.type !== 'landDifferent')) return true;
+  if (step.targetProjectId && project.id !== step.targetProjectId) {
+    flightState.status = `OBJECTIVE TARGET: ${stationName(step.targetProjectId).toUpperCase()}`;
+    flightState.statusUntil = performance.now() + 2500;
+    updateFlightHud(true);
+    return false;
+  }
   if (step.type === 'landDifferent' && project.id === missionState.contractStartStationId) {
     flightState.status = 'OBJECTIVE NEEDS A DIFFERENT STATION';
     flightState.statusUntil = performance.now() + 2500;
@@ -3098,6 +3202,8 @@ function handleTradeCompleted(trade) {
   const step = getActiveContractStep();
   if (!missionState.active || !step || step.type !== 'trade') return;
   if (step.action && trade.action !== step.action) return;
+  if (step.commodityId && trade.commodity !== step.commodityId) return;
+  if (step.stationId && trade.stationId !== step.stationId) return;
   if (step.action === 'buy') missionState.contractStartStationId = trade.stationId;
   missionState.contractProgress = Math.min(step.target || 1, missionState.contractProgress + Math.max(1, trade.qty || 1));
   updateContractObjectiveProgress();
@@ -3107,7 +3213,7 @@ function handleTradeCompleted(trade) {
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
   const pointsBefore = combatState.skillPoints;
-  emitCombatEnemyKill({ classId: cls.id });
+  emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position?.clone?.() });
   registerMissionKill();
   if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
     deactivateCombatObject(enemy);
@@ -3212,6 +3318,28 @@ function stationName(projectId) {
 
 function getStationCategory(projectId) {
   return USSY_PROJECTS.find(project => project.id === projectId)?.category || 'default';
+}
+
+function getNearestStationFaction(pos) {
+  if (!pos || typeof pos.distanceToSquared !== 'function') {
+    return normalizeCategory(getStationCategory(traderState.dockedStation || flightState.nearestNode?.userData?.project?.id || 'devussy'));
+  }
+  let nearestProject = null;
+  let minDist = Infinity;
+  for (const node of projectNodes) {
+    if (!node?.position) continue;
+    const dist = pos.distanceToSquared(node.position);
+    if (dist < minDist) {
+      minDist = dist;
+      nearestProject = node.userData?.project || null;
+    }
+  }
+  return normalizeCategory(nearestProject?.category);
+}
+
+function getEnemyFireCooldown(pos, cls) {
+  const aggression = getEnemyAggressionMultiplier(getNearestStationFaction(pos));
+  return cls.fireRate / aggression;
 }
 
 function openStationMenu(projectId) {
@@ -3371,8 +3499,6 @@ function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
     ? 'scout'
     : (classId || getRandomClassForTier(getDifficultyTier(flightState.score)));
   const cls = getEnemyClass(resolvedClassId);
-  const localFaction = getStationCategory(flightState.nearestNode?.userData?.project?.id || traderState.dockedStation || 'devussy');
-  const aggressionMultiplier = getEnemyAggressionMultiplier(localFaction);
   buildEnemyFromClass(enemy, cls.id);
   const angle = Math.random() * Math.PI * 2 + offset;
   const height = (Math.random() - 0.5) * 54;
@@ -3393,7 +3519,8 @@ function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.shieldHp = cls.health > 2 ? cls.health - 1 : 0;
   enemy.userData.maxShieldHp = enemy.userData.shieldHp;
   enemy.userData.spawnDelay = delay;
-  enemy.userData.cooldown = (cls.fireRate / aggressionMultiplier) + delay * 1000 + Math.random() * (cls.fireRate / aggressionMultiplier);
+  const fireCooldown = getEnemyFireCooldown(enemy.position, cls);
+  enemy.userData.cooldown = fireCooldown + delay * 1000 + Math.random() * fireCooldown;
   enemy.visible = delay <= 0;
   buildEnemyHealthPips(enemy);
 }
@@ -4257,7 +4384,8 @@ function updateCombatObjects(dt) {
       enemy.userData.burstRemaining -= 1;
       enemy.userData.burstNextAt = now + cls.burstDelay;
       if (enemy.userData.burstRemaining <= 0) {
-        enemy.userData.cooldown = cls.fireRate + Math.random() * cls.fireRate * 0.45;
+        const fireCooldown = getEnemyFireCooldown(enemy.position, cls);
+        enemy.userData.cooldown = fireCooldown + Math.random() * fireCooldown * 0.45;
       }
     }
 

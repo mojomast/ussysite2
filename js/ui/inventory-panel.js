@@ -29,7 +29,7 @@ function skillStatus(node) {
 }
 
 function renderCargo() {
-  const rows = COMMODITIES.map(commodity => {
+  const rows = COMMODITIES.filter(commodity => !commodity.blackMarketOnly).map(commodity => {
     const qty = traderState.cargo[commodity.id] || 0;
     return `
       <div class="inv-row ${qty > 0 ? '' : 'is-empty'}">

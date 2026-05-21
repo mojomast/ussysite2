@@ -7,7 +7,7 @@ import {
   normalizeStationCategory
 } from '../flight/combat-overhaul.js';
 import { combatState, buyWeapon, equipWeapon, reapplySkills, unlockSkillNode } from '../flight/combat-state.js';
-import { gainReputation, getReputationPriceMultiplier } from './reputation.js';
+import { gainReputation, getReputation, getReputationPriceMultiplier, normalizeCategory } from './reputation.js';
 import { refreshInventoryIfOpen } from '../ui/inventory-panel.js';
 
 export const traderState = {
@@ -27,13 +27,14 @@ export const traderState = {
 
 export const COMMODITIES = [
   { id: 'devplans', name: 'DEVPLANS', basePrice: 45, category: 'core' },
-  { id: 'agents', name: 'AGENT CORES', basePrice: 120, category: 'core' },
+  { id: 'agents', name: 'AGENT CORES', basePrice: 120, category: 'core', restricted: true, minReputation: 20 },
   { id: 'audiodata', name: 'AUDIO DATA', basePrice: 70, category: 'creative' },
   { id: 'mediafiles', name: 'MEDIA FILES', basePrice: 55, category: 'creative' },
   { id: 'govdata', name: 'GOV DATA', basePrice: 90, category: 'governance' },
   { id: 'shellcreds', name: 'SHELL CREDS', basePrice: 150, category: 'infrastructure' },
-  { id: 'exploitkit', name: 'EXPLOIT KIT', basePrice: 200, category: 'security' },
-  { id: 'rawlogs', name: 'RAW LOGS', basePrice: 30, category: 'tools' }
+  { id: 'exploitkit', name: 'EXPLOIT KIT', basePrice: 200, category: 'security', restricted: true, minReputation: -20 },
+  { id: 'rawlogs', name: 'RAW LOGS', basePrice: 30, category: 'tools' },
+  { id: 'contraband', name: 'CONTRABAND', basePrice: 400, category: 'security', restricted: true, minReputation: -50, blackMarketOnly: true }
 ];
 
 const stationProfiles = new Map();
@@ -44,23 +45,19 @@ let dismissGameMessageRef = noop;
 let updateFlightHudRef = noop;
 let getVoicePersonaRef = () => ({});
 let onTradeRef = noop;
+let showFactionMissionRef = noop;
 
-export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona, onTrade } = {}) {
+export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona, onTrade, showFactionMission } = {}) {
   if (typeof showGameMessage === 'function') showGameMessageRef = showGameMessage;
   if (typeof dismissGameMessage === 'function') dismissGameMessageRef = dismissGameMessage;
   if (typeof updateFlightHud === 'function') updateFlightHudRef = updateFlightHud;
   if (typeof getVoicePersona === 'function') getVoicePersonaRef = getVoicePersona;
   if (typeof onTrade === 'function') onTradeRef = onTrade;
+  if (typeof showFactionMission === 'function') showFactionMissionRef = showFactionMission;
 }
 
 function getProject(projectId) {
   return (window.USSY_PROJECTS || []).find(project => project.id === projectId) || null;
-}
-
-function normalizeCategory(category) {
-  if (category === 'infra') return 'infrastructure';
-  if (category === 'ai') return 'security';
-  return category;
 }
 
 export function getStationProfile(projectId) {
@@ -136,7 +133,8 @@ export function getMarketPrice(projectId, commodityId, action = 'buy') {
   if (action === 'sell' && !profile.demands.includes(commodityId)) multiplier *= 0.88;
   const noise = getDrift(projectId, commodityId);
   const repMultiplier = getReputationPriceMultiplier(normalizeCategory(getProject(projectId)?.category));
-  return Math.max(1, Math.round(commodity.basePrice * (multiplier + noise) * repMultiplier));
+  const effectiveRepMultiplier = action === 'sell' ? (2 - repMultiplier) : repMultiplier;
+  return Math.max(1, Math.round(commodity.basePrice * (multiplier + noise) * effectiveRepMultiplier));
 }
 
 export function getCargoUsed() {
@@ -160,15 +158,21 @@ export function openTradeMenu(projectId) {
   traderState.docked = true;
   traderState.dockedStation = projectId;
   const projectName = stationName(projectId);
+  const faction = normalizeCategory(getProject(projectId)?.category);
+  const rep = getReputation(faction);
+  const marketChoice = rep <= -50
+    ? { key: '1', code: 'Digit1', label: 'BLACK MARKET', action: () => showBlackMarket(projectId, 0) }
+    : { key: '1', code: 'Digit1', label: 'VIEW MARKET', action: () => showMarket(projectId, 0) };
   showGameMessageRef({
     type: 'STATION COMMS',
     source: stationSource(projectId),
     text: `WELCOME TO ${projectName.toUpperCase()} STATION. CREDITS: ${traderState.credits}. FUEL: ${Math.round(traderState.fuel)}%. CARGO: ${getCargoUsed()}/${traderState.maxCargo} UNITS. SELECT SERVICE:`,
     choices: [
-      { key: '1', code: 'Digit1', label: 'VIEW MARKET', action: () => showMarket(projectId, 0) },
+      marketChoice,
       { key: '2', code: 'Digit2', label: 'REFUEL', action: () => refuelDialog(projectId) },
       { key: '3', code: 'Digit3', label: 'VIEW CARGO', action: () => showCargoHold(projectId) },
       { key: '4', code: 'Digit4', label: 'SHIPYARD', action: () => showShipyard(projectId) },
+      { key: '5', code: 'Digit5', label: 'MISSIONS', action: () => showFactionMissionRef(projectId) },
       { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessageRef() }
     ]
   });
@@ -180,10 +184,15 @@ export function closeTradeMenu() {
 
 function sortedMarket(projectId) {
   const profile = getStationProfile(projectId);
-  return [...COMMODITIES].sort((a, b) => {
+  return COMMODITIES.filter(commodity => !commodity.blackMarketOnly).sort((a, b) => {
     const score = id => (profile.produces.includes(id) ? 2 : 0) + (profile.demands.includes(id) ? 3 : 0);
     return score(b.id) - score(a.id) || a.name.localeCompare(b.name);
   });
+}
+
+function getTradePrice(projectId, commodityId, action = 'buy', options = {}) {
+  const price = getMarketPrice(projectId, commodityId, action);
+  return options.blackMarket && action === 'buy' ? Math.max(1, Math.round(price * 1.3)) : price;
 }
 
 function showMarket(projectId, page = 0) {
@@ -194,10 +203,13 @@ function showMarket(projectId, page = 0) {
     const buyPrice = getMarketPrice(projectId, commodity.id, 'buy');
     const sellPrice = getMarketPrice(projectId, commodity.id, 'sell');
     const stock = traderState.cargo[commodity.id] || 0;
+    const restricted = commodity.restricted
+      ? ` [REP ${(commodity.minReputation ?? 0) >= 0 ? '+' : ''}${commodity.minReputation ?? 0} REQ]`
+      : '';
     return {
       key: String(idx + 1),
       code: `Digit${idx + 1}`,
-      label: `${commodity.name} BUY ${buyPrice}cr SELL ${sellPrice}cr HOLD:${stock}`,
+      label: `${commodity.name} BUY ${buyPrice}cr SELL ${sellPrice}cr HOLD:${stock}${restricted}`,
       action: () => tradeActionDialog(projectId, commodity.id)
     };
   });
@@ -210,6 +222,35 @@ function showMarket(projectId, page = 0) {
     type: 'STATION MARKET',
     source: stationSource(projectId),
     text: `MARKET PAGE ${page + 1}. PRODUCTION GOODS ARE CHEAP. DEMAND GOODS PAY PREMIUMS. SELECT COMMODITY:`,
+    choices
+  });
+}
+
+function showBlackMarket(projectId, page = 0) {
+  const items = [...COMMODITIES].sort((a, b) => a.name.localeCompare(b.name));
+  const start = page * 3;
+  const visible = items.slice(start, start + 3);
+  const choices = visible.map((commodity, idx) => {
+    const buyPrice = getTradePrice(projectId, commodity.id, 'buy', { blackMarket: true });
+    const sellPrice = getTradePrice(projectId, commodity.id, 'sell', { blackMarket: true });
+    const stock = traderState.cargo[commodity.id] || 0;
+    return {
+      key: String(idx + 1),
+      code: `Digit${idx + 1}`,
+      label: `${commodity.name} BUY ${buyPrice}cr SELL ${sellPrice}cr HOLD:${stock}`,
+      action: () => tradeActionDialog(projectId, commodity.id, { blackMarket: true })
+    };
+  });
+  if (start + 3 < items.length) {
+    choices.push({ key: '4', code: 'Digit4', label: 'NEXT BLACK PAGE', action: () => showBlackMarket(projectId, page + 1) });
+  } else {
+    choices.push({ key: '4', code: 'Digit4', label: 'BACK', action: () => openTradeMenu(projectId) });
+  }
+  ttsEngine.speak('BLACK MARKET ACCESS GRANTED. DISCRETION ADVISED.', getVoicePersonaRef('USSYVERSE CONTROL'));
+  showGameMessageRef({
+    type: 'BLACK MARKET',
+    source: `${stationName(projectId).toUpperCase()} SHADOW EXCHANGE`,
+    text: `BLACK MARKET PAGE ${page + 1}. CLEARANCE CHECKS ARE OFFLINE. BUY PRICES INCLUDE RISK PREMIUMS.`,
     choices
   });
 }
@@ -391,17 +432,18 @@ function confirmSkillUnlock(projectId, nodeId, branch) {
   });
 }
 
-function tradeActionDialog(projectId, commodityId) {
+function tradeActionDialog(projectId, commodityId, options = {}) {
   const commodityName = getCommodityName(commodityId);
   const stock = traderState.cargo[commodityId] || 0;
+  const backAction = options.blackMarket ? () => showBlackMarket(projectId, 0) : () => showMarket(projectId, 0);
   showGameMessageRef({
-    type: 'TRADE CONSOLE',
+    type: options.blackMarket ? 'BLACK MARKET CONSOLE' : 'TRADE CONSOLE',
     source: stationSource(projectId),
-    text: `${commodityName}. BUY PRICE ${getMarketPrice(projectId, commodityId, 'buy')}cr. SELL PRICE ${getMarketPrice(projectId, commodityId, 'sell')}cr. HOLDING ${stock}. SELECT ACTION:`,
+    text: `${commodityName}. BUY PRICE ${getTradePrice(projectId, commodityId, 'buy', options)}cr. SELL PRICE ${getTradePrice(projectId, commodityId, 'sell', options)}cr. HOLDING ${stock}. SELECT ACTION:`,
     choices: [
-      { key: '1', code: 'Digit1', label: `BUY ${commodityName}`, action: () => buyDialog(projectId, commodityId) },
-      { key: '2', code: 'Digit2', label: `SELL ${commodityName}`, action: () => sellDialog(projectId, commodityId) },
-      { key: '3', code: 'Digit3', label: 'BACK TO MARKET', action: () => showMarket(projectId, 0) },
+      { key: '1', code: 'Digit1', label: `BUY ${commodityName}`, action: () => buyDialog(projectId, commodityId, options) },
+      { key: '2', code: 'Digit2', label: `SELL ${commodityName}`, action: () => sellDialog(projectId, commodityId, options) },
+      { key: '3', code: 'Digit3', label: options.blackMarket ? 'BACK TO BLACK MARKET' : 'BACK TO MARKET', action: backAction },
       { key: '4', code: 'Digit4', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
     ]
   });
@@ -419,8 +461,8 @@ function quantityChoices(max, onSelect, backAction) {
   return choices;
 }
 
-function buyDialog(projectId, commodityId) {
-  const price = getMarketPrice(projectId, commodityId, 'buy');
+function buyDialog(projectId, commodityId, options = {}) {
+  const price = getTradePrice(projectId, commodityId, 'buy', options);
   const cargoSpace = traderState.maxCargo - getCargoUsed();
   const affordable = Math.floor(traderState.credits / price);
   const max = Math.min(affordable, cargoSpace);
@@ -430,13 +472,13 @@ function buyDialog(projectId, commodityId) {
     source: stationSource(projectId),
     text: `BUY ${name} AT ${price}cr EACH. YOU HAVE ${traderState.credits}cr. HOW MANY? MAX ${max}.`,
     choices: max > 0
-      ? quantityChoices(max, qty => confirmTrade('buy', projectId, commodityId, qty), () => tradeActionDialog(projectId, commodityId))
-      : [{ key: '1', code: 'Digit1', label: 'BACK', action: () => tradeActionDialog(projectId, commodityId) }]
+      ? quantityChoices(max, qty => confirmTrade('buy', projectId, commodityId, qty, options), () => tradeActionDialog(projectId, commodityId, options))
+      : [{ key: '1', code: 'Digit1', label: 'BACK', action: () => tradeActionDialog(projectId, commodityId, options) }]
   });
 }
 
-function sellDialog(projectId, commodityId) {
-  const price = getMarketPrice(projectId, commodityId, 'sell');
+function sellDialog(projectId, commodityId, options = {}) {
+  const price = getTradePrice(projectId, commodityId, 'sell', options);
   const max = traderState.cargo[commodityId] || 0;
   const name = getCommodityName(commodityId);
   showGameMessageRef({
@@ -444,31 +486,40 @@ function sellDialog(projectId, commodityId) {
     source: stationSource(projectId),
     text: `SELL ${name} AT ${price}cr EACH. HOLDING ${max}. HOW MANY?`,
     choices: max > 0
-      ? quantityChoices(max, qty => confirmTrade('sell', projectId, commodityId, qty), () => tradeActionDialog(projectId, commodityId))
-      : [{ key: '1', code: 'Digit1', label: 'BACK', action: () => tradeActionDialog(projectId, commodityId) }]
+      ? quantityChoices(max, qty => confirmTrade('sell', projectId, commodityId, qty, options), () => tradeActionDialog(projectId, commodityId, options))
+      : [{ key: '1', code: 'Digit1', label: 'BACK', action: () => tradeActionDialog(projectId, commodityId, options) }]
   });
 }
 
-function confirmTrade(action, projectId, commodityId, qty) {
-  const result = executeTrade(action, projectId, commodityId, qty);
+function confirmTrade(action, projectId, commodityId, qty, options = {}) {
+  const result = executeTrade(action, projectId, commodityId, qty, options);
   updateFlightHudRef(true);
   refreshInventoryIfOpen();
+  const marketAction = options.blackMarket ? () => showBlackMarket(projectId, 0) : () => showMarket(projectId, 0);
   showGameMessageRef({
     type: result.success ? 'TRADE CONFIRMED' : 'TRADE REJECTED',
     source: stationSource(projectId),
     text: result.message,
     choices: [
-      { key: '1', code: 'Digit1', label: 'MARKET', action: () => showMarket(projectId, 0) },
+      { key: '1', code: 'Digit1', label: options.blackMarket ? 'BLACK MARKET' : 'MARKET', action: marketAction },
       { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
     ]
   });
 }
 
-export function executeTrade(action, projectId, commodityId, qty) {
+export function executeTrade(action, projectId, commodityId, qty, options = {}) {
   const quantity = Math.max(0, Math.floor(qty));
   const commodity = COMMODITIES.find(item => item.id === commodityId);
   if (!commodity || quantity <= 0) return { success: false, message: 'INVALID TRADE ORDER.' };
-  const price = getMarketPrice(projectId, commodityId, action);
+  if (commodity.blackMarketOnly && !options.blackMarket) return { success: false, message: 'TRADE DENIED: BLACK MARKET ACCESS REQUIRED.' };
+  if (commodity.restricted && !options.blackMarket) {
+    const faction = normalizeCategory(getProject(projectId)?.category);
+    const rep = getReputation(faction);
+    if (rep < (commodity.minReputation ?? 0)) {
+      return { success: false, message: 'TRADE DENIED: SECURITY CLEARANCE REQUIRED.' };
+    }
+  }
+  const price = getTradePrice(projectId, commodityId, action, options);
   const total = price * quantity;
 
   if (action === 'buy') {

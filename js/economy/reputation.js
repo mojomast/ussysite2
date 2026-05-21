@@ -5,24 +5,24 @@ export const reputationState = {
   hostile: new Set()
 };
 
-function normalizeFaction(faction) {
-  if (faction === 'infra') return 'infrastructure';
-  if (faction === 'ai') return 'security';
-  return faction;
+export function normalizeCategory(category) {
+  if (category === 'infra') return 'infrastructure';
+  if (category === 'ai') return 'security';
+  return category ?? 'tools';
 }
 
 export function getReputation(faction) {
-  return reputationState.scores[normalizeFaction(faction)] ?? 0;
+  return reputationState.scores[normalizeCategory(faction)] ?? 0;
 }
 
 export function gainReputation(faction, amount) {
-  const normalized = normalizeFaction(faction);
+  const normalized = normalizeCategory(faction);
   if (!FACTIONS.includes(normalized)) return;
   reputationState.scores[normalized] = Math.min(100, (reputationState.scores[normalized] ?? 0) + amount);
 }
 
 export function loseReputation(faction, amount) {
-  const normalized = normalizeFaction(faction);
+  const normalized = normalizeCategory(faction);
   if (!FACTIONS.includes(normalized)) return;
   reputationState.scores[normalized] = Math.max(-100, (reputationState.scores[normalized] ?? 0) - amount);
 }
