@@ -4235,5 +4235,9 @@ function animate(time) {
   }
 }
 
-// Start Application
-window.onload = init;
+// Start Application. Module loading can complete after the load event on static deploys.
+if (document.readyState === 'loading') {
+  window.addEventListener('load', init, { once: true });
+} else {
+  init();
+}
