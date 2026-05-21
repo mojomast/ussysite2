@@ -1,4 +1,5 @@
 import { COMMODITIES, traderState } from '../economy/trader.js';
+import { FACTIONS, getReputationLabel, reputationState } from '../economy/reputation.js';
 import { WEAPON_DEFS, SKILL_TREE_NODES } from '../flight/combat-overhaul.js';
 import { combatState } from '../flight/combat-state.js';
 import { flightState } from '../flight/state.js';
@@ -99,6 +100,19 @@ function renderSkills() {
   }).join('');
 }
 
+function renderReputation() {
+  return FACTIONS.map(faction => {
+    const label = getReputationLabel(faction);
+    const shortName = faction === 'infrastructure' ? 'INFRA' : faction.toUpperCase();
+    return `
+      <div class="inv-rep-row inv-rep-${label.toLowerCase()}">
+        <span>${escapeHtml(shortName)}</span>
+        <strong>${escapeHtml(label)}</strong>
+        <small>${reputationState.scores[faction] ?? 0}</small>
+      </div>`;
+  }).join('');
+}
+
 export function renderInventoryPanel() {
   const panel = document.getElementById('inventory-panel');
   if (!panel) return;
@@ -111,7 +125,7 @@ export function renderInventoryPanel() {
   const upgradesDisplay = document.getElementById('inv-upgrades-count');
 
   if (cargoGrid) cargoGrid.innerHTML = `<div class="inv-col-title">CARGO HOLD</div>${renderCargo()}`;
-  if (weaponsGrid) weaponsGrid.innerHTML = `<div class="inv-col-title">WEAPONS</div>${renderWeapons()}`;
+  if (weaponsGrid) weaponsGrid.innerHTML = `<div class="inv-col-title">WEAPONS</div>${renderWeapons()}<div class="inv-col-title inv-rep-title">FACTION STANDING</div><div class="inv-rep-grid">${renderReputation()}</div>`;
   if (skillsGrid) skillsGrid.innerHTML = `<div class="inv-col-title">SKILL TREE</div><div class="inv-skill-summary">XP ${combatState.xp}/${combatState.xpToNextPoint} // SP ${combatState.skillPoints}</div>${renderSkills()}`;
   if (spDisplay) spDisplay.textContent = `SP: ${combatState.skillPoints}`;
   if (creditsDisplay) creditsDisplay.textContent = `${traderState.credits}CR`;

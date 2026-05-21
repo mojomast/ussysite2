@@ -3020,6 +3020,26 @@ body.flight-active #flight-hud {
   white-space: nowrap;
 }
 
+.credit-gain-indicator {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--cyber-green, #00ff80);
+  font-size: var(--text-xs);
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+
+.credit-gain-indicator.credit-flash {
+  animation: credit-pop 1.4s ease-out forwards;
+}
+
+@keyframes credit-pop {
+  0% { opacity: 1; transform: translateY(0); }
+  60% { opacity: 1; transform: translateY(-10px); }
+  100% { opacity: 0; transform: translateY(-18px); }
+}
+
 /* INVENTORY PANEL */
 .inventory-panel {
   position: fixed;
@@ -3222,6 +3242,47 @@ body.flight-active #flight-hud {
 
 .inv-skill-locked {
   opacity: 0.42;
+}
+
+.inv-rep-title {
+  margin-top: 8px;
+}
+
+.inv-rep-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.inv-rep-row {
+  border: 1px solid rgba(0, 240, 255, 0.12);
+  background: rgba(0, 240, 255, 0.04);
+  padding: 6px 7px;
+  font-size: clamp(8px, 0.62vw, 10px);
+}
+
+.inv-rep-row span {
+  display: block;
+  color: var(--cyber-cyan);
+  letter-spacing: 0.08em;
+}
+
+.inv-rep-row strong {
+  display: block;
+  color: rgba(0, 240, 255, 0.72);
+  margin: 2px 0;
+}
+
+.inv-rep-row small {
+  color: var(--text-muted);
+}
+
+.inv-rep-allied strong {
+  color: var(--cyber-green);
+}
+
+.inv-rep-hostile strong {
+  color: var(--cyber-pink);
 }
 
 @keyframes inv-appear {

@@ -33,11 +33,22 @@ All stations have fuel available and track local fuel stock.
 base = commodity.basePrice
 multiplier = 0.78 if station produces commodity
 multiplier = 1.35 if station demands commodity
-noise = ((sum(charCodes(projectId + commodityId)) % 100) / 100) * 0.24 - 0.12
-price = round(base * (multiplier + noise))
+drift = deterministic station/commodity noise, adjusted by recent trades
+repMultiplier = 0.85 allied, 0.92 friendly, 1.0 neutral, 1.1 unfriendly, 1.2 hostile
+price = round(base * (multiplier + drift) * repMultiplier)
 ```
 
-The noise is deterministic per station and commodity for a session.
+The baseline drift starts as deterministic per station and commodity. Buying a commodity pushes that station price up by `0.03`; selling pushes it down by `0.03`. Drift is capped at `+/-0.35` and recovers toward baseline every 30 seconds while flying.
+
+## Faction Reputation
+
+Reputation is tracked per faction from `-100` to `100` in `js/economy/reputation.js`:
+
+```text
+core, creative, infrastructure, security, governance, tools
+```
+
+Successful trades grant `+2` reputation with the station faction. Completed mission contracts grant `+5` reputation with the docked station faction. Reputation changes market prices and local enemy aggression; friendly/allied stations discount prices while unfriendly/hostile standing raises prices and makes nearby enemies fire more aggressively. The inventory panel shows current faction standing labels.
 
 ## Fuel
 
@@ -58,5 +69,6 @@ Dock/Land
               -> Sell Quantity
       -> Refuel
       -> View Cargo
+      -> Shipyard
       -> Dismiss
 ```

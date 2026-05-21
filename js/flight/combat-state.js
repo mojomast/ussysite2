@@ -93,8 +93,9 @@ export function equipWeapon(weaponId, slot = 'primary') {
 }
 
 export function awardXp(amount) {
+  const spBefore = combatState.skillPoints;
   addCombatXp(combatState, amount);
-  reapplySkills();
+  if (combatState.skillPoints > spBefore) reapplySkills();
 }
 
 export function serializeCombatState() {

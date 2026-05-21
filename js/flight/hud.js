@@ -17,6 +17,16 @@ export function updateFlightHud() {
   if (xpLabel) xpLabel.textContent = `XP ${combatState.xp}/${combatState.xpToNextPoint}`;
   return traderState.fuel;
 }
+
+export function showCreditGain(amount) {
+  const el = document.getElementById('flight-credit-gain');
+  if (!el) return;
+  el.textContent = `+${amount}CR`;
+  el.classList.remove('credit-flash');
+  void el.offsetWidth;
+  el.classList.add('credit-flash');
+}
+
 export function updateCockpitRadar() {}
 export function updateFlightCamera() {}
 export function updateFlightNavMarker() {}

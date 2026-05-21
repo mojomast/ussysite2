@@ -7,6 +7,7 @@ import {
   normalizeStationCategory
 } from '../flight/combat-overhaul.js';
 import { combatState, buyWeapon, equipWeapon, reapplySkills, unlockSkillNode } from '../flight/combat-state.js';
+import { gainReputation, getReputationPriceMultiplier } from './reputation.js';
 import { refreshInventoryIfOpen } from '../ui/inventory-panel.js';
 
 export const traderState = {
@@ -36,6 +37,7 @@ export const COMMODITIES = [
 ];
 
 const stationProfiles = new Map();
+const priceDrift = new Map();
 const noop = () => {};
 let showGameMessageRef = noop;
 let dismissGameMessageRef = noop;
@@ -92,6 +94,38 @@ export function getStationProfile(projectId) {
   return profile;
 }
 
+function getBaseDrift(projectId, commodityId) {
+  const hashSource = `${projectId}:${commodityId}`;
+  const hash = Array.from(hashSource).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return ((hash % 100) / 100) * 0.24 - 0.12;
+}
+
+function getDrift(projectId, commodityId) {
+  const key = `${projectId}:${commodityId}`;
+  if (!priceDrift.has(key)) priceDrift.set(key, getBaseDrift(projectId, commodityId));
+  return priceDrift.get(key);
+}
+
+export function applyTradePressure(projectId, commodityId, action) {
+  const key = `${projectId}:${commodityId}`;
+  const current = priceDrift.get(key) ?? getDrift(projectId, commodityId);
+  const delta = action === 'buy' ? 0.03 : -0.03;
+  priceDrift.set(key, Math.max(-0.35, Math.min(0.35, current + delta)));
+}
+
+export function tickPriceDrift() {
+  for (const [key, drift] of priceDrift.entries()) {
+    const [projectId, commodityId] = key.split(':');
+    const baseline = getBaseDrift(projectId, commodityId);
+    const delta = drift - baseline;
+    if (Math.abs(delta) < 0.005) {
+      priceDrift.delete(key);
+      continue;
+    }
+    priceDrift.set(key, drift + (delta > 0 ? -0.005 : 0.005));
+  }
+}
+
 export function getMarketPrice(projectId, commodityId, action = 'buy') {
   const commodity = COMMODITIES.find(item => item.id === commodityId);
   if (!commodity) return 0;
@@ -100,10 +134,9 @@ export function getMarketPrice(projectId, commodityId, action = 'buy') {
   if (profile.produces.includes(commodityId)) multiplier = 0.78;
   if (profile.demands.includes(commodityId)) multiplier = 1.35;
   if (action === 'sell' && !profile.demands.includes(commodityId)) multiplier *= 0.88;
-  const hashSource = `${projectId}:${commodityId}`;
-  const hash = Array.from(hashSource).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const noise = ((hash % 100) / 100) * 0.24 - 0.12;
-  return Math.max(1, Math.round(commodity.basePrice * (multiplier + noise)));
+  const noise = getDrift(projectId, commodityId);
+  const repMultiplier = getReputationPriceMultiplier(normalizeCategory(getProject(projectId)?.category));
+  return Math.max(1, Math.round(commodity.basePrice * (multiplier + noise) * repMultiplier));
 }
 
 export function getCargoUsed() {
@@ -444,6 +477,8 @@ export function executeTrade(action, projectId, commodityId, qty) {
     traderState.credits -= total;
     traderState.cargo[commodityId] = (traderState.cargo[commodityId] || 0) + quantity;
     recordTrade(action, projectId, commodity, quantity, price);
+    applyTradePressure(projectId, commodityId, action);
+    gainReputation(normalizeCategory(getProject(projectId)?.category), 2);
     onTradeRef({ ...traderState.lastTrade, total });
     ttsEngine.speak('CARGO LOADED. CREDITS DEDUCTED.', getVoicePersonaRef('USSYVERSE CONTROL'));
     return { success: true, message: `CARGO LOADED: ${quantity} ${commodity.name}. ${total} CREDITS DEDUCTED.` };
@@ -455,6 +490,8 @@ export function executeTrade(action, projectId, commodityId, qty) {
     traderState.cargo[commodityId] -= quantity;
     if (traderState.cargo[commodityId] <= 0) delete traderState.cargo[commodityId];
     recordTrade(action, projectId, commodity, quantity, price);
+    applyTradePressure(projectId, commodityId, action);
+    gainReputation(normalizeCategory(getProject(projectId)?.category), 2);
     onTradeRef({ ...traderState.lastTrade, total });
     ttsEngine.speak('CARGO SOLD. CREDITS RECEIVED.', getVoicePersonaRef('USSYVERSE CONTROL'));
     return { success: true, message: `CARGO SOLD: ${quantity} ${commodity.name}. ${total} CREDITS RECEIVED.` };

@@ -1,6 +1,7 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
-import { configureTrader, openTradeMenu, refuelAt, traderState, updateFuelDrain } from './economy/trader.js';
+import { configureTrader, openTradeMenu, refuelAt, tickPriceDrift, traderState, updateFuelDrain } from './economy/trader.js';
+import { gainReputation, getEnemyAggressionMultiplier, reputationState } from './economy/reputation.js';
 import { toggleInventoryPanel } from './ui/inventory-panel.js';
 import {
   ENEMY_CLASSES,
@@ -30,6 +31,7 @@ import {
   setCombatFlightState,
   unlockSkillNode as unlockCombatSkillNode
 } from './flight/combat-state.js';
+import { showCreditGain } from './flight/hud.js';
 import { activateEnemyWave, buildOrchestratorGameState } from './flight/orchestrator.js';
 
 const USSY_PROJECTS = window.USSY_PROJECTS || [];
@@ -176,6 +178,7 @@ const landingRange = 7.2;
 const flightBounds = 135;
 const radarRange = 140;
 let radarLastUpdate = 0;
+let lastPriceDriftTick = 0;
 let activeUniverseScale = 1;
 
 const loadoutState = {
@@ -248,7 +251,10 @@ const skillTree = {
 
 setCombatFlightState(flightState);
 configureCombat({
-  onEnemyKill: () => awardXp(25),
+  onEnemyKill: ({ classId } = {}) => {
+    const cls = getEnemyClass(classId || 'scout');
+    awardXp(cls.xpReward ?? 25);
+  },
   onPlayerHit: () => awardXp(5),
   onMissionComplete: () => awardXp(100)
 });
@@ -1013,12 +1019,24 @@ function restoreCombatStateFromHash() {
   if (hashMatch) deserializeCombatState(hashMatch[1]);
   const creditsMatch = location.hash.match(/cr:(\d+)/);
   if (creditsMatch) traderState.credits = parseInt(creditsMatch[1], 10);
+  const reputationMatch = location.hash.match(/rep:([A-Za-z0-9+/=]+)/);
+  if (reputationMatch) {
+    try {
+      const scores = JSON.parse(atob(reputationMatch[1]));
+      Object.keys(reputationState.scores).forEach(faction => {
+        if (typeof scores[faction] === 'number') reputationState.scores[faction] = Math.max(-100, Math.min(100, scores[faction]));
+      });
+    } catch {
+      // Ignore malformed shared save URLs.
+    }
+  }
   syncCombatCreditsFromTrader();
 }
 
 function saveCombatStateToHash() {
   const encoded = serializeCombatState();
-  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}`);
+  const reputationEncoded = btoa(JSON.stringify(reputationState.scores));
+  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}`);
 }
 
 // Init application
@@ -2334,6 +2352,7 @@ function setCombatCredits(value) {
 
 function addCombatCredits(value) {
   setCombatCredits(traderState.credits + value);
+  if (value > 0 && isFlightActive) showCreditGain(value);
 }
 
 function buildEnemyMaterial(color, opacity = 0.88) {
@@ -3027,6 +3046,7 @@ function completeMissionContract() {
   const reward = contract?.rewardCredits || 0;
   emitCombatMissionComplete({ type: 'contract', contractId: contract?.id });
   if (reward > 0) addCombatCredits(reward);
+  gainReputation(getStationCategory(traderState.dockedStation || 'devussy'), 5);
   const title = contract?.title || 'Objective';
   missionState.active = false;
   missionState.step = 'idle';
@@ -3159,10 +3179,12 @@ function landOnNearestProject() {
 
 function restockAtProject(project) {
   skillTree.applyAll();
-  combatState.overchargeUsed = false;
   const maxShield = skillTree.getMaxShield();
   flightState.shield = Math.min(flightState.shield + maxShield, maxShield);
   flightState.armor = skillTree.getMaxArmor();
+  if (skillTree.unlocked.has('hull_4')) {
+    flightState.armor = Math.min(flightState.armor + 20, skillTree.getMaxArmor() + 20);
+  }
   if (skillTree.unlocked.has('shield_4') && !combatState.overchargeUsed) {
     flightState.shield = Math.round(maxShield * 1.5);
     combatState.overchargeUsed = true;
@@ -3349,6 +3371,8 @@ function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
     ? 'scout'
     : (classId || getRandomClassForTier(getDifficultyTier(flightState.score)));
   const cls = getEnemyClass(resolvedClassId);
+  const localFaction = getStationCategory(flightState.nearestNode?.userData?.project?.id || traderState.dockedStation || 'devussy');
+  const aggressionMultiplier = getEnemyAggressionMultiplier(localFaction);
   buildEnemyFromClass(enemy, cls.id);
   const angle = Math.random() * Math.PI * 2 + offset;
   const height = (Math.random() - 0.5) * 54;
@@ -3369,7 +3393,7 @@ function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.shieldHp = cls.health > 2 ? cls.health - 1 : 0;
   enemy.userData.maxShieldHp = enemy.userData.shieldHp;
   enemy.userData.spawnDelay = delay;
-  enemy.userData.cooldown = cls.fireRate + delay * 1000 + Math.random() * cls.fireRate;
+  enemy.userData.cooldown = (cls.fireRate / aggressionMultiplier) + delay * 1000 + Math.random() * (cls.fireRate / aggressionMultiplier);
   enemy.visible = delay <= 0;
   buildEnemyHealthPips(enemy);
 }
@@ -4072,7 +4096,9 @@ function updateFlight(time) {
 
   if (flightState.landed) {
     flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
-    if (skillTree.unlocked.has('hull_4')) flightState.armor = Math.min(skillTree.getMaxArmor(), flightState.armor + dt);
+    if (skillTree.unlocked.has('hull_4') && flightState.armor < skillTree.getMaxArmor()) {
+      flightState.armor = Math.min(skillTree.getMaxArmor(), flightState.armor + dt);
+    }
     updateProjectLandingTarget();
     updateFlightNavigation();
     updateFlightCamera();
@@ -4701,6 +4727,10 @@ function animate(time) {
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
     updateFlight(time);
+    if (time - lastPriceDriftTick > 30000) {
+      tickPriceDrift();
+      lastPriceDriftTick = time;
+    }
     if (time - gameOrchestrator._lastCheck > 1000) {
       gameOrchestrator._lastCheck = time;
       pollOrchestrator();

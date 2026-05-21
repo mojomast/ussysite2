@@ -67,4 +67,12 @@ Recent damage increases adrenaline by `0.15`, decaying by `0.04/s`. The value dr
 
 ## XP Escalation
 
-Enemy kills add XP. When `xp >= xpToNextPoint`, the player gains one skill point, XP rolls over, and the next threshold is multiplied by `1.35` and rounded.
+Enemy kills add the destroyed class' `xpReward`, so scouts and dreadnoughts no longer pay the same XP. Player-hit survival ticks add 5XP and mission completion adds 100XP. When `xp >= xpToNextPoint`, the player gains one skill point, XP rolls over, and the next threshold is multiplied by `1.35` and rounded. Skill effects are only reapplied when a new skill point is actually awarded.
+
+## Upgrade Effects
+
+`hull_4` adds slow armor regeneration while landed and grants a small dock bonus, capped above the normal hull maximum. `shield_4` overcharge is reset on launch, so it can fire once per flight session instead of every immediate re-dock.
+
+## HUD Feedback
+
+Combat credit gains update the canonical trader credits balance and flash a short `+CR` indicator on the cockpit HUD when the player is actively flying.
