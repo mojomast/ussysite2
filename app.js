@@ -475,44 +475,61 @@ const radioChain = {
 };
 
 const ttsConfig = {
-  openRouterKey: '',
-  model: 'openai/tts-1',
+  endpoint: '/api/tts',
+  model: 'openai/gpt-audio-mini',
   voiceId: 'onyx',
-  enabled: false
+  audioFormat: 'pcm16',
+  enabled: true
 };
 
-function setTTSKey(key = '') {
-  ttsConfig.openRouterKey = String(key).trim();
-  ttsConfig.enabled = ttsConfig.openRouterKey.length > 10;
+function setTTSBackendEnabled(enabled = true) {
+  ttsConfig.enabled = Boolean(enabled);
   return ttsConfig.enabled;
 }
 
-window.setTTSKey = setTTSKey;
+window.setTTSBackendEnabled = setTTSBackendEnabled;
 
-async function fetchTTSSpeech(text, persona = {}) {
-  if (!ttsConfig.enabled || !ttsConfig.openRouterKey) return null;
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/audio/speech', {
+function buildBackendTTSRequest(text, persona = {}) {
+  return {
+    url: ttsConfig.endpoint,
+    options: {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${ttsConfig.openRouterKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.origin,
-        'X-Title': 'USSYVERSE'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: ttsConfig.model,
-        input: text,
-        voice: persona.voiceId || ttsConfig.voiceId,
+        text,
+        voiceId: persona.voiceId || ttsConfig.voiceId,
+        format: ttsConfig.audioFormat,
         speed: persona.rate ?? 1.0
       })
-    });
+    }
+  };
+}
+
+async function fetchTTSSpeech(text, persona = {}) {
+  if (!ttsConfig.enabled) return null;
+  try {
+    const request = buildBackendTTSRequest(text, persona);
+    const response = await fetch(request.url, request.options);
     if (!response.ok) return null;
-    return await response.blob();
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.startsWith('audio/')) return await response.blob();
+    return null;
   } catch {
     return null;
   }
 }
+
+window.__USSY_TTS_DEBUG__ = {
+  ttsConfig,
+  setTTSBackendEnabled,
+  fetchTTSSpeech,
+  buildBackendTTSRequest,
+  preprocessRadioText,
+  getVoicePersona: source => getVoicePersona(source)
+};
 
 if (ttsEngine.supported) {
   window.speechSynthesis.onvoiceschanged = () => ttsEngine.initVoices();
