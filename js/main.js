@@ -186,6 +186,8 @@ const nodeBaseScale = 1;
 const planetNodeRadius = isCoarsePointer ? 1.55 : 1.75;
 const planetNodeFlightScale = isCoarsePointer ? 3.8 : 4.4;
 const planetDistantHaloScale = isCoarsePointer ? 14 : 18;
+const flightPlanetMinDistance = 260;
+const flightPlanetMaxDistance = 1080;
 const planetNodeHitRadius = isCoarsePointer ? planetNodeRadius * 1.18 : planetNodeRadius * 1.06;
 const planetLabelRadius = planetNodeRadius * 1.35;
 const landingRange = 7.2;
@@ -1806,7 +1808,12 @@ function buildProjectNodes() {
 
     const nodeMesh = createPlanetNodeLOD(hexColor);
     nodeMesh.position.set(posX, yHeight, posZ);
-    Object.assign(nodeMesh.userData, { project: proj, baseScale: nodeBaseScale, basePosition: nodeMesh.position.clone() });
+    Object.assign(nodeMesh.userData, {
+      project: proj,
+      baseScale: nodeBaseScale,
+      basePosition: nodeMesh.position.clone(),
+      flightPosition: createFlightProjectPosition(idx, count, proj)
+    });
     nodeMesh.userData.visualRadius = planetNodeRadius;
     nodeMesh.scale.setScalar(nodeBaseScale);
 
@@ -1847,6 +1854,23 @@ function buildProjectNodes() {
     labelsContainer.appendChild(label);
     projectLabels.push({ element: label, object3d: nodeMesh });
   });
+}
+
+function createFlightProjectPosition(idx, count, project) {
+  const total = Math.max(1, count);
+  const t = total === 1 ? 0.5 : idx / (total - 1);
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const idOffset = Array.from(project.id || '').reduce((sum, char) => sum + char.charCodeAt(0), 0) * 0.0017;
+  const theta = idx * goldenAngle + idOffset;
+  const vertical = 1 - 2 * ((idx + 0.5) / total);
+  const radial = Math.sqrt(Math.max(0, 1 - vertical * vertical));
+  const shellRadius = THREE.MathUtils.lerp(flightPlanetMinDistance, flightPlanetMaxDistance, t)
+    + Math.sin((idx + 1) * 12.9898 + idOffset) * 54;
+  return new THREE.Vector3(
+    Math.cos(theta) * radial * shellRadius,
+    vertical * shellRadius * 0.92 + Math.sin(theta * 1.7) * 120,
+    Math.sin(theta) * radial * shellRadius
+  );
 }
 
 function buildRelatedProjectEdges() {
@@ -1940,7 +1964,11 @@ function applyFlightUniverseScale(scale) {
   const visualScale = flightScaleActive ? planetNodeFlightScale : 1;
   projectNodes.forEach(node => {
     if (!node.userData.basePosition) node.userData.basePosition = node.position.clone();
-    node.position.copy(node.userData.basePosition).multiplyScalar(scale);
+    if (flightScaleActive && node.userData.flightPosition) {
+      node.position.copy(node.userData.flightPosition);
+    } else {
+      node.position.copy(node.userData.basePosition).multiplyScalar(scale);
+    }
     node.scale.setScalar((node.userData.baseScale ?? nodeBaseScale) * visualScale);
     if (node.userData.distantHalo) node.userData.distantHalo.visible = flightScaleActive;
     const line = node.userData.connectionLine;
