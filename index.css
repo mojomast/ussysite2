@@ -1230,6 +1230,27 @@ body.console-active .hud-layout {
   clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%, 0 18px);
 }
 
+.tts-status-indicator {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  z-index: 2;
+  pointer-events: none;
+  color: #00f0ff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.28);
+}
+
+.tts-status-indicator.muted {
+  opacity: 0.34;
+  text-shadow: none;
+}
+
 body.flight-active .flight-hud {
   opacity: 1;
   pointer-events: auto;

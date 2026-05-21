@@ -165,6 +165,60 @@ const gameMessageState = {
 
 const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. MOUSELOOK TO AIM, W/S TO THRUST, A/D TO STRAFE, Q/E TO ROLL, LEFT CLICK FOR LASERS, RIGHT CLICK FOR MISSILES, V TO SET NAV, P FOR AUTOPILOT, C FOR CHASE CAM, SPACE TO CONFIRM MESSAGES, L TO LAND AND RESTOCK. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
 
+const ttsEngine = {
+  supported: 'speechSynthesis' in window,
+  enabled: true,
+  activeVoice: null,
+
+  speak(text, options = {}) {
+    if (!this.supported || !this.enabled || !text) return;
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = options.rate ?? 1.1;
+    utterance.pitch = options.pitch ?? 0.85;
+    utterance.volume = options.volume ?? 0.9;
+
+    if (options.voice) {
+      utterance.voice = typeof options.voice === 'string' ? this.setVoice(options.voice) : options.voice;
+    } else if (this.activeVoice) {
+      utterance.voice = this.activeVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  },
+
+  stop() {
+    if (this.supported) window.speechSynthesis.cancel();
+  },
+
+  setVoice(voiceNameFragment = '') {
+    if (!this.supported) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return null;
+
+    const requested = voiceNameFragment.toLowerCase();
+    const requestedVoice = requested
+      ? voices.find(voice => `${voice.name} ${voice.lang}`.toLowerCase().includes(requested))
+      : null;
+    const preferredNames = ['google uk english male', 'daniel', 'alex'];
+    const preferredVoice = voices.find(voice => preferredNames.some(name => voice.name.toLowerCase().includes(name)));
+    const englishVoice = voices.find(voice => voice.lang.toLowerCase().startsWith('en'));
+
+    this.activeVoice = requestedVoice || preferredVoice || englishVoice || voices[0];
+    return this.activeVoice;
+  },
+
+  initVoices() {
+    return this.setVoice();
+  }
+};
+
+if (ttsEngine.supported) {
+  window.speechSynthesis.onvoiceschanged = () => ttsEngine.initVoices();
+  document.addEventListener('DOMContentLoaded', () => ttsEngine.initVoices());
+}
+
 function getRenderPixelRatio() {
   return Math.min(window.devicePixelRatio || 1, isCoarsePointer ? 1 : 1.25);
 }
@@ -236,6 +290,7 @@ const customCursor = document.getElementById('custom-cursor');
 const telemetryTimer = document.getElementById('telemetry-timer');
 const telemetryCoord = document.getElementById('telemetry-coord');
 const flightHud = document.getElementById('flight-hud');
+const ttsStatus = document.getElementById('tts-status');
 const flightStatus = document.getElementById('flight-status');
 const flightScore = document.getElementById('flight-score');
 const flightShield = document.getElementById('flight-shield');
@@ -1331,6 +1386,7 @@ function enterFlightMode() {
   enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
   playerMissiles.forEach(missile => deactivateCombatObject(missile));
 
+  ttsEngine.speak('USSYVERSE DOGFIGHT MODE ACTIVATED. WELCOME, OPERATOR.', { rate: 1.0, pitch: 0.72 });
   startTutorialMission();
   updateFlightHud(true);
   updateCockpitRadar(0, true);
@@ -1343,6 +1399,7 @@ function enterFlightMode() {
 }
 
 function exitFlightMode(releasePointer = true) {
+  ttsEngine.stop();
   isFlightActive = false;
   flightState.pointerLocked = false;
   flightState.keys.clear();
@@ -1543,6 +1600,19 @@ function updateFlightNavLine() {
   flightNavLine.geometry.computeBoundingSphere();
 }
 
+function getVoicePersona(source = '') {
+  const normalizedSource = String(source).toUpperCase();
+
+  if (normalizedSource.includes('USSYVERSE CONTROL')) return { pitch: 0.80, rate: 1.0 };
+  if (normalizedSource.includes('DEVUSSY DOCK CONTROL')) return { pitch: 0.75, rate: 1.05 };
+  if (normalizedSource.includes('COMBAT SYSTEM')) return { pitch: 0.70, rate: 1.3 };
+  if (normalizedSource.includes('NAVIGATION')) return { pitch: 0.88, rate: 0.95 };
+  if (normalizedSource.includes('DEVUSSY')) return { pitch: 0.78, rate: 1.05 };
+  if (normalizedSource.includes('FACTION')) return { pitch: 0.72, rate: 0.98 };
+
+  return { pitch: 0.82, rate: 1.05 };
+}
+
 function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18 }) {
   gameMessageState.active = true;
   gameMessageState.type = type;
@@ -1555,6 +1625,7 @@ function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text 
   gameMessageState.choices = choices;
   gameMessageState.onDismiss = onDismiss;
   renderGameMessage();
+  ttsEngine.speak(text, getVoicePersona(source));
 }
 
 function renderGameMessage() {
@@ -1594,6 +1665,7 @@ function dismissGameMessage() {
   gameMessageState.active = false;
   gameMessageState.onDismiss = null;
   renderGameMessage();
+  ttsEngine.stop();
   if (callback) callback();
   return true;
 }
@@ -1606,6 +1678,7 @@ function handleGameMessageChoice(event) {
   if (!choice) return false;
   gameMessageState.active = false;
   renderGameMessage();
+  ttsEngine.speak(`${choice.label}`, { rate: 1.1, pitch: 0.9 });
   if (choice.action) choice.action();
   return true;
 }
@@ -1674,9 +1747,11 @@ function registerMissionKill() {
     enemies.forEach(enemy => deactivateCombatObject(enemy));
     setMissionStep('goLandAtProject');
   } else {
+    const killCallouts = ['SPLASH ONE', 'BOGEY DOWN', 'KILL CONFIRMED', 'TARGET ELIMINATED'];
+    ttsEngine.speak(killCallouts[Math.floor(Math.random() * killCallouts.length)], { rate: 1.3, pitch: 0.75, volume: 0.85 });
     showGameMessage({
       type: 'MISSION PROGRESS',
-      source: 'USSYVERSE CONTROL',
+      source: 'COMBAT SYSTEM',
       text: `BOGEY DESTROYED. OBJECTIVE PROGRESS: ${missionState.kills}/${missionState.killGoal}. CONTINUE SWEEPING RADAR.`
     });
   }
@@ -1743,6 +1818,7 @@ function restockAtProject(project) {
   flightState.energy = 100;
   flightState.status = `RESTOCKED AT ${project.name.toUpperCase()}`;
   flightState.statusUntil = performance.now() + 2500;
+  ttsEngine.speak(`DOCKING AT ${project.name.toUpperCase()}. RESTOCKING SUPPLIES.`, { rate: 1.0, pitch: 0.80 });
   updateFlightHud(true);
 }
 
@@ -1854,6 +1930,11 @@ function onGlobalKeyDown(event) {
   if (event.code === 'KeyL') {
     event.preventDefault();
     if (!event.repeat) landOnNearestProject();
+    return;
+  }
+  if (event.code === 'KeyM') {
+    event.preventDefault();
+    if (!event.repeat) toggleFlightTts();
     return;
   }
   if (event.code === 'Escape' && !flightState.pointerLocked) {
@@ -2454,6 +2535,7 @@ function updateFlightHud(force) {
   if (!force && now - flightState.lastHudUpdate < 120) return;
   flightState.lastHudUpdate = now;
   const speed = flightState.vel.length();
+  updateTtsStatusIndicator();
   if (flightStatus) flightStatus.textContent = isFlightActive ? flightState.status : 'TYPE USSY TO LAUNCH';
   if (flightScore) flightScore.textContent = String(flightState.score);
   if (flightShield) flightShield.textContent = String(Math.round(flightState.shield));
@@ -2486,6 +2568,21 @@ function updateFlightHud(force) {
   if (flightAmmoBar) flightAmmoBar.style.width = `${((flightState.ammo / maxPlayerAmmo) * 100).toFixed(1)}%`;
   if (flightMissiles) flightMissiles.textContent = `${flightState.missiles}/${maxPlayerMissilesStored}`;
   if (flightMissileBar) flightMissileBar.style.width = `${((flightState.missiles / maxPlayerMissilesStored) * 100).toFixed(1)}%`;
+}
+
+function updateTtsStatusIndicator() {
+  const ttsStatusEl = ttsStatus || document.getElementById('tts-status');
+  if (ttsStatusEl) ttsStatusEl.textContent = ttsEngine.enabled ? 'TTS●' : 'TTS○';
+  if (ttsStatusEl) ttsStatusEl.classList.toggle('muted', !ttsEngine.enabled);
+}
+
+function toggleFlightTts() {
+  ttsEngine.enabled = !ttsEngine.enabled;
+  if (!ttsEngine.enabled) ttsEngine.stop();
+  flightState.status = ttsEngine.enabled ? 'TTS ACTIVE' : 'TTS MUTED';
+  flightState.statusUntil = performance.now() + 2200;
+  updateTtsStatusIndicator();
+  updateFlightHud(true);
 }
 
 function updateFlightNavMarker() {
