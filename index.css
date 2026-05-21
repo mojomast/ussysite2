@@ -1241,29 +1241,6 @@ body.console-active .hud-layout {
   color: var(--cyber-cyan);
 }
 
-.flight-hud {
-  position: fixed;
-  left: 50%;
-  bottom: 20px;
-  z-index: 14;
-  width: min(900px, 48vw);
-  min-width: 620px;
-  background:
-    linear-gradient(90deg, rgba(255, 204, 0, 0.16), rgba(5, 9, 18, 0.92) 12% 88%, rgba(0, 240, 255, 0.13)),
-    rgba(5, 9, 18, 0.9);
-  border: 1px solid rgba(255, 204, 0, 0.38);
-  border-top: 4px solid rgba(255, 204, 0, 0.66);
-  color: rgba(240, 243, 248, 0.94);
-  font-family: var(--font-mono);
-  padding: 18px 24px 16px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, 12px);
-  transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.58), 0 0 28px rgba(255, 204, 0, 0.12);
-  clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%, 0 18px);
-}
-
 .tts-status-indicator {
   position: absolute;
   top: 7px;
@@ -1285,39 +1262,17 @@ body.console-active .hud-layout {
   text-shadow: none;
 }
 
-body.flight-active .flight-hud {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translate(-50%, 0);
-}
-
 .objectives-panel {
-  position: fixed;
-  top: clamp(88px, 12vh, 132px);
-  right: 24px;
-  z-index: 14;
-  width: min(360px, 26vw);
-  min-width: 280px;
-  padding: 14px 16px;
   color: rgba(240, 243, 248, 0.94);
-  background:
-    linear-gradient(135deg, rgba(0, 240, 255, 0.13), rgba(5, 9, 18, 0.92) 42%, rgba(255, 204, 0, 0.1)),
-    rgba(5, 9, 18, 0.9);
-  border: 1px solid rgba(0, 240, 255, 0.34);
-  border-left: 4px solid rgba(0, 240, 255, 0.7);
   font-family: var(--font-mono);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(16px);
-  transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.5), 0 0 26px rgba(0, 240, 255, 0.1);
-  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  transition: opacity 0.2s ease, border-color 0.2s ease;
 }
 
 body.flight-active .objectives-panel {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
 }
 
 .objectives-panel [hidden] {
@@ -2583,27 +2538,30 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
 }
 
 /* ── TOP RIGHT: OBJECTIVES ── */
-.objectives-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: clamp(240px, 23vw, 340px);
-  min-height: clamp(140px, 17vh, 220px);
-  max-height: clamp(180px, 23vh, 280px);
+.objectives-panel,
+#cockpit-objectives {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  width: clamp(240px, 22vw, 320px);
+  /* Match radar panel height */
   height: auto;
+  min-height: clamp(120px, 16vh, 200px);
   z-index: 9100;
   overflow: hidden;
-  /* Mirror parallelogram: right edge vertical, left edge diagonal */
-  clip-path: polygon(18% 0, 100% 0, 100% 100%, 0 100%, 0 28%);
-  background:
-    linear-gradient(225deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
-  border-left: 1px solid rgba(0, 240, 255, 0.4);
-  border-bottom: 1px solid rgba(0, 240, 255, 0.25);
-  box-shadow: inset 20px 0 40px rgba(0, 240, 255, 0.04), -2px 0 18px rgba(0, 0, 0, 0.5);
+  /* Mirror of radar clip-path: diagonal cut on BOTTOM-LEFT corner */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 18% 100%, 0 85%);
+  background: linear-gradient(225deg, rgba(0, 20, 35, 0.96) 0%, rgba(3, 8, 20, 0.92) 100%);
+  border-left: 1px solid rgba(0, 240, 255, 0.45);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+  box-shadow: inset 20px 0 40px rgba(0, 240, 255, 0.05), -2px 0 24px rgba(0, 0, 0, 0.6);
+  filter: drop-shadow(-2px 0 8px rgba(0, 240, 255, 0.2));
+  padding: clamp(12px, 1.6vh, 20px) clamp(14px, 1.8vw, 22px);
 }
 
 .objectives-panel-inner {
-  padding: clamp(8px, 1.2vw, 18px) clamp(10px, 1.4vw, 20px);
+  padding: 0;
 }
 
 /* Restore full objectives-panel header so text isn't clipped by the diagonal */
@@ -2881,18 +2839,21 @@ body.flight-active:not(.flight-third-person) .cockpit-dash-center {
 
 /* ── BOTTOM RIGHT ── */
 #flight-hud {
-  position: fixed;
-  bottom: 0;
-  right: 0;
+  position: fixed !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  margin: 0 !important;
   width: clamp(200px, 18vw, 260px);
   height: clamp(220px, 28vh, 280px);
-  z-index: 9100;
+  z-index: 9200;
   overflow: hidden;
   clip-path: polygon(0 0, 88% 0, 100% 15%, 100% 100%, 0 100%);
   background: linear-gradient(200deg, rgba(0, 20, 35, 0.96) 0%, rgba(3, 8, 20, 0.92) 100%);
   border-left: 1px solid rgba(0, 240, 255, 0.25);
   filter: drop-shadow(0 -3px 10px rgba(0, 240, 255, 0.3));
-  transform: none;
   padding: 0;
   opacity: 0;
   transition: opacity 0.18s ease;
@@ -2900,9 +2861,11 @@ body.flight-active:not(.flight-third-person) .cockpit-dash-center {
 }
 
 body.flight-active #flight-hud {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  right: 0 !important;
+  left: auto !important;
 }
 
 .flight-hud-inner {
