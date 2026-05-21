@@ -36,6 +36,7 @@ const flightTempVec2 = new THREE.Vector3();
 const radarTempVec = new THREE.Vector3();
 const flightBeamAxis = new THREE.Vector3(0, 1, 0);
 const flightQuat = new THREE.Quaternion();
+const flightInputQuat = new THREE.Quaternion();
 const flightEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const ignoredRelationTags = new Set(['Featured', 'Active', 'Stable', 'Historical', 'Ecosystem']);
 const manualRelationHints = [
@@ -76,8 +77,10 @@ const orbitState = {
 
 const flightState = {
   keys: new Set(),
+  mouseButtons: new Set(),
   pos: new THREE.Vector3(0, 2.2, 16),
   vel: new THREE.Vector3(),
+  orientation: new THREE.Quaternion(),
   yaw: 0,
   pitch: 0,
   roll: 0,
@@ -120,11 +123,13 @@ const maxPlayerMissiles = 8;
 const maxPlayerAmmo = 240;
 const maxPlayerMissilesStored = 8;
 const constellationScale = 2.25;
+const flightUniverseScale = 10;
 const nodeBaseScale = 1.65;
 const landingRange = 7.2;
 const flightBounds = 135;
 const radarRange = 140;
 let radarLastUpdate = 0;
+let activeUniverseScale = 1;
 
 const missionState = {
   active: false,
@@ -147,7 +152,7 @@ const gameMessageState = {
   onDismiss: null
 };
 
-const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. MOUSELOOK TO AIM, W/S TO THRUST, A/D TO STRAFE, Q/E TO ROLL, SPACE FOR LASERS, CTRL FOR MISSILES, V FOR CHASE CAM, L TO LAND AND RESTOCK. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
+const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. MOUSELOOK TO AIM, W/S TO THRUST, A/D TO STRAFE, Q/E TO ROLL, LEFT CLICK FOR LASERS, RIGHT CLICK FOR MISSILES, SPACE TO CONFIRM MESSAGES, V FOR CHASE CAM, L TO LAND AND RESTOCK. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
 
 function getRenderPixelRatio() {
   return Math.min(window.devicePixelRatio || 1, isCoarsePointer ? 1 : 1.25);
@@ -311,6 +316,7 @@ function init() {
   window.addEventListener('resize', onWindowResize);
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('click', onSceneClick);
+  document.addEventListener('contextmenu', onSceneContextMenu);
   document.addEventListener('touchstart', onTouchStart, { passive: true });
   document.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('pointermove', onPointerMove);
@@ -571,25 +577,42 @@ function createFlightGameObjects() {
   scene.add(gameRoot);
 
   playerShip = new THREE.Group();
-  const shipBody = new THREE.Mesh(
-    new THREE.ConeGeometry(0.28, 1.25, 4),
-    new THREE.MeshBasicMaterial({ color: 0xdce7ff, wireframe: true, transparent: true, opacity: 0.92 })
-  );
-  shipBody.rotation.x = -Math.PI / 2;
-  playerShip.add(shipBody);
+  const hullMat = new THREE.MeshBasicMaterial({ color: 0xdce7ff, wireframe: true, transparent: true, opacity: 0.92 });
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true, transparent: true, opacity: 0.72 });
+  const engineMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.72 });
+  const weaponMat = new THREE.MeshBasicMaterial({ color: 0xff3355, wireframe: true, transparent: true, opacity: 0.82 });
 
-  const wingMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true, transparent: true, opacity: 0.68 });
-  const wingGeo = new THREE.BoxGeometry(1.05, 0.04, 0.24);
-  const wings = new THREE.Mesh(wingGeo, wingMat);
-  wings.position.z = 0.18;
-  playerShip.add(wings);
+  const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.16, 1.45, 6), hullMat);
+  fuselage.rotation.x = Math.PI / 2;
+  fuselage.position.z = -0.05;
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.72, 6), hullMat);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -0.92;
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.2), hullMat);
+  tail.position.z = 0.68;
+  playerShip.add(fuselage, nose, tail);
 
-  const cockpit = new THREE.Mesh(
-    new THREE.SphereGeometry(0.14, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.75 })
-  );
-  cockpit.position.z = -0.22;
+  const cockpit = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), engineMat);
+  cockpit.scale.set(0.85, 0.48, 1.25);
+  cockpit.position.set(0, 0.13, -0.42);
   playerShip.add(cockpit);
+
+  const foilGeo = new THREE.BoxGeometry(0.92, 0.035, 0.25);
+  const engineGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.36, 8);
+  const cannonGeo = new THREE.BoxGeometry(0.025, 0.025, 0.82);
+  [-1, 1].forEach(side => {
+    [-1, 1].forEach(layer => {
+      const foil = new THREE.Mesh(foilGeo, wingMat);
+      foil.position.set(side * 0.52, layer * 0.13, 0.04);
+      foil.rotation.z = side * layer * 0.24;
+      const engine = new THREE.Mesh(engineGeo, engineMat);
+      engine.rotation.x = Math.PI / 2;
+      engine.position.set(side * 0.38, layer * 0.11, 0.31);
+      const cannon = new THREE.Mesh(cannonGeo, weaponMat);
+      cannon.position.set(side * 0.93, layer * 0.22, -0.12);
+      playerShip.add(foil, engine, cannon);
+    });
+  });
   gameRoot.add(playerShip);
 
   const enemyBodyGeo = new THREE.SphereGeometry(0.32, 10, 8);
@@ -706,7 +729,7 @@ function buildProjectNodes() {
     
     const nodeMesh = new THREE.Mesh(nodeGeo, nodeMat);
     nodeMesh.position.set(posX, yHeight, posZ);
-    nodeMesh.userData = { project: proj, baseScale: nodeBaseScale };
+    nodeMesh.userData = { project: proj, baseScale: nodeBaseScale, basePosition: nodeMesh.position.clone() };
     nodeMesh.scale.setScalar(nodeBaseScale);
 
     const hitGeo = new THREE.SphereGeometry(isCoarsePointer ? 0.95 : 0.7, 12, 12);
@@ -830,6 +853,24 @@ function buildRelatedProjectEdges() {
   );
   selectedEdgesMesh.geometry.setDrawRange(0, 0);
   connectionsGroup.add(selectedEdgesMesh);
+}
+
+function applyFlightUniverseScale(scale) {
+  if (activeUniverseScale === scale) return;
+  activeUniverseScale = scale;
+  projectNodes.forEach(node => {
+    if (!node.userData.basePosition) node.userData.basePosition = node.position.clone();
+    node.position.copy(node.userData.basePosition).multiplyScalar(scale);
+    const line = node.userData.connectionLine;
+    if (line && line.geometry && line.geometry.attributes.position) {
+      const position = line.geometry.attributes.position;
+      position.setXYZ(1, node.position.x, node.position.y, node.position.z);
+      position.needsUpdate = true;
+      line.geometry.computeBoundingSphere();
+    }
+  });
+  updateRelationshipEdges();
+  if (selectedNode && selectionRing) selectionRing.position.copy(selectedNode.position);
 }
 
 function getEdgeKey(from, to) {
@@ -1219,7 +1260,9 @@ function enterFlightMode() {
   document.body.classList.remove('scene-dragging');
 
   if (gameRoot) gameRoot.visible = true;
+  applyFlightUniverseScale(flightUniverseScale);
   flightState.keys.clear();
+  flightState.mouseButtons.clear();
   flightState.vel.set(0, 0, 0);
   flightState.score = 0;
   flightState.shield = 100;
@@ -1243,6 +1286,8 @@ function enterFlightMode() {
     flightState.pitch = THREE.MathUtils.clamp(Math.asin(flightTempVec.y), -1.2, 1.2);
   }
   flightState.roll = 0;
+  flightEuler.set(flightState.pitch, flightState.yaw, 0, 'YXZ');
+  flightState.orientation.setFromEuler(flightEuler);
 
   enemies.forEach(enemy => deactivateCombatObject(enemy));
   playerBullets.forEach(bullet => deactivateCombatObject(bullet));
@@ -1264,9 +1309,11 @@ function exitFlightMode(releasePointer = true) {
   isFlightActive = false;
   flightState.pointerLocked = false;
   flightState.keys.clear();
+  flightState.mouseButtons.clear();
   flightState.vel.set(0, 0, 0);
   document.body.classList.remove('flight-active', 'pointer-unlocked', 'flight-third-person');
   if (gameRoot) gameRoot.visible = false;
+  applyFlightUniverseScale(1);
   enemies.forEach(enemy => deactivateCombatObject(enemy));
   playerBullets.forEach(bullet => deactivateCombatObject(bullet));
   enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
@@ -1307,6 +1354,7 @@ function onPointerLockError() {
 function clearFlightInput() {
   if (!isFlightActive) return;
   flightState.keys.clear();
+  flightState.mouseButtons.clear();
 }
 
 function toggleFlightView() {
@@ -1490,7 +1538,8 @@ function getMissionLandingProjectName() {
 
 function landOnNearestProject() {
   updateProjectLandingTarget();
-  if (!flightState.nearestNode || flightState.nearestDistance > landingRange) {
+  const activeLandingRange = landingRange * activeUniverseScale;
+  if (!flightState.nearestNode || flightState.nearestDistance > activeLandingRange) {
     flightState.status = 'APPROACH PROJECT NODE TO LAND';
     updateFlightHud(true);
     return;
@@ -1581,7 +1630,6 @@ function findNearestEnemy() {
 }
 
 function onGlobalKeyDown(event) {
-  const isControlKey = event.code === 'ControlLeft' || event.code === 'ControlRight';
   if (isTypingTarget(event.target) || event.metaKey || event.altKey) return;
   if (!isFlightActive && event.ctrlKey) return;
 
@@ -1601,8 +1649,9 @@ function onGlobalKeyDown(event) {
     event.preventDefault();
     return;
   }
-  if (event.code === 'KeyE' && dismissGameMessage()) {
+  if (event.code === 'Space') {
     event.preventDefault();
+    dismissGameMessage();
     return;
   }
 
@@ -1738,7 +1787,16 @@ function applyOrbitToCamera() {
 }
 
 function onPointerDown(event) {
-  if (isFlightActive) return;
+  if (isFlightActive) {
+    if (event.button === 0 || event.button === 2) {
+      event.preventDefault();
+      flightState.mouseButtons.add(event.button);
+    }
+    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock && !(event.target.closest && event.target.closest('.hud-panel, .hud-interactive'))) {
+      renderer.domElement.requestPointerLock();
+    }
+    return;
+  }
   if (!isConsoleActive || event.button !== 0) return;
   if (event.target.closest && (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive'))) return;
 
@@ -1769,11 +1827,20 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (isFlightActive) {
+    flightState.mouseButtons.delete(event.button);
+    return;
+  }
   if (orbitState.pointerId !== event.pointerId) return;
   orbitState.dragging = false;
   orbitState.pointerId = null;
   orbitState.captureTarget = null;
   document.body.classList.remove('scene-dragging');
+}
+
+function onSceneContextMenu(event) {
+  if (!isFlightActive) return;
+  event.preventDefault();
 }
 
 function onSceneWheel(event) {
@@ -1787,9 +1854,8 @@ function onSceneWheel(event) {
 
 function onMouseMove(event) {
   if (isFlightActive && flightState.pointerLocked) {
-    flightState.yaw -= event.movementX * flightState.mouseSensitivity;
-    flightState.pitch -= event.movementY * flightState.mouseSensitivity;
-    flightState.pitch = THREE.MathUtils.clamp(flightState.pitch, -1.18, 1.18);
+    applyLocalFlightRotation(0, 1, 0, -event.movementX * flightState.mouseSensitivity);
+    applyLocalFlightRotation(1, 0, 0, -event.movementY * flightState.mouseSensitivity);
     return;
   }
   customCursor.style.left = event.clientX + 'px';
@@ -1827,9 +1893,15 @@ function onSceneClick(event) {
   }
 }
 
+function applyLocalFlightRotation(x, y, z, angle) {
+  if (!angle) return;
+  flightTempVec.set(x, y, z);
+  flightInputQuat.setFromAxisAngle(flightTempVec, angle);
+  flightState.orientation.multiply(flightInputQuat).normalize();
+}
+
 function updateFlightBasis() {
-  flightEuler.set(flightState.pitch, flightState.yaw, flightState.roll, 'YXZ');
-  flightQuat.setFromEuler(flightEuler);
+  flightQuat.copy(flightState.orientation);
   flightForward.set(0, 0, -1).applyQuaternion(flightQuat).normalize();
   flightRight.set(1, 0, 0).applyQuaternion(flightQuat).normalize();
   flightUp.set(0, 1, 0).applyQuaternion(flightQuat).normalize();
@@ -1852,6 +1924,10 @@ function updateFlight(time) {
   }
 
   if (flightState.pointerLocked || isCoarsePointer) {
+    if (flightState.keys.has('KeyQ')) applyLocalFlightRotation(0, 0, 1, 1.85 * dt);
+    if (flightState.keys.has('KeyE')) applyLocalFlightRotation(0, 0, 1, -1.85 * dt);
+    updateFlightBasis();
+
     const boost = flightState.keys.has('ShiftLeft') || flightState.keys.has('ShiftRight') ? 1.75 : 1;
     if (flightState.keys.has('KeyW') || flightState.keys.has('ArrowUp')) {
       flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * dt);
@@ -1865,13 +1941,10 @@ function updateFlight(time) {
     if (flightState.keys.has('KeyD') || flightState.keys.has('ArrowRight')) {
       flightState.vel.addScaledVector(flightRight, flightState.strafe * dt);
     }
-    if (flightState.keys.has('KeyQ')) flightState.roll += 1.65 * dt;
-    if (flightState.keys.has('KeyE')) flightState.roll -= 1.65 * dt;
-    if (!flightState.keys.has('KeyQ') && !flightState.keys.has('KeyE')) flightState.roll *= Math.pow(0.9, dt * 60);
 
     const maxSpeed = 22 * boost;
     if (flightState.vel.lengthSq() > maxSpeed * maxSpeed) flightState.vel.setLength(maxSpeed);
-    if (flightState.keys.has('Space') && time - flightState.lastShot > flightState.fireCooldown) {
+    if (flightState.mouseButtons.has(0) && time - flightState.lastShot > flightState.fireCooldown) {
       if (flightState.ammo <= 0) {
         flightState.status = 'LASER AMMO EMPTY // LAND TO RESTOCK';
       } else if (flightState.energy < flightState.laserEnergyCost) {
@@ -1885,7 +1958,7 @@ function updateFlight(time) {
       }
       flightState.lastShot = time;
     }
-    if ((flightState.keys.has('ControlLeft') || flightState.keys.has('ControlRight')) && time - flightState.lastMissile > flightState.missileCooldown) {
+    if (flightState.mouseButtons.has(2) && time - flightState.lastMissile > flightState.missileCooldown) {
       if (flightState.missiles <= 0) {
         flightState.status = 'MISSILES EMPTY // LAND TO RESTOCK';
       } else if (flightState.energy < flightState.missileEnergyCost) {
@@ -1900,13 +1973,11 @@ function updateFlight(time) {
       }
       flightState.lastMissile = time;
     }
-  } else {
-    flightState.roll *= Math.pow(0.92, dt * 60);
   }
 
   flightState.vel.multiplyScalar(Math.pow(flightState.damping, dt * 60));
   flightState.pos.addScaledVector(flightState.vel, dt);
-  flightState.pos.clampLength(1.8, flightBounds);
+  flightState.pos.clampLength(1.8, flightBounds * activeUniverseScale);
 
   updateProjectLandingTarget();
   updateCombatObjects(dt);
@@ -1928,8 +1999,9 @@ function updateProjectLandingTarget() {
   });
   if (flightState.nearestNode) {
     const projectName = flightState.nearestNode.userData.project.name;
+    const activeLandingRange = landingRange * activeUniverseScale;
     if (performance.now() > flightState.statusUntil) {
-      flightState.status = flightState.nearestDistance <= landingRange
+      flightState.status = flightState.nearestDistance <= activeLandingRange
         ? `LANDING RANGE: ${projectName}`
         : `${flightState.view.toUpperCase()} VIEW // ${flightState.pointerLocked || isCoarsePointer ? 'MOUSELOOK ARMED' : 'CLICK TO RECAPTURE'}`;
     }
@@ -2078,7 +2150,8 @@ function mapRadarPoint(targetPos, radius) {
   const forward = radarTempVec.dot(flightForward);
   const up = radarTempVec.dot(flightUp);
   const distance = Math.max(0.001, Math.sqrt(right * right + forward * forward + up * up));
-  const scale = Math.min(distance, radarRange) / radarRange;
+  const activeRadarRange = radarRange * activeUniverseScale;
+  const scale = Math.min(distance, activeRadarRange) / activeRadarRange;
   const angle = Math.atan2(right, forward);
   return {
     x: Math.sin(angle) * scale * radius,
@@ -2086,7 +2159,7 @@ function mapRadarPoint(targetPos, radius) {
     distance,
     above: up > 8,
     below: up < -8,
-    edge: distance > radarRange
+    edge: distance > activeRadarRange
   };
 }
 
@@ -2176,7 +2249,7 @@ function updateCockpitRadar(time, force = false) {
 
   ctx.font = '11px monospace';
   ctx.fillStyle = 'rgba(125, 252, 255, 0.78)';
-  ctx.fillText(`RANGE ${radarRange}`, 10, height - 12);
+  ctx.fillText(`RANGE ${radarRange * activeUniverseScale}`, 10, height - 12);
   ctx.restore();
 }
 
@@ -2376,6 +2449,11 @@ function animate(time) {
   camCurrent.lookAt.lerp(camTarget.lookAt, lerpFactor);
   
   camera.position.copy(camCurrent.pos);
+  if (isFlightActive) {
+    camera.up.copy(flightUp);
+  } else {
+    camera.up.set(0, 1, 0);
+  }
   camera.lookAt(camCurrent.lookAt);
 
   // Render WebGL

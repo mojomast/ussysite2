@@ -1385,17 +1385,10 @@ body.flight-active .game-message-system.active {
 
 body.flight-active .hud-left,
 body.flight-active .hud-right,
+body.flight-active .hud-header,
+body.flight-active .instructions-panel,
 body.flight-active .hud-footer {
-  opacity: 0.32;
-  transition: opacity 0.2s ease;
-}
-
-body.flight-active .hud-left:hover,
-body.flight-active .hud-right:hover,
-body.flight-active.pointer-unlocked .hud-left,
-body.flight-active.pointer-unlocked .hud-right,
-body.flight-active.pointer-unlocked .hud-footer {
-  opacity: 1;
+  display: none;
 }
 
 .flight-resource-panel {
