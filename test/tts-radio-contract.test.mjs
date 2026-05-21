@@ -51,6 +51,11 @@ test('game messages wait for TTS audio start before typewriter text advances', (
 
 test('TTS transmissions are single-owner and radio text avoids spoken slash characters', () => {
   assert.match(appSource, /activeTransmission: 0/);
+  assert.match(appSource, /activeRequest: null/);
+  assert.match(appSource, /new AbortController\(\)/);
+  assert.match(appSource, /fetchTTSSpeech\(radioText, utteranceOptions, requestController\?\.signal\)/);
+  assert.match(appSource, /if \(signal\) request\.options\.signal = signal/);
+  assert.match(appSource, /this\.activeRequest\.abort\(\)/);
   assert.match(appSource, /const transmissionId = this\.activeTransmission \+ 1/);
   assert.match(appSource, /const isCurrentTransmission = \(\) => this\.enabled && this\.activeTransmission === transmissionId/);
   assert.match(appSource, /if \(!isCurrentTransmission\(\)\) return/);

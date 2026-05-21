@@ -205,6 +205,7 @@ const ttsEngine = {
   enabled: true,
   activeVoice: null,
   activeTransmission: 0,
+  activeRequest: null,
 
   async speak(text, options = {}) {
     if (!this.enabled || !text) return;
@@ -235,11 +236,13 @@ const ttsEngine = {
     }
 
     this.stop(false);
+    const requestController = typeof AbortController === 'function' ? new AbortController() : null;
+    this.activeRequest = requestController;
     radioChain.addClickIn();
 
     try {
       if (ttsConfig.enabled) {
-        const blob = await fetchTTSSpeech(radioText, utteranceOptions);
+        const blob = await fetchTTSSpeech(radioText, utteranceOptions, requestController?.signal);
         if (!isCurrentTransmission()) return;
         if (blob && await radioChain.processBlob(blob, utteranceOptions.onStart)) return;
       }
@@ -253,12 +256,15 @@ const ttsEngine = {
         // Keep TTS failures non-blocking for the render/game loop.
       }
     } finally {
+      if (this.activeRequest === requestController) this.activeRequest = null;
       if (isCurrentTransmission()) radioChain.addClickOut();
     }
   },
 
   stop(invalidate = true) {
     if (invalidate) this.activeTransmission += 1;
+    if (this.activeRequest) this.activeRequest.abort();
+    this.activeRequest = null;
     if (this.supported) window.speechSynthesis.cancel();
     if (typeof radioChain !== 'undefined') radioChain.stopActive();
   },
@@ -533,10 +539,11 @@ function buildBackendTTSRequest(text, persona = {}) {
   };
 }
 
-async function fetchTTSSpeech(text, persona = {}) {
+async function fetchTTSSpeech(text, persona = {}, signal = null) {
   if (!ttsConfig.enabled) return null;
   try {
     const request = buildBackendTTSRequest(text, persona);
+    if (signal) request.options.signal = signal;
     const response = await fetch(request.url, request.options);
     if (!response.ok) return null;
 
