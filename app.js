@@ -187,11 +187,15 @@ function preprocessRadioText(text) {
     .replace(/&(?:nbsp|amp|lt|gt|quot|#39);/gi, ' ')
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\b([0-9]|1[0-9]|20)\s*\/\s*([0-9]|1[0-9]|20)\b/g, (_, left, right) => `${numToWord(left)} of ${numToWord(right)}`)
+    .replace(/\s*\/{1,}\s*/g, ', ')
+    .replace(/&/g, ' and ')
     .replace(/[`*_~#>]/g, '')
     .replace(/[\[\](){}<>]/g, ' ')
-    .replace(/\//g, ' slash ')
     .replace(/\b([0-9]|1[0-9]|20)\b/g, match => numToWord(match))
     .replace(/\b(OPERATOR|CONTROL|CONFIRMED|OBJECTIVE|BOGEY)\b(?![,.;:!?])/gi, '$1,')
+    .replace(/\s+([,.!?])/g, '$1')
+    .replace(/([,.!?]){2,}/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -200,11 +204,15 @@ const ttsEngine = {
   supported: 'speechSynthesis' in window,
   enabled: true,
   activeVoice: null,
+  activeTransmission: 0,
 
   async speak(text, options = {}) {
     if (!this.enabled || !text) return;
     const radioText = preprocessRadioText(text);
     if (!radioText) return;
+    const transmissionId = this.activeTransmission + 1;
+    this.activeTransmission = transmissionId;
+    const isCurrentTransmission = () => this.enabled && this.activeTransmission === transmissionId;
 
     const utteranceOptions = {
       rate: options.rate ?? 1.1,
@@ -212,7 +220,11 @@ const ttsEngine = {
       volume: options.volume ?? 0.9,
       longMessage: radioText.length > 80,
       voiceId: options.voiceId,
-      onStart: typeof options.onStart === 'function' ? options.onStart : null
+      onStart: typeof options.onStart === 'function'
+        ? () => {
+            if (isCurrentTransmission()) options.onStart();
+          }
+        : null
     };
 
     const requestedVoice = options.voice ?? options.voiceId;
@@ -222,27 +234,31 @@ const ttsEngine = {
       utteranceOptions.voice = this.activeVoice;
     }
 
-    this.stop();
+    this.stop(false);
     radioChain.addClickIn();
 
     try {
       if (ttsConfig.enabled) {
         const blob = await fetchTTSSpeech(radioText, utteranceOptions);
+        if (!isCurrentTransmission()) return;
         if (blob && await radioChain.processBlob(blob, utteranceOptions.onStart)) return;
       }
+      if (!isCurrentTransmission()) return;
       await radioChain.processSpeechSynthesis(radioText, utteranceOptions);
     } catch {
       try {
+        if (!isCurrentTransmission()) return;
         await radioChain.processSpeechSynthesis(radioText, utteranceOptions);
       } catch {
         // Keep TTS failures non-blocking for the render/game loop.
       }
     } finally {
-      radioChain.addClickOut();
+      if (isCurrentTransmission()) radioChain.addClickOut();
     }
   },
 
-  stop() {
+  stop(invalidate = true) {
+    if (invalidate) this.activeTransmission += 1;
     if (this.supported) window.speechSynthesis.cancel();
     if (typeof radioChain !== 'undefined') radioChain.stopActive();
   },

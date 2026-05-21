@@ -49,6 +49,18 @@ test('game messages wait for TTS audio start before typewriter text advances', (
   assert.match(appSource, /typeSpeed: 30/);
 });
 
+test('TTS transmissions are single-owner and radio text avoids spoken slash characters', () => {
+  assert.match(appSource, /activeTransmission: 0/);
+  assert.match(appSource, /const transmissionId = this\.activeTransmission \+ 1/);
+  assert.match(appSource, /const isCurrentTransmission = \(\) => this\.enabled && this\.activeTransmission === transmissionId/);
+  assert.match(appSource, /if \(!isCurrentTransmission\(\)\) return/);
+  assert.match(appSource, /stop\(invalidate = true\)/);
+  assert.match(appSource, /this\.stop\(false\)/);
+  assert.match(appSource, /\$\{numToWord\(left\)\} of \$\{numToWord\(right\)\}/);
+  assert.match(appSource, /replace\(\/\\s\*\\\/\{1,\}\\s\*\/g, ', '\)/);
+  assert.doesNotMatch(appSource, /' slash '/);
+});
+
 test('configured OpenRouter model exists and can output audio', { skip: !process.env.OPENROUTER_VALIDATE_MODELS }, async () => {
   const response = await fetch(`https://openrouter.ai/api/v1/models/${model}/endpoints`);
   assert.equal(response.status, 200);
