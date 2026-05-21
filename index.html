@@ -450,15 +450,15 @@
       <div class="cockpit-frame-content">
         <div class="flight-resource-panel flight-resource-left" aria-live="polite">
           <div class="resource-panel-title">SHIP STATUS</div>
-          <div class="resource-row"><span>SPEED</span><strong id="flight-speed">0</strong></div>
+          <div class="resource-bar"><span class="resource-bar-label">SPEED</span><strong id="flight-speed" class="resource-bar-value">0</strong></div>
           <div class="resource-meter"><span id="flight-speed-bar"></span></div>
-          <div class="resource-row"><span>SHIELDS</span><strong id="flight-shields-detail">100</strong></div>
+          <div class="resource-bar"><span class="resource-bar-label">SHIELDS</span><strong id="flight-shields-detail" class="resource-bar-value">100</strong></div>
           <div class="resource-meter shield"><span id="flight-shield-bar"></span></div>
-          <div class="resource-row"><span>ENERGY</span><strong id="flight-energy">100</strong></div>
+          <div class="resource-bar"><span class="resource-bar-label">ENERGY</span><strong id="flight-energy" class="resource-bar-value">100</strong></div>
           <div class="resource-meter energy"><span id="flight-energy-bar"></span></div>
-          <div class="resource-row"><span>HEAT</span><strong id="flight-heat-cockpit">0</strong></div>
+          <div class="resource-bar"><span class="resource-bar-label">HEAT</span><strong id="flight-heat-cockpit" class="resource-bar-value">0</strong></div>
           <div class="resource-meter heat"><span id="flight-heat-bar-cockpit" class="heat-bar-fill"></span></div>
-          <div class="resource-row"><span>FUEL</span><strong id="flight-fuel">100</strong></div>
+          <div class="resource-bar"><span class="resource-bar-label">FUEL</span><strong id="flight-fuel" class="resource-bar-value">100</strong></div>
           <div class="resource-meter fuel"><span id="flight-fuel-bar"></span></div>
         </div>
       </div>
@@ -469,23 +469,27 @@
       <div class="cockpit-dash-center-inner">
         <div class="dash-center-title">COMBAT // NAV</div>
         <div class="dash-center-grid">
+
+          <!-- Row 1 -->
           <div class="dash-cell">
             <span class="dash-label">PRIMARY WPN</span>
             <strong id="flight-weapon-primary-c">LASER Mk.I</strong>
           </div>
-          <div class="dash-cell dash-cell-wide">
-            <span class="dash-label">CROSSHAIR</span>
-            <strong id="flight-crosshair-c">NO TARGET</strong>
-          </div>
-          <div class="dash-cell">
-            <span class="dash-label">SECONDARY</span>
-            <strong id="flight-weapon-secondary-c">MISSILES</strong>
+          <div class="dash-cell dash-cell-center">
+            <span class="dash-label">CROSSHAIR TARGET</span>
+            <strong id="flight-crosshair-c">NO PROJECT</strong>
           </div>
           <div class="dash-cell">
             <span class="dash-label">NAV TARGET</span>
             <strong id="flight-nav-target-c">NONE</strong>
           </div>
+
+          <!-- Row 2 -->
           <div class="dash-cell">
+            <span class="dash-label">SECONDARY WPN</span>
+            <strong id="flight-weapon-secondary-c">MISSILE RACK</strong>
+          </div>
+          <div class="dash-cell dash-cell-center">
             <span class="dash-label">ETA</span>
             <strong id="flight-nav-eta-c">--</strong>
           </div>
@@ -493,8 +497,9 @@
             <span class="dash-label">AUTOPILOT</span>
             <strong id="flight-autopilot-c">OFF</strong>
           </div>
+
         </div>
-        <div class="dash-center-help">MOUSELOOK // W/S THRUST // LMB FIRE // V NAV // P AUTO // C CAM // T TRADE</div>
+        <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // C CAM // T TRADE</div>
       </div>
     </div>
 
@@ -504,7 +509,7 @@
         <div id="tts-status" class="tts-status-indicator" aria-live="polite" aria-label="TTS status"></div>
         <div class="flight-hud-header">
           <span>ECON / STATUS</span>
-          <span id="flight-status">TYPE USSY TO LAUNCH</span>
+          <span id="flight-status" class="hud-status-pill">ARMED</span>
         </div>
         <div class="flight-hud-grid">
           <div>
