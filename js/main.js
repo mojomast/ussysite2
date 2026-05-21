@@ -185,6 +185,7 @@ const flightUniverseScale = 10;
 const nodeBaseScale = 1;
 const planetNodeRadius = isCoarsePointer ? 1.55 : 1.75;
 const planetNodeFlightScale = isCoarsePointer ? 3.8 : 4.4;
+const planetDistantHaloScale = isCoarsePointer ? 14 : 18;
 const planetNodeHitRadius = isCoarsePointer ? planetNodeRadius * 1.18 : planetNodeRadius * 1.06;
 const planetLabelRadius = planetNodeRadius * 1.35;
 const landingRange = 7.2;
@@ -1935,11 +1936,13 @@ function buildRelatedProjectEdges() {
 function applyFlightUniverseScale(scale) {
   if (activeUniverseScale === scale) return;
   activeUniverseScale = scale;
-  const visualScale = scale === flightUniverseScale ? planetNodeFlightScale : 1;
+  const flightScaleActive = scale === flightUniverseScale;
+  const visualScale = flightScaleActive ? planetNodeFlightScale : 1;
   projectNodes.forEach(node => {
     if (!node.userData.basePosition) node.userData.basePosition = node.position.clone();
     node.position.copy(node.userData.basePosition).multiplyScalar(scale);
     node.scale.setScalar((node.userData.baseScale ?? nodeBaseScale) * visualScale);
+    if (node.userData.distantHalo) node.userData.distantHalo.visible = flightScaleActive;
     const line = node.userData.connectionLine;
     if (line && line.geometry && line.geometry.attributes.position) {
       const position = line.geometry.attributes.position;
@@ -2031,22 +2034,38 @@ function createPlanetNodeLOD(hexColor) {
     map: createPlanetNodeLOD.glowTexture,
     color: hexColor,
     transparent: true,
-    opacity: 0.42,
+    opacity: 0.64,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    fog: false
+  });
+  const distantHaloMat = new THREE.SpriteMaterial({
+    map: createPlanetNodeLOD.glowTexture,
+    color: hexColor,
+    transparent: true,
+    opacity: 0.18,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
     fog: false
   });
   const high = new THREE.Mesh(new THREE.IcosahedronGeometry(planetNodeRadius, 3), highMat);
   const medium = new THREE.Mesh(new THREE.IcosahedronGeometry(planetNodeRadius, 1), midMat);
   const sprite = new THREE.Sprite(spriteMat);
-  sprite.scale.setScalar(planetNodeRadius * 3.2);
+  sprite.scale.setScalar(planetNodeRadius * 5.8);
+  const distantHalo = new THREE.Sprite(distantHaloMat);
+  distantHalo.scale.setScalar(planetNodeRadius * planetDistantHaloScale);
+  distantHalo.visible = false;
   const glowShell = new THREE.Mesh(new THREE.SphereGeometry(planetNodeRadius * 1.18, 24, 12), glowMat);
   lod.addLevel(high, 0);
-  lod.addLevel(medium, 40);
-  lod.addLevel(sprite, 90);
+  lod.addLevel(medium, 80);
+  lod.addLevel(sprite, 220);
   lod.add(glowShell);
+  lod.add(distantHalo);
   lod.userData.visualMaterials = [highMat, midMat, spriteMat];
   lod.userData.glowMaterial = glowMat;
+  lod.userData.distantHalo = distantHalo;
+  lod.userData.distantHaloMaterial = distantHaloMat;
   lod.userData.visualRadius = planetNodeRadius;
   return lod;
 }
@@ -2057,6 +2076,7 @@ function setProjectNodeOpacity(node, opacity) {
     material.opacity = material.isSpriteMaterial ? opacity * 0.48 : opacity;
   });
   if (node.userData.glowMaterial) node.userData.glowMaterial.opacity = 0.18 * opacity;
+  if (node.userData.distantHaloMaterial) node.userData.distantHaloMaterial.opacity = 0.18 * opacity;
 }
 
 function getRelatedEdgesForProject(projectId) {
