@@ -80,6 +80,13 @@ test('mission transmissions outrank low-priority combat barks', () => {
   assert.match(appSource, /priority: ttsPriority/);
 });
 
+test('all in-game voice playback uses the radio filter chain', () => {
+  assert.match(appSource, /source\.connect\(chain\.input\)/);
+  assert.match(appSource, /this\.gainNode\.connect\(chain\.input\)/);
+  assert.match(appSource, /if \(!chain \|\| chain\.ctx\.state === 'suspended'\) return false/);
+  assert.doesNotMatch(appSource, /speakRaw\(/);
+});
+
 test('configured OpenRouter model exists and can output audio', { skip: !process.env.OPENROUTER_VALIDATE_MODELS }, async () => {
   const response = await fetch(`https://openrouter.ai/api/v1/models/${model}/endpoints`);
   assert.equal(response.status, 200);

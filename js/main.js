@@ -371,6 +371,58 @@ function getTtsPriorityRank(priority = 'normal') {
   return 1;
 }
 
+const SETTINGS_STORAGE_KEY = 'ussy.flight.settings.v1';
+const gameSettings = {
+  radioVolume: 0.45,
+  chatterVolume: 0.38
+};
+
+function clampVolume(value) {
+  return Math.max(0, Math.min(1, Number(value)));
+}
+
+function volumePercent(value) {
+  return `${Math.round(clampVolume(value) * 100)}%`;
+}
+
+function loadFlightSettings() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+    if (Number.isFinite(saved.radioVolume)) gameSettings.radioVolume = clampVolume(saved.radioVolume);
+    if (Number.isFinite(saved.chatterVolume)) gameSettings.chatterVolume = clampVolume(saved.chatterVolume);
+  } catch {
+    // Settings are optional; defaults keep the game fully playable.
+  }
+}
+
+function saveFlightSettings() {
+  try {
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(gameSettings));
+  } catch {
+    // Ignore private-mode or storage quota failures.
+  }
+}
+
+function setRadioVolume(value) {
+  gameSettings.radioVolume = clampVolume(value);
+  saveFlightSettings();
+  radioChain.updateOutputGains();
+  flightState.status = `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}`;
+  flightState.statusUntil = performance.now() + 2200;
+  updateFlightHud(true);
+}
+
+function setChatterVolume(value) {
+  gameSettings.chatterVolume = clampVolume(value);
+  saveFlightSettings();
+  combatAudio.updateGain();
+  flightState.status = `CHATTER VOLUME ${volumePercent(gameSettings.chatterVolume)}`;
+  flightState.statusUntil = performance.now() + 2200;
+  updateFlightHud(true);
+}
+
+loadFlightSettings();
+
 const ttsEngine = {
   supported: 'speechSynthesis' in window,
   enabled: true,
@@ -392,7 +444,7 @@ const ttsEngine = {
     const utteranceOptions = {
       rate: options.rate ?? 1.1,
       pitch: options.pitch ?? 0.85,
-      volume: options.volume ?? 0.9,
+      volume: clampVolume(options.volume ?? gameSettings.radioVolume),
       longMessage: radioText.length > 80,
       voiceId: options.voiceId,
       onStart: typeof options.onStart === 'function'
@@ -483,6 +535,7 @@ const radioChain = {
   activeSource: null,
   activeNoise: null,
   speechTimer: null,
+  outputGains: new Set(),
 
   buildChain() {
     const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -516,7 +569,8 @@ const radioChain = {
     compressor.release.value = 0.08;
 
     const gain = this.ctx.createGain();
-    gain.gain.value = 1.1;
+    gain.gain.value = 1.1 * gameSettings.radioVolume;
+    this.outputGains.add(gain);
 
     highpass.connect(lowpass);
     lowpass.connect(waveshaper);
@@ -524,7 +578,17 @@ const radioChain = {
     compressor.connect(gain);
     gain.connect(this.ctx.destination);
 
-    return { ctx: this.ctx, input: highpass };
+    return { ctx: this.ctx, input: highpass, outputGain: gain };
+  },
+
+  updateOutputGains() {
+    this.outputGains.forEach(gain => {
+      try {
+        gain.gain.value = 1.1 * gameSettings.radioVolume;
+      } catch {
+        this.outputGains.delete(gain);
+      }
+    });
   },
 
   async processBlob(audioBlob, onStart = null) {
@@ -541,6 +605,7 @@ const radioChain = {
         this.activeSource = source;
         source.onended = () => {
           if (this.activeSource === source) this.activeSource = null;
+          this.outputGains.delete(chain.outputGain);
           resolve(true);
         };
         source.start();
@@ -555,9 +620,7 @@ const radioChain = {
     if (!ttsEngine.supported) return false;
 
     const chain = this.buildChain();
-    if (!chain || chain.ctx.state === 'suspended') {
-      return this.speakRaw(text, utteranceOptions);
-    }
+    if (!chain || chain.ctx.state === 'suspended') return false;
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = utteranceOptions.rate ?? 1.1;
@@ -574,7 +637,7 @@ const radioChain = {
     const speechDelay = utteranceOptions.longMessage ? 160 : 0;
     noise.buffer = noiseBuffer;
     noise.loop = true;
-    noiseGain.gain.value = 0.04;
+    noiseGain.gain.value = 0.04 * gameSettings.radioVolume;
     noise.connect(noiseGain);
     noiseGain.connect(chain.input);
     this.activeNoise = { source: noise, gain: noiseGain };
@@ -585,6 +648,7 @@ const radioChain = {
         if (settled) return;
         settled = true;
         this.fadeNoiseOut(noise, noiseGain);
+        this.outputGains.delete(chain.outputGain);
         resolve(true);
       };
 
@@ -598,26 +662,6 @@ const radioChain = {
         this.speechTimer = null;
         window.speechSynthesis.speak(utterance);
       }, speechDelay);
-    });
-  },
-
-  speakRaw(text, utteranceOptions = {}) {
-    return new Promise(resolve => {
-      try {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = utteranceOptions.rate ?? 1.1;
-        utterance.pitch = utteranceOptions.pitch ?? 0.85;
-        utterance.volume = utteranceOptions.volume ?? 0.9;
-        if (utteranceOptions.voice) utterance.voice = utteranceOptions.voice;
-        utterance.onstart = () => {
-          if (typeof utteranceOptions.onStart === 'function') utteranceOptions.onStart();
-        };
-        utterance.onend = () => resolve(true);
-        utterance.onerror = () => resolve(false);
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        resolve(false);
-      }
     });
   },
 
@@ -638,7 +682,7 @@ const radioChain = {
       const now = chain.ctx.currentTime;
       oscillator.type = 'sine';
       oscillator.frequency.value = 1200;
-      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.setValueAtTime(0.18 * gameSettings.radioVolume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
       oscillator.connect(gain);
       gain.connect(chain.input);
@@ -693,11 +737,16 @@ const combatAudio = {
 
   init() {
     if (this.ctx) return;
-    if (!radioChain.ctx) return;
-    this.ctx = radioChain.ctx;
+    const chain = radioChain.buildChain();
+    if (!chain || chain.ctx.state === 'suspended') return;
+    this.ctx = chain.ctx;
     this.gainNode = this.ctx.createGain();
-    this.gainNode.gain.value = 0.75;
-    this.gainNode.connect(this.ctx.destination);
+    this.updateGain();
+    this.gainNode.connect(chain.input);
+  },
+
+  updateGain() {
+    if (this.gainNode) this.gainNode.gain.value = 0.75 * gameSettings.chatterVolume;
   },
 
   async bark(text, persona = {}) {
@@ -806,6 +855,7 @@ window.__USSY_TTS_DEBUG__ = {
   ENEMY_CLASSES: typeof ENEMY_CLASSES !== 'undefined' ? ENEMY_CLASSES : [],
   WEAPON_DEFS: typeof WEAPON_DEFS !== 'undefined' ? WEAPON_DEFS : [],
   loadoutState: typeof loadoutState !== 'undefined' ? loadoutState : null,
+  gameSettings,
   preprocessRadioText,
   getVoicePersona: source => getVoicePersona(source)
 };
@@ -3624,7 +3674,10 @@ function onGlobalKeyDown(event) {
   }
   if (event.code === 'KeyM') {
     event.preventDefault();
-    if (!event.repeat) toggleFlightTts();
+    if (!event.repeat) {
+      if (event.shiftKey) toggleFlightTts();
+      else openAudioSettingsMenu();
+    }
     return;
   }
   if (event.code === 'Escape' && !flightState.pointerLocked) {
@@ -4440,6 +4493,47 @@ function toggleFlightTts() {
   flightState.statusUntil = performance.now() + 2200;
   updateTtsStatusIndicator();
   updateFlightHud(true);
+}
+
+function openAudioSettingsMenu() {
+  showGameMessage({
+    type: 'AUDIO SETTINGS',
+    source: 'USSYVERSE CONTROL',
+    text: `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}. COMBAT CHATTER ${volumePercent(gameSettings.chatterVolume)}. TTS ${ttsEngine.enabled ? 'ACTIVE' : 'MUTED'}. SELECT CONTROL:`,
+    choices: [
+      { key: '1', code: 'Digit1', label: `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}`, action: () => openVolumeMenu('radio') },
+      { key: '2', code: 'Digit2', label: `CHATTER VOLUME ${volumePercent(gameSettings.chatterVolume)}`, action: () => openVolumeMenu('chatter') },
+      { key: '3', code: 'Digit3', label: ttsEngine.enabled ? 'MUTE TTS' : 'ENABLE TTS', action: () => { toggleFlightTts(); openAudioSettingsMenu(); } },
+      { key: '4', code: 'Digit4', label: 'RESTORE QUIET DEFAULTS', action: () => { setRadioVolume(0.45); setChatterVolume(0.38); openAudioSettingsMenu(); } },
+      { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessage() }
+    ],
+    ttsPriority: 'low'
+  });
+}
+
+function openVolumeMenu(kind) {
+  const isRadio = kind === 'radio';
+  const label = isRadio ? 'RADIO' : 'CHATTER';
+  const setter = isRadio ? setRadioVolume : setChatterVolume;
+  const current = isRadio ? gameSettings.radioVolume : gameSettings.chatterVolume;
+  const presets = isRadio
+    ? [0.25, 0.45, 0.7, 1]
+    : [0.2, 0.38, 0.6, 1];
+  showGameMessage({
+    type: `${label} VOLUME`,
+    source: 'USSYVERSE CONTROL',
+    text: `${label} VOLUME IS ${volumePercent(current)}. SELECT A PRESET:`,
+    choices: [
+      ...presets.map((value, index) => ({
+        key: String(index + 1),
+        code: `Digit${index + 1}`,
+        label: volumePercent(value),
+        action: () => { setter(value); openAudioSettingsMenu(); }
+      })),
+      { key: 'b', code: 'KeyB', label: 'BACK', action: () => openAudioSettingsMenu() }
+    ],
+    ttsPriority: 'low'
+  });
 }
 
 function updateFlightNavMarker() {

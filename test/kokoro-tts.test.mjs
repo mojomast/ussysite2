@@ -57,15 +57,36 @@ async function loadTTSBrowserContext() {
 
 function createMockAudioContext() {
   const destination = { connect() {} };
+  const node = () => ({ connect() {} });
   return {
     currentTime: 0,
+    sampleRate: 24000,
     destination,
     state: 'running',
+    createBiquadFilter() {
+      return { ...node(), frequency: { value: 0 }, Q: { value: 0 }, type: 'lowpass' };
+    },
+    createWaveShaper() {
+      return { ...node(), curve: null, oversample: 'none' };
+    },
+    createDynamicsCompressor() {
+      return {
+        ...node(),
+        threshold: { value: 0 },
+        knee: { value: 0 },
+        ratio: { value: 0 },
+        attack: { value: 0 },
+        release: { value: 0 }
+      };
+    },
     createGain() {
       return {
         gain: { value: 1 },
         connect() {}
       };
+    },
+    createBuffer(channels, length) {
+      return { getChannelData: () => new Float32Array(length) };
     },
     createBufferSource() {
       return {

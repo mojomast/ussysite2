@@ -35,6 +35,14 @@ flight loop -> fuel drain -> dock at project node -> trade menu -> traderState -
 
 Fuel drains while thrusting or using autopilot. Landing calls restock/refuel behavior and opens the station menu. Trade choices reuse the existing message choice system and emit a trade-completed callback so objectives can advance without coupling mission code to market internals.
 
+## Audio Data Flow
+
+```text
+/api/tts audio -> ttsEngine.speak() or combatAudio.bark() -> Web Audio radio chain -> speakers
+```
+
+Mission comms and short barks use separate scheduling channels, but both route through the same radio filter chain before playback. The app does not fall back to clean browser speech when the radio chain is unavailable, which keeps the voice treatment consistent. The in-flight audio settings menu is opened with `M`; `Shift+M` keeps the quick TTS mute toggle.
+
 ## Objectives And Missions
 
 The flight HUD has a persistent objectives panel with `Current` and `Available` tabs. `O` toggles those tabs while flying. The current objective is stored in `missionState.currentObjective`; available multi-step contracts are defined in `missionContracts` inside `main.js` until the mission extraction is completed.

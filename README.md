@@ -85,6 +85,10 @@ The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The
 
 Dogfight mode now opens with a deployment choice: run the guided tutorial or enter free roam with the director enabled. The tutorial covers combat, landing, and a cargo-market buy/sell route. The flight HUD includes an objectives panel toggled with `O`, showing the current objective and available multi-step contracts.
 
+## Audio Settings
+
+In flight, press `M` to open audio settings for radio volume, combat chatter volume, TTS mute, and quiet defaults. Radio transmissions default quieter than before, and all in-game voices are routed through the radio filter chain so clean and distorted voice paths do not mix.
+
 ## How It Works
 
 The client runs all rendering, flight, combat, trade, objective, mission, and HUD state locally. After the tutorial completes or free roam is selected, `gameOrchestrator` begins sparse polling of `/api/orchestrate`; the server asks a cheap Gemini Flash model whether to fire a post-tutorial event. Events return as JSON and are rendered through the existing `showGameMessage()` radio/HUD system.

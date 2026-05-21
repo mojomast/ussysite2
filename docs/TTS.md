@@ -41,19 +41,21 @@ Comms channel:
 - A lower-priority request is dropped while a higher-priority transmission is active.
 - A low-priority request is dropped while any comms transmission is active.
 - Accepted comms transmissions stop the prior comms audio and include radio click-in/click-out noise.
+- Comms volume defaults to `45%` and is adjustable from the in-flight audio settings menu.
 
 Combat channel:
 
 - Entry point: `combatAudio.bark()`.
 - Used for short overlapping callouts such as missile, shield, and kill barks.
 - Concurrency cap: `maxConcurrent` is `2`; when the cap is reached, the oldest bark is stopped before the new one starts.
-- Combat barks play through their own gain node and do not add radio click noise.
+- Combat barks play through their own gain node, then through the same radio filter chain as comms. They do not add click-in/click-out noise.
+- Combat chatter volume defaults to `38%` and is adjustable separately from comms.
 
 Diagram:
 
 ```text
 ttsEngine.speak()   -> comms channel  -> priority-gated radio chain with clicks
-combatAudio.bark()  -> combat channel -> capped overlapping barks, no click noise
+combatAudio.bark()  -> combat channel -> capped overlapping barks -> radio chain, no click noise
 ```
 
 ## API
@@ -69,6 +71,18 @@ combatAudio.bark()  -> combat channel -> capped overlapping barks, no click nois
 ## Radio Chain
 
 The main app keeps a radio-style audio chain for browser speech and backend audio. It adds click-in/click-out effects, highpass/lowpass filtering, compression, and short noise beds when the Web Audio context is available.
+
+All in-game voices that play through the main app are routed through this chain. If the Web Audio context is unavailable or suspended, the app drops the voice instead of falling back to clean speech so the player does not hear mixed clean/distorted voices.
+
+## Audio Settings
+
+Open the in-flight audio settings menu with `M`. Use `Shift+M` for the quick TTS mute toggle. Settings are persisted in `localStorage` under `ussy.flight.settings.v1`.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| Radio volume | `45%` | Main mission, dock, navigation, and menu transmissions |
+| Chatter volume | `38%` | Short overlapping combat/navigation barks before they enter the radio filter |
+| TTS | Active | Enables or mutes voice playback |
 
 ## Voice Personas
 
