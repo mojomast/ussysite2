@@ -1811,19 +1811,6 @@ body.flight-active .flight-resource-panel {
   background: rgba(255, 68, 85, 0.86);
 }
 
-.cockpit-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 12;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.18s ease;
-}
-
-body.flight-active:not(.flight-third-person) .cockpit-overlay {
-  opacity: 1;
-}
-
 .cockpit-vignette {
   position: absolute;
   inset: 0;
@@ -2249,159 +2236,6 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
   }
 }
 
-/* Keep the cockpit readable without overwhelming 1080p and laptop displays. */
-@media (min-width: 1025px) and (max-height: 1100px), (min-width: 1025px) and (max-width: 1700px) {
-  .flight-hud {
-    width: min(760px, 54vw);
-    min-width: 540px;
-    bottom: 14px;
-    padding: 12px 16px 11px;
-  }
-
-  .objectives-panel {
-    top: 78px;
-    right: 14px;
-    width: min(330px, 24vw);
-    min-width: 250px;
-    padding: 11px 13px;
-  }
-
-  .objectives-panel-header {
-    font-size: 0.66rem;
-    margin-bottom: 9px;
-  }
-
-  .objective-pane h4 {
-    font-size: 0.86rem;
-  }
-
-  .objective-pane p {
-    font-size: 0.62rem;
-  }
-
-  .flight-hud-header {
-    font-size: 0.78rem;
-    padding-bottom: 6px;
-    margin-bottom: 7px;
-  }
-
-  .flight-hud-grid {
-    gap: 8px;
-  }
-
-  .flight-hud-grid > div {
-    flex-basis: 104px;
-    padding: 7px 9px;
-  }
-
-  .flight-hud-label {
-    font-size: 0.58rem;
-    margin-bottom: 3px;
-  }
-
-  .flight-hud strong {
-    font-size: 0.9rem;
-  }
-
-  .mini-meter {
-    height: 6px;
-    margin: 3px 0;
-  }
-
-  .flight-hud-help {
-    margin-top: 8px;
-    font-size: 0.62rem;
-    line-height: 1.35;
-  }
-
-  .cockpit-reticle {
-    width: 68px;
-    height: 68px;
-  }
-
-  .cockpit-reticle::before {
-    top: -14px;
-    height: 96px;
-  }
-
-  .cockpit-reticle::after {
-    left: -14px;
-    width: 96px;
-  }
-
-  .cockpit-frame {
-    bottom: -5vh;
-    width: min(42vw, 650px);
-    height: min(46vh, 450px);
-  }
-
-  .cockpit-frame-left {
-    left: -7vw;
-  }
-
-  .cockpit-frame-right {
-    right: -7vw;
-  }
-
-  .cockpit-frame-content {
-    inset: clamp(28px, 3.7vh, 42px) clamp(34px, 3.8vw, 58px) clamp(44px, 5vh, 64px);
-  }
-
-  .cockpit-frame-left .cockpit-frame-content {
-    padding-left: clamp(36px, 4.8vw, 72px);
-  }
-
-  .cockpit-frame-right .cockpit-frame-content {
-    padding-right: clamp(36px, 4.8vw, 72px);
-  }
-
-  .flight-resource-panel {
-    padding: clamp(10px, 1.3vw, 18px);
-  }
-
-  .resource-row {
-    grid-template-columns: minmax(58px, 0.62fr) minmax(84px, 1.38fr);
-    gap: 10px;
-    font-size: clamp(0.55rem, 0.72vw, 0.72rem);
-    letter-spacing: 0.1em;
-    padding: clamp(7px, 0.85vw, 11px) clamp(9px, 1vw, 14px);
-    border-left-width: 3px;
-  }
-
-  .resource-row strong {
-    font-size: clamp(1.35rem, 2.25vw, 2.65rem);
-  }
-
-  .resource-meter {
-    height: clamp(8px, 0.8vw, 13px);
-    margin: -1px 0 clamp(7px, 0.8vw, 11px);
-  }
-
-  .radar-module {
-    grid-template-columns: minmax(80px, 0.7fr) 1fr;
-    gap: 10px;
-    margin-bottom: clamp(7px, 0.8vw, 11px);
-    padding: clamp(8px, 0.9vw, 12px);
-  }
-
-  .radar-title {
-    font-size: clamp(0.52rem, 0.7vw, 0.68rem);
-  }
-
-  .cockpit-radar {
-    width: min(138px, 9vw);
-    height: min(138px, 9vw);
-    min-width: 92px;
-    min-height: 92px;
-  }
-
-  .cockpit-dash {
-    bottom: 10px;
-    gap: 12px;
-    font-size: 0.48rem;
-  }
-}
-
 /* --- RESPONSIVE / MOBILE LAYOUT --- */
 @media (max-width: 1024px) {
   .hero-brand {
@@ -2446,19 +2280,6 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
   
   .custom-cursor {
     display: none !important;
-  }
-
-  .flight-resource-panel {
-    display: none;
-  }
-
-  .cockpit-frame {
-    display: none;
-  }
-
-  .flight-hud {
-    width: calc(100vw - 28px);
-    min-width: 0;
   }
 
   .game-message-system {
@@ -2706,34 +2527,6 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
     display: none;
   }
 
-  .flight-hud {
-    width: calc(100vw - 20px);
-    min-width: 0;
-    max-height: 46svh;
-    bottom: 10px;
-    padding: 11px 12px;
-    overflow: auto;
-  }
-
-  .objectives-panel {
-    top: auto;
-    right: 10px;
-    bottom: calc(46svh + 20px);
-    left: 10px;
-    width: auto;
-    min-width: 0;
-    max-height: 32svh;
-    overflow: auto;
-    padding: 10px 12px;
-  }
-
-  .objectives-panel-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 7px;
-    font-size: 0.66rem;
-  }
-
   .objective-pane h4 {
     font-size: 0.82rem;
   }
@@ -2746,54 +2539,6 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
     max-height: 18svh;
   }
 
-  .flight-hud-header {
-    font-size: 0.68rem;
-    gap: 8px;
-  }
-
-  .flight-hud-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
-  }
-
-  .flight-hud-grid > div {
-    padding: 8px;
-  }
-
-  .flight-hud-label {
-    font-size: 0.55rem;
-  }
-
-  .flight-hud strong {
-    font-size: 0.86rem;
-  }
-
-  .flight-hud-help {
-    font-size: 0.58rem;
-  }
-}
-
-@media (max-width: 640px) {
-  .flight-hud {
-    bottom: 14px;
-    max-height: 44svh;
-    overflow: auto;
-  }
-
-  .objectives-panel {
-    bottom: calc(44svh + 26px);
-  }
-
-  .flight-resource-panel {
-    display: none;
-  }
-
-  .cockpit-dash {
-    width: calc(100vw - 32px);
-    justify-content: space-between;
-    gap: 10px;
-  }
 }
 
 /* ==================== COCKPIT FLIGHT HUD ==================== */
@@ -2805,6 +2550,12 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
   pointer-events: none;
   z-index: 9000;
   overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+body.flight-active:not(.flight-third-person) .cockpit-overlay {
+  opacity: 1;
 }
 
 .cockpit-overlay > * {
@@ -2817,256 +2568,224 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
   pointer-events: none;
 }
 
+/* ═══════════════════════════════════════════════════════
+   COCKPIT HUD CORNER PANELS — REDESIGN v3
+   Skewed-trapezoid panels that look like a real fighter HUD.
+   All four corners. No overlap.
+═══════════════════════════════════════════════════════ */
+
+/* ── TOP LEFT: TACTICAL RADAR ── */
 .radar-panel {
   position: fixed;
   top: 0;
   left: 0;
-  width: clamp(180px, 18vw, 260px);
-  height: clamp(160px, 18vh, 240px);
+  width: clamp(260px, 24vw, 360px);
+  height: clamp(220px, 24vh, 320px);
   z-index: 9100;
-  clip-path: polygon(0 0, 100% 0, 100% 70%, 80% 100%, 0 100%);
-  background: rgba(6, 10, 23, 0.82);
-  border-right: 1px solid rgba(0, 240, 255, 0.3);
-  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
   overflow: hidden;
+  /* Parallelogram: left edge vertical, right edge diagonal */
+  clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%);
+  background:
+    linear-gradient(135deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
+  border-right: 1px solid rgba(0, 240, 255, 0.4);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+  box-shadow: inset -20px 0 40px rgba(0, 240, 255, 0.04), 2px 0 18px rgba(0, 0, 0, 0.5);
 }
 
 .radar-panel-inner {
   position: absolute;
   inset: 0;
+  /* Counter-skew content slightly so text reads straight */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: clamp(6px, 1vw, 12px);
-  transform: skewX(-2deg);
+  padding: clamp(10px, 1.4vw, 20px) clamp(12px, 1.6vw, 24px);
+  gap: 6px;
 }
 
 .radar-title {
   font-family: var(--font-display);
-  font-size: clamp(8px, 0.7vw, 11px);
-  letter-spacing: 0.12em;
+  font-size: clamp(9px, 0.8vw, 12px);
+  letter-spacing: 0.18em;
   color: var(--cyber-cyan);
-  margin-bottom: 4px;
   text-align: center;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
 }
 
+/* Make the canvas square and large — the whole point of the radar */
 .cockpit-radar {
-  width: clamp(100px, 11vw, 160px) !important;
-  height: clamp(100px, 11vw, 160px) !important;
+  width: clamp(160px, 17vw, 240px) !important;
+  height: clamp(160px, 17vw, 240px) !important;
   display: block;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 16px rgba(0, 240, 255, 0.08);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .radar-range {
   font-family: var(--font-mono);
-  font-size: clamp(8px, 0.65vw, 10px);
-  color: var(--text-muted);
-  margin-top: 4px;
+  font-size: clamp(8px, 0.7vw, 11px);
+  color: rgba(0, 240, 255, 0.6);
+  letter-spacing: 0.12em;
+  text-align: center;
 }
 
+/* ── TOP RIGHT: OBJECTIVES ── */
 .objectives-panel {
   position: fixed;
   top: 0;
   right: 0;
-  width: clamp(220px, 22vw, 320px);
+  width: clamp(240px, 23vw, 340px);
+  min-height: clamp(140px, 17vh, 220px);
+  max-height: clamp(180px, 23vh, 280px);
   height: auto;
-  min-width: 0;
-  min-height: clamp(120px, 15vh, 200px);
-  max-height: clamp(160px, 22vh, 260px);
   z-index: 9100;
-  clip-path: polygon(20% 0, 100% 0, 100% 100%, 0 100%, 0 25%);
-  background: rgba(6, 10, 23, 0.82);
-  border: 0;
-  border-left: 1px solid rgba(0, 240, 255, 0.3);
-  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
-  padding: 0;
   overflow: hidden;
-  box-shadow: none;
+  /* Mirror parallelogram: right edge vertical, left edge diagonal */
+  clip-path: polygon(18% 0, 100% 0, 100% 100%, 0 100%, 0 28%);
+  background:
+    linear-gradient(225deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
+  border-left: 1px solid rgba(0, 240, 255, 0.4);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+  box-shadow: inset 20px 0 40px rgba(0, 240, 255, 0.04), -2px 0 18px rgba(0, 0, 0, 0.5);
 }
 
 .objectives-panel-inner {
-  padding: clamp(8px, 1vw, 14px) clamp(10px, 1.2vw, 16px);
-  transform: skewX(2deg);
+  padding: clamp(8px, 1.2vw, 18px) clamp(10px, 1.4vw, 20px);
 }
 
+/* Restore full objectives-panel header so text isn't clipped by the diagonal */
 .objectives-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-family: var(--font-display);
-  font-size: clamp(8px, 0.7vw, 11px);
-  letter-spacing: 0.12em;
+  font-size: clamp(8px, 0.75vw, 11px);
+  letter-spacing: 0.15em;
   color: var(--cyber-cyan);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
-.objective-view-btn {
-  font-family: var(--font-mono);
-  font-size: clamp(8px, 0.65vw, 10px);
-  color: var(--text-muted);
-  background: none;
-  border: 1px solid rgba(0, 240, 255, 0.15);
-  padding: 2px 6px;
-  cursor: pointer;
-  letter-spacing: 0.08em;
-}
-
-.objective-view-btn.active {
-  color: var(--cyber-cyan);
-  border-color: rgba(0, 240, 255, 0.5);
-  background: rgba(0, 240, 255, 0.08);
-}
-
-.objective-kicker {
-  font-family: var(--font-mono);
-  font-size: clamp(7px, 0.6vw, 9px);
-  color: var(--text-muted);
-  letter-spacing: 0.1em;
-  margin-bottom: 3px;
-}
-
-#objective-title {
-  font-family: var(--font-display);
-  font-size: clamp(10px, 0.9vw, 14px);
-  color: var(--text-primary);
-  margin-bottom: 4px;
-  line-height: 1.2;
-}
-
-#objective-body {
-  font-family: var(--font-sans);
-  font-size: clamp(9px, 0.75vw, 11px);
-  color: var(--text-muted);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-
-.objective-tracked-badge {
-  font-family: var(--font-mono);
-  font-size: clamp(7px, 0.6vw, 9px);
-  color: var(--cyber-cyan);
-  letter-spacing: 0.15em;
-}
-
-.objective-progress {
-  font-family: var(--font-mono);
-  font-size: clamp(7px, 0.6vw, 9px);
-  color: var(--text-muted);
-  margin-top: 3px;
-}
-
+/* ── BOTTOM LEFT: SHIP STATUS — full skewed trapezoid ── */
 .cockpit-frame.cockpit-frame-left {
   position: fixed;
   bottom: 0;
   left: 0;
-  width: clamp(240px, 22vw, 340px);
-  height: clamp(200px, 22vh, 280px);
+  width: clamp(280px, 26vw, 400px);
+  height: clamp(220px, 26vh, 320px);
   z-index: 9100;
-  clip-path: polygon(0 0, 88% 0, 100% 12%, 100% 100%, 0 100%);
-  background: rgba(6, 10, 23, 0.82);
-  border-right: 1px solid rgba(0, 240, 255, 0.25);
-  border-top: 1px solid rgba(0, 240, 255, 0.2);
+  overflow: hidden;
+  /* Trapezoid: bottom-left and top-left flush, top-right diagonal */
+  clip-path: polygon(0 16%, 12% 0, 100% 0, 100% 100%, 0 100%);
+  background:
+    linear-gradient(315deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
+  border-right: 1px solid rgba(0, 240, 255, 0.35);
+  border-top: 1px solid rgba(0, 240, 255, 0.25);
+  box-shadow: inset 0 -20px 40px rgba(0, 240, 255, 0.04), 0 -2px 18px rgba(0, 0, 0, 0.5);
+  /* Subtle overall panel skew — cockpit lean */
   transform: none;
-  overflow: hidden;
-}
-
-.cockpit-frame-content {
-  position: absolute;
-  inset: 0;
-  padding: clamp(8px, 1vw, 14px);
-  transform: skewX(-2deg);
-  overflow: hidden;
 }
 
 .cockpit-frame.cockpit-frame-left .cockpit-frame-content {
-  padding: clamp(8px, 1vw, 14px);
-  transform: skewX(-2deg);
+  position: absolute;
+  inset: 0;
+  padding: clamp(10px, 1.4vw, 20px) clamp(14px, 1.6vw, 24px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: none;
 }
 
 .resource-panel-title {
   font-family: var(--font-display);
-  font-size: clamp(8px, 0.7vw, 11px);
-  letter-spacing: 0.15em;
+  font-size: clamp(9px, 0.75vw, 12px);
+  letter-spacing: 0.18em;
   color: var(--cyber-cyan);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
-}
-
-.flight-resource-panel {
-  width: 100%;
-  height: 100%;
-  display: block;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  opacity: 1;
-  pointer-events: none;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.22);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
 .resource-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1px;
+  margin-bottom: 0px;
 }
 
 .resource-row span {
   font-family: var(--font-mono);
-  font-size: clamp(9px, 0.75vw, 11px);
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
+  font-size: clamp(9px, 0.78vw, 12px);
+  color: rgba(148, 200, 220, 0.8);
+  letter-spacing: 0.08em;
 }
 
 .resource-row strong {
   font-family: var(--font-mono);
-  font-size: clamp(10px, 0.85vw, 13px);
+  font-size: clamp(10px, 0.9vw, 14px);
   color: var(--cyber-yellow);
+  letter-spacing: 0.05em;
 }
 
 .resource-meter {
-  height: 3px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 2px;
-  margin-bottom: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  margin-bottom: 6px;
   overflow: hidden;
+  position: relative;
+}
+
+/* Angled end on meter — cockpit detail */
+.resource-meter::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  clip-path: polygon(4px 0, 100% 0, 100% 100%, 0 100%);
+  z-index: 1;
 }
 
 .resource-meter span {
   display: block;
   height: 100%;
-  background: var(--cyber-cyan);
-  transition: width 0.3s ease;
+  transition: width 0.35s ease;
+  box-shadow: 0 0 6px currentColor;
 }
 
-.resource-meter.shield span { background: var(--cyber-cyan); }
-.resource-meter.energy span { background: var(--cyber-green); }
-.resource-meter.heat span { background: var(--cyber-pink); }
-.resource-meter.fuel span { background: var(--cyber-green); }
+.resource-meter.shield span { background: var(--cyber-cyan); color: var(--cyber-cyan); }
+.resource-meter.energy span { background: var(--cyber-green); color: var(--cyber-green); }
+.resource-meter.heat span   { background: var(--cyber-pink); color: var(--cyber-pink); }
+.resource-meter.fuel span   { background: var(--cyber-green); color: var(--cyber-green); }
+.resource-meter.armor span  { background: rgba(148, 163, 184, 0.7); }
+.resource-meter.ammo span   { background: var(--cyber-yellow); color: var(--cyber-yellow); }
+.resource-meter.missile span { background: var(--cyber-pink); color: var(--cyber-pink); }
 
+/* ── BOTTOM RIGHT: COMBAT/NAV STATS ── */
 #flight-hud {
   position: fixed;
   bottom: 0;
   right: 0;
-  width: clamp(280px, 28vw, 400px);
-  height: clamp(200px, 22vh, 280px);
-  min-width: 0;
+  width: clamp(280px, 28vw, 420px);
+  height: clamp(220px, 26vh, 320px);
   z-index: 9100;
-  clip-path: polygon(0 12%, 12% 0, 100% 0, 100% 100%, 0 100%);
-  background: rgba(6, 10, 23, 0.82);
-  border: 0;
-  border-left: 1px solid rgba(0, 240, 255, 0.25);
-  border-top: 1px solid rgba(0, 240, 255, 0.2);
-  padding: 0;
-  transform: none;
   overflow: hidden;
+  /* Mirror of bottom-left: diagonal on top-left corner */
+  clip-path: polygon(0 0, 88% 0, 100% 16%, 100% 100%, 0 100%);
+  background:
+    linear-gradient(225deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
+  border-left: 1px solid rgba(0, 240, 255, 0.35);
+  border-top: 1px solid rgba(0, 240, 255, 0.25);
+  box-shadow: inset 0 -20px 40px rgba(0, 240, 255, 0.04), 0 -2px 18px rgba(0, 0, 0, 0.5);
+  transform: none;
+  padding: 0;
   box-shadow: none;
 }
 
@@ -3077,11 +2796,11 @@ body.flight-active #flight-hud {
 .flight-hud-inner {
   position: absolute;
   inset: 0;
-  padding: clamp(8px, 1vw, 14px);
-  transform: skewX(2deg);
+  padding: clamp(10px, 1.4vw, 20px) clamp(14px, 1.6vw, 22px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transform: none;
 }
 
 .flight-hud-header {
@@ -3089,82 +2808,115 @@ body.flight-active #flight-hud {
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-display);
-  font-size: clamp(8px, 0.7vw, 11px);
-  letter-spacing: 0.12em;
+  font-size: clamp(9px, 0.75vw, 12px);
+  letter-spacing: 0.15em;
   color: var(--cyber-cyan);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.22);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
 #flight-status {
-  font-size: clamp(7px, 0.6vw, 9px);
+  font-size: clamp(8px, 0.65vw, 10px);
   color: var(--cyber-green);
   letter-spacing: 0.1em;
+  text-shadow: 0 0 6px rgba(0, 255, 100, 0.5);
 }
 
 .flight-hud-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3px 10px;
+  gap: 4px 12px;
   flex: 1;
   overflow: hidden;
+  align-content: start;
 }
 
 .flight-hud-grid > div {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 
 .flight-hud-label {
   font-family: var(--font-mono);
   font-size: clamp(7px, 0.6vw, 9px);
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
+  color: rgba(148, 200, 220, 0.65);
+  letter-spacing: 0.08em;
   line-height: 1;
+  text-transform: uppercase;
 }
 
+.flight-hud strong,
 .flight-hud-grid strong {
   font-family: var(--font-mono);
-  font-size: clamp(10px, 0.85vw, 12px);
+  font-size: clamp(10px, 0.9vw, 13px);
   color: var(--cyber-yellow);
-  line-height: 1.2;
+  line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.04em;
 }
 
 .flight-hud-help {
   font-family: var(--font-mono);
   font-size: clamp(6px, 0.55vw, 8px);
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
+  color: rgba(148, 200, 220, 0.4);
+  letter-spacing: 0.06em;
   margin-top: auto;
-  padding-top: 4px;
+  padding-top: 6px;
   border-top: 1px solid rgba(0, 240, 255, 0.1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* ── COCKPIT DASH BAR — center bottom ── */
 .cockpit-dash {
   position: fixed;
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 16px;
-  padding: 4px 16px;
+  gap: 20px;
+  padding: 5px 20px;
   font-family: var(--font-mono);
-  font-size: clamp(7px, 0.6vw, 9px);
-  color: var(--text-muted);
+  font-size: clamp(7px, 0.62vw, 9px);
+  color: rgba(148, 200, 220, 0.5);
   letter-spacing: 0.08em;
-  background: rgba(6, 10, 23, 0.7);
-  border-top: 1px solid rgba(0, 240, 255, 0.15);
+  background: rgba(3, 8, 20, 0.7);
+  border-top: 1px solid rgba(0, 240, 255, 0.12);
   z-index: 9200;
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* ── CORNER ACCENT LINES — pure decoration ── */
+/* Top-left corner slash accent */
+.radar-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.6), transparent);
+  pointer-events: none;
+}
+
+/* Bottom-right corner slash accent */
+#flight-hud::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 60%;
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.6), transparent);
+  pointer-events: none;
 }
 
 .hud-hidden-telemetry {
@@ -3178,11 +2930,21 @@ body.flight-active #flight-hud {
   pointer-events: none !important;
 }
 
-.scanlines { z-index: 200 !important; }
-.cyber-bg-grid { z-index: 1 !important; }
-.cyber-bg-gradient { z-index: 2 !important; }
-#adrenaline-vignette { z-index: 300 !important; }
-.cockpit-vignette { z-index: 9050; pointer-events: none; }
-#labels-container { z-index: 5000 !important; }
-.custom-cursor { z-index: 10000; }
-.cockpit-overlay { z-index: 9000; }
+/* ── Z-INDEX GUARD ── */
+.scanlines            { z-index: 200 !important; }
+.cyber-bg-grid        { z-index: 1 !important; }
+.cyber-bg-gradient    { z-index: 2 !important; }
+#adrenaline-vignette  { z-index: 300 !important; pointer-events: none; }
+.cockpit-vignette     { z-index: 9050; pointer-events: none; }
+#labels-container     { z-index: 5000 !important; }
+.custom-cursor        { z-index: 10000 !important; }
+
+/* ── SUPPRESS old cockpit-frame-right completely in flight ── */
+body.flight-active .cockpit-frame.cockpit-frame-right {
+  display: none !important;
+}
+
+body.flight-active .cockpit-frame.cockpit-frame-left {
+  /* The new fixed-position block below overrides layout; suppress old absolute positioning */
+  position: fixed !important;
+}
