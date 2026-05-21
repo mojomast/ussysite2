@@ -184,6 +184,7 @@ const constellationScale = 2.25;
 const flightUniverseScale = 10;
 const nodeBaseScale = 1;
 const planetNodeRadius = isCoarsePointer ? 1.55 : 1.75;
+const planetNodeFlightScale = isCoarsePointer ? 3.8 : 4.4;
 const planetNodeHitRadius = isCoarsePointer ? planetNodeRadius * 1.18 : planetNodeRadius * 1.06;
 const planetLabelRadius = planetNodeRadius * 1.35;
 const landingRange = 7.2;
@@ -1934,9 +1935,11 @@ function buildRelatedProjectEdges() {
 function applyFlightUniverseScale(scale) {
   if (activeUniverseScale === scale) return;
   activeUniverseScale = scale;
+  const visualScale = scale === flightUniverseScale ? planetNodeFlightScale : 1;
   projectNodes.forEach(node => {
     if (!node.userData.basePosition) node.userData.basePosition = node.position.clone();
     node.position.copy(node.userData.basePosition).multiplyScalar(scale);
+    node.scale.setScalar((node.userData.baseScale ?? nodeBaseScale) * visualScale);
     const line = node.userData.connectionLine;
     if (line && line.geometry && line.geometry.attributes.position) {
       const position = line.geometry.attributes.position;

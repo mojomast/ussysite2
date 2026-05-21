@@ -29,7 +29,7 @@ Keyboard and mouse events mutate `flightState`. The animation loop applies physi
 
 ## Space Visuals
 
-`main.js` keeps the flight visuals browser-local and allocation-stable. Project nodes render as planet-scale `THREE.LOD` objects with high-detail icosphere, medium icosphere, far sprite impostor, and additive BackSide glow shells. Invisible raycast spheres remain in `projectHitTargets` and are sized to the visible planet radius so clicks still resolve the same project objects.
+`main.js` keeps the flight visuals browser-local and allocation-stable. Project nodes render as planet-scale `THREE.LOD` objects with high-detail icosphere, medium icosphere, far sprite impostor, and additive BackSide glow shells. Flight mode applies an additional planet visual multiplier so bodies read at planetary scale while console mode remains readable. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
 
 Flight mode adds camera-relative depth cues only while `isFlightActive` is true: three existing `THREE.Points` star layers use different parallax factors, one `InstancedMesh` debris field recycles up to 300 low-poly rocks around the ship, and one `BufferGeometry` dust stream recycles up to 600 particles ahead of the camera. Nebula sprites are static additive canvas-gradient backdrops.
 
