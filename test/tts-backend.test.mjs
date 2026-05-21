@@ -40,7 +40,7 @@ test('health endpoint reports backend TTS configuration without exposing key', a
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.configured, Boolean(process.env.OPENROUTER_API_KEY));
-    assert.equal(body.model, process.env.OPENROUTER_TTS_MODEL || 'openai/gpt-audio');
+    assert.equal(body.model, process.env.OPENROUTER_TTS_MODEL || 'hexgrad/kokoro-82m');
     assert.equal(body.voice, process.env.OPENROUTER_TTS_VOICE || 'onyx');
     assert.equal(body.format, process.env.OPENROUTER_TTS_FORMAT || 'pcm16');
     assert.equal(body.sampleRate, Number(process.env.OPENROUTER_TTS_SAMPLE_RATE || 24000));

@@ -26,11 +26,21 @@ loadLocalEnv();
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
 const publicOrigin = process.env.PUBLIC_ORIGIN || '';
-const openRouterModel = process.env.OPENROUTER_TTS_MODEL || 'openai/gpt-audio';
+const openRouterModel = process.env.OPENROUTER_TTS_MODEL || 'hexgrad/kokoro-82m';
 const openRouterVoice = process.env.OPENROUTER_TTS_VOICE || 'onyx';
 const openRouterFormat = process.env.OPENROUTER_TTS_FORMAT || 'pcm16';
 const openRouterSampleRate = Number(process.env.OPENROUTER_TTS_SAMPLE_RATE || 24000);
 const maxBodyBytes = 16 * 1024;
+
+export const KOKORO_VOICE_MAP = {
+  onyx: 'am_adam',
+  alloy: 'af_heart',
+  echo: 'am_michael',
+  fable: 'bf_emma',
+  nova: 'af_nova',
+  shimmer: 'af_sky',
+  default: 'am_adam'
+};
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -87,9 +97,25 @@ function readRequestJson(req) {
   });
 }
 
-function buildOpenRouterPayload({ text, voiceId, format }) {
+function isKokoroModel(model = openRouterModel) {
+  return String(model).startsWith('hexgrad/kokoro');
+}
+
+function mapKokoroVoiceId(voiceId = openRouterVoice) {
+  return KOKORO_VOICE_MAP[voiceId] || voiceId || KOKORO_VOICE_MAP.default;
+}
+
+export function buildOpenRouterPayload({ text, voiceId, format, model = openRouterModel }) {
+  if (isKokoroModel(model)) {
+    return {
+      model,
+      input: text,
+      voice: mapKokoroVoiceId(voiceId || openRouterVoice)
+    };
+  }
+
   return {
-    model: openRouterModel,
+    model,
     messages: [
       {
         role: 'system',
@@ -150,8 +176,11 @@ function createWavFromPcm16(pcmBuffer, sampleRate = openRouterSampleRate) {
 async function fetchOpenRouterSpeech(payload, origin = 'http://localhost') {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return { status: 503, error: 'OPENROUTER_API_KEY is not configured on the server' };
+  const endpoint = isKokoroModel(payload.model)
+    ? 'https://openrouter.ai/api/v1/audio/speech'
+    : 'https://openrouter.ai/api/v1/chat/completions';
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -188,7 +217,7 @@ async function fetchOpenRouterSpeech(payload, origin = 'http://localhost') {
 
   const data = await response.json();
   const audioData = data?.choices?.[0]?.message?.audio?.data;
-  const audioFormat = data?.choices?.[0]?.message?.audio?.format || payload.audio.format || openRouterFormat;
+  const audioFormat = data?.choices?.[0]?.message?.audio?.format || payload.audio?.format || openRouterFormat;
   if (!audioData) return { status: 502, error: 'OpenRouter response did not include audio data' };
 
   return {
@@ -269,7 +298,8 @@ export function createAppServer() {
         model: openRouterModel,
         voice: openRouterVoice,
         format: openRouterFormat,
-        sampleRate: openRouterSampleRate
+        sampleRate: openRouterSampleRate,
+        kokoroVoiceMap: KOKORO_VOICE_MAP
       });
       return;
     }

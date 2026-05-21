@@ -1,6 +1,6 @@
 # USSYVERSE Site
 
-Three.js portfolio site with a hidden USSYVERSE dogfight mode and browser-native TTS radio chatter.
+Three.js portfolio site with a hidden USSYVERSE dogfight mode and OpenRouter-backed TTS radio chatter.
 
 ## Local Setup
 
@@ -31,7 +31,7 @@ The browser never receives the OpenRouter API key. `app.js` calls the same-origi
 Defaults:
 
 ```bash
-OPENROUTER_TTS_MODEL=openai/gpt-audio
+OPENROUTER_TTS_MODEL=hexgrad/kokoro-82m
 OPENROUTER_TTS_VOICE=onyx
 OPENROUTER_TTS_FORMAT=pcm16
 OPENROUTER_TTS_SAMPLE_RATE=24000
@@ -39,7 +39,9 @@ HOST=127.0.0.1
 PORT=3000
 ```
 
-OpenRouter currently requires streamed `pcm16` output for this audio model. The backend assembles the streamed PCM chunks and returns `audio/wav` to the browser so the existing Web Audio radio chain can decode and process it.
+Kokoro is the default backend TTS model. OpenAI-style voice names are mapped server-side to Kokoro voice IDs, and the backend returns the upstream `audio/*` response to the browser for Web Audio playback.
+
+To switch back to GPT Audio, set `OPENROUTER_TTS_MODEL=openai/gpt-audio`. See `docs/TTS.md` for the voice map, endpoint differences, and multi-channel audio behavior.
 
 Security notes:
 

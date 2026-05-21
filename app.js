@@ -520,9 +520,67 @@ const radioChain = {
   }
 };
 
+const combatAudio = {
+  ctx: null,
+  active: [],
+  maxConcurrent: 2,
+  gainNode: null,
+
+  init() {
+    if (this.ctx) return;
+    if (!radioChain.ctx) return;
+    this.ctx = radioChain.ctx;
+    this.gainNode = this.ctx.createGain();
+    this.gainNode.gain.value = 0.75;
+    this.gainNode.connect(this.ctx.destination);
+  },
+
+  async bark(text, persona = {}) {
+    if (!ttsEngine.enabled || !text) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const radioText = preprocessRadioText(text);
+    if (!radioText) return;
+    const blob = await fetchTTSSpeech(radioText, persona);
+    if (!blob) return;
+
+    const arrayBuffer = await blob.arrayBuffer();
+    let audioBuffer;
+    try {
+      audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+    } catch {
+      return;
+    }
+
+    if (this.active.length >= this.maxConcurrent) {
+      const oldest = this.active.shift();
+      try { oldest.source.stop(); } catch {}
+    }
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(this.gainNode);
+    const entry = { source, startedAt: this.ctx.currentTime };
+    this.active.push(entry);
+    source.onended = () => {
+      const idx = this.active.indexOf(entry);
+      if (idx !== -1) this.active.splice(idx, 1);
+    };
+    source.start();
+  },
+
+  stopAll() {
+    for (const { source } of this.active) {
+      try { source.stop(); } catch {}
+    }
+    this.active = [];
+  }
+};
+
 const ttsConfig = {
   endpoint: '/api/tts',
-  model: 'openai/gpt-audio',
+  model: 'hexgrad/kokoro-82m',
   voiceId: 'onyx',
   audioFormat: 'pcm16',
   enabled: true
@@ -574,6 +632,7 @@ window.__USSY_TTS_DEBUG__ = {
   setTTSBackendEnabled,
   fetchTTSSpeech,
   buildBackendTTSRequest,
+  combatAudio,
   preprocessRadioText,
   getVoicePersona: source => getVoicePersona(source)
 };
@@ -1766,6 +1825,7 @@ function enterFlightMode() {
 
 function exitFlightMode(releasePointer = true) {
   ttsEngine.stop();
+  combatAudio.stopAll();
   isFlightActive = false;
   flightState.pointerLocked = false;
   flightState.keys.clear();
@@ -2144,7 +2204,7 @@ function registerMissionKill() {
       'BREAKING RIGHT',
       'ENGAGED'
     ];
-    ttsEngine.speak(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85, priority: 'low' });
+    combatAudio.bark(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85, priority: 'low' });
     showGameMessage({
       type: 'MISSION PROGRESS',
       source: 'COMBAT SYSTEM',
@@ -2645,7 +2705,7 @@ function updateFlight(time) {
           flightState.missiles -= 1;
           flightState.energy = Math.max(0, flightState.energy - flightState.missileEnergyCost);
           flightState.status = 'MISSILE AWAY';
-          ttsEngine.speak('FOX TWO', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
+          combatAudio.bark('FOX TWO', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
         }
       }
       flightState.lastMissile = time;
@@ -2683,7 +2743,7 @@ function updateProjectLandingTarget() {
     const isFinalApproach = isMissionApproach && flightState.nearestDistance < activeLandingRange * 1.5;
     if (isFinalApproach && !flightState.finalApproachSpoken) {
       flightState.finalApproachSpoken = true;
-      ttsEngine.speak('FINAL APPROACH', { ...getVoicePersona('NAVIGATION'), priority: 'normal' });
+      combatAudio.bark('FINAL APPROACH', { ...getVoicePersona('NAVIGATION'), priority: 'normal' });
     } else if (!isFinalApproach) {
       flightState.finalApproachSpoken = false;
     }
@@ -2787,11 +2847,11 @@ function applyPlayerDamage(amount) {
   }
   const shieldDrop = shieldBefore - flightState.shield;
   if (shieldDrop > 15) {
-    ttsEngine.speak('TAKING FIRE', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
+    combatAudio.bark('TAKING FIRE', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
   }
   if (flightState.shield < 25 && !flightState.shieldCriticalSpoken) {
     flightState.shieldCriticalSpoken = true;
-    window.setTimeout(() => ttsEngine.speak('SHIELDS CRITICAL', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' }), shieldDrop > 15 ? 450 : 0);
+    window.setTimeout(() => combatAudio.bark('SHIELDS CRITICAL', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' }), shieldDrop > 15 ? 450 : 0);
   }
 }
 

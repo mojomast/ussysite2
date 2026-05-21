@@ -15,7 +15,7 @@ const voiceId = extractStringConfig('voiceId');
 const audioFormat = extractStringConfig('audioFormat');
 
 test('browser TTS config uses the local backend endpoint', () => {
-  assert.equal(model, 'openai/gpt-audio');
+  assert.equal(model, 'hexgrad/kokoro-82m');
   assert.equal(voiceId, 'onyx');
   assert.equal(audioFormat, 'pcm16');
   assert.match(appSource, /endpoint:\s*'\/api\/tts'/);
@@ -73,8 +73,8 @@ test('mission transmissions outrank low-priority combat barks', () => {
   assert.match(appSource, /priority: 'high'/);
   assert.match(appSource, /priority: 'low'/);
   assert.match(appSource, /ttsEngine\.speak\(text, \{\n\s+\.\.\.getVoicePersona\(source\),\n\s+priority: 'high'/);
-  assert.match(appSource, /ttsEngine\.speak\('FOX TWO', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
-  assert.match(appSource, /ttsEngine\.speak\('TAKING FIRE', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
+  assert.match(appSource, /combatAudio\.bark\('FOX TWO', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
+  assert.match(appSource, /combatAudio\.bark\('TAKING FIRE', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
 });
 
 test('configured OpenRouter model exists and can output audio', { skip: !process.env.OPENROUTER_VALIDATE_MODELS }, async () => {
