@@ -1,5 +1,10 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
+import { configureTrader, openTradeMenu, refuelAt, traderState, updateFuelDrain } from './economy/trader.js';
+
+const USSY_PROJECTS = window.USSY_PROJECTS || [];
+const USSY_CATEGORIES = window.USSY_CATEGORIES || {};
+
 let scene, camera, renderer;
 let coreGroup, nodesGroup, connectionsGroup;
 let coreMesh, coreOuterParticles;
@@ -98,6 +103,9 @@ const flightState = {
   energy: 100,
   ammo: 240,
   missiles: 8,
+  fuel: 100,
+  maxFuel: 100,
+  fuelDepleted: false,
   lastTime: 0,
   lastShot: 0,
   lastMissile: 0,
@@ -525,7 +533,8 @@ const ttsConfig = {
   model: 'openai/gpt-audio',
   voiceId: 'onyx',
   audioFormat: 'pcm16',
-  enabled: true
+  enabled: false,
+  key: ''
 };
 
 function setTTSBackendEnabled(enabled = true) {
@@ -533,7 +542,13 @@ function setTTSBackendEnabled(enabled = true) {
   return ttsConfig.enabled;
 }
 
-window.setTTSBackendEnabled = setTTSBackendEnabled;
+function setTTSKey(key) {
+  ttsConfig.key = String(key || '');
+  ttsConfig.enabled = Boolean(ttsConfig.key);
+  return ttsConfig.enabled;
+}
+
+window.setTTSKey = setTTSKey;
 
 function buildBackendTTSRequest(text, persona = {}) {
   return {
@@ -568,15 +583,6 @@ async function fetchTTSSpeech(text, persona = {}, signal = null) {
     return null;
   }
 }
-
-window.__USSY_TTS_DEBUG__ = {
-  ttsConfig,
-  setTTSBackendEnabled,
-  fetchTTSSpeech,
-  buildBackendTTSRequest,
-  preprocessRadioText,
-  getVoicePersona: source => getVoicePersona(source)
-};
 
 if (ttsEngine.supported) {
   window.speechSynthesis.onvoiceschanged = () => ttsEngine.initVoices();
@@ -670,6 +676,8 @@ const flightShieldsDetail = document.getElementById('flight-shields-detail');
 const flightShieldBar = document.getElementById('flight-shield-bar');
 const flightEnergy = document.getElementById('flight-energy');
 const flightEnergyBar = document.getElementById('flight-energy-bar');
+const flightFuel = document.getElementById('flight-fuel');
+const flightFuelBar = document.getElementById('flight-fuel-bar');
 const flightArmor = document.getElementById('flight-armor');
 const flightArmorBar = document.getElementById('flight-armor-bar');
 const flightAmmo = document.getElementById('flight-ammo');
@@ -704,6 +712,13 @@ let inspectHowLabel, inspectHowBody;
 
 // Init application
 function init() {
+  configureTrader({
+    showGameMessage,
+    dismissGameMessage,
+    updateFlightHud,
+    getVoicePersona
+  });
+
   // Initialize Three.js Scene
   scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x03060f, 0.02);
@@ -1721,6 +1736,13 @@ function enterFlightMode() {
   flightState.energy = 100;
   flightState.ammo = maxPlayerAmmo;
   flightState.missiles = maxPlayerMissilesStored;
+  flightState.fuel = flightState.maxFuel;
+  flightState.fuelDepleted = false;
+  flightState.thrust = 14;
+  flightState.strafe = 8;
+  traderState.fuel = traderState.maxFuel;
+  traderState.docked = false;
+  traderState.dockedStation = null;
   flightState.lastTime = 0;
   flightState.lastShot = 0;
   flightState.lastMissile = 0;
@@ -1776,6 +1798,8 @@ function exitFlightMode(releasePointer = true) {
   flightState.navEta = '--';
   flightState.autopilot = false;
   flightState.vel.set(0, 0, 0);
+  traderState.docked = false;
+  traderState.dockedStation = null;
   document.body.classList.remove('flight-active', 'pointer-unlocked', 'flight-third-person');
   if (gameRoot) gameRoot.visible = false;
   applyFlightUniverseScale(1);
@@ -2199,11 +2223,14 @@ function landOnNearestProject() {
   if (!handleMissionLanding(project)) return;
   restockAtProject(project);
   flightState.landed = true;
+  traderState.docked = true;
+  traderState.dockedStation = project.id;
   flightState.vel.set(0, 0, 0);
   selectProject(project.id, false);
   if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
     document.exitPointerLock();
   }
+  openTradeMenu(project.id);
 }
 
 function restockAtProject(project) {
@@ -2212,6 +2239,11 @@ function restockAtProject(project) {
   flightState.ammo = maxPlayerAmmo;
   flightState.missiles = maxPlayerMissilesStored;
   flightState.energy = 100;
+  refuelAt(project.id, { free: true, silent: true });
+  flightState.fuel = traderState.fuel;
+  flightState.fuelDepleted = false;
+  flightState.thrust = 14;
+  flightState.strafe = 8;
   flightState.shieldCriticalSpoken = false;
   flightState.finalApproachSpoken = false;
   flightState.status = `RESTOCKED AT ${project.name.toUpperCase()}`;
@@ -2329,6 +2361,11 @@ function onGlobalKeyDown(event) {
   if (event.code === 'KeyL') {
     event.preventDefault();
     if (!event.repeat) landOnNearestProject();
+    return;
+  }
+  if (event.code === 'KeyT') {
+    event.preventDefault();
+    if (!event.repeat && flightState.landed && traderState.dockedStation) openTradeMenu(traderState.dockedStation);
     return;
   }
   if (event.code === 'KeyM') {
@@ -2654,6 +2691,21 @@ function updateFlight(time) {
 
   flightState.vel.multiplyScalar(Math.pow(flightState.damping, dt * 60));
   flightState.pos.addScaledVector(flightState.vel, dt);
+  const isThrusting = flightState.keys.has('KeyW') || flightState.keys.has('KeyS')
+    || flightState.keys.has('ArrowUp') || flightState.keys.has('ArrowDown')
+    || flightState.autopilot;
+  if (updateFuelDrain(dt, isThrusting) && !flightState.fuelDepleted) {
+    flightState.fuelDepleted = true;
+    flightState.thrust = 2;
+    flightState.strafe = 1;
+    showGameMessage({
+      type: 'CRITICAL SYSTEM',
+      source: 'USSYVERSE CONTROL',
+      text: 'FUEL DEPLETED. THRUST REDUCED TO EMERGENCY DRIFT. DOCK AT ANY STATION TO REFUEL.'
+    });
+    ttsEngine.speak('FUEL DEPLETED. EMERGENCY DRIFT ONLY.', getVoicePersona('USSYVERSE CONTROL'));
+  }
+  flightState.fuel = traderState.fuel;
   flightState.pos.clampLength(1.8, flightBounds * activeUniverseScale);
 
   updateProjectLandingTarget();
@@ -2981,6 +3033,14 @@ function updateFlightHud(force) {
   if (flightShieldBar) flightShieldBar.style.width = `${Math.max(0, flightState.shield).toFixed(1)}%`;
   if (flightEnergy) flightEnergy.textContent = `${Math.round(flightState.energy)}%`;
   if (flightEnergyBar) flightEnergyBar.style.width = `${Math.max(0, flightState.energy).toFixed(1)}%`;
+  const fuelPercent = Math.max(0, Math.min(100, traderState.fuel));
+  const fuelColor = fuelPercent < 25 ? 'rgba(255, 68, 85, 0.88)' : (fuelPercent <= 50 ? 'rgba(255, 204, 0, 0.9)' : 'rgba(0, 255, 102, 0.84)');
+  flightState.fuel = fuelPercent;
+  if (flightFuel) flightFuel.textContent = `${Math.round(fuelPercent)}%`;
+  if (flightFuelBar) {
+    flightFuelBar.style.width = `${fuelPercent.toFixed(1)}%`;
+    flightFuelBar.style.background = fuelColor;
+  }
   if (flightArmor) flightArmor.textContent = `${Math.round(flightState.armor)}%`;
   if (flightArmorBar) flightArmorBar.style.width = `${Math.max(0, flightState.armor).toFixed(1)}%`;
   if (flightAmmo) flightAmmo.textContent = `${flightState.ammo}/${maxPlayerAmmo}`;

@@ -1,76 +1,69 @@
-# USSYVERSE Site
+# USSYSITE2
 
-Three.js portfolio site with a hidden USSYVERSE dogfight mode and browser-native TTS radio chatter.
+USSYSITE2 is the USSYVERSE portfolio site: a browser-native Three.js project constellation with a hidden space combat and trade easter egg. The public site is a cybernetic 3D index of projects from `projects.js`; typing `ussy` launches the flight layer where those project nodes become stations.
 
-## Local Setup
+## How To Run
 
-1. Copy the example environment file:
+Open `index.html` in a browser. There is no build step, bundler, or package install required for the static site.
 
-   ```bash
-   cp .env.example .env
-   ```
+Optional local server and backend TTS support still use `server.mjs` via `npm start`.
 
-2. Put the real OpenRouter key in `.env`:
+## Easter Egg
 
-   ```bash
-   OPENROUTER_API_KEY=sk-or-v1-...
-   ```
+Type `ussy` anywhere outside an input field to enter dogfight mode.
 
-3. Start the local backend/static server:
+## Controls
 
-   ```bash
-   npm start
-   ```
+| Control | Action |
+| --- | --- |
+| `W` / `S` or arrow up/down | Forward/reverse thrust, drains fuel |
+| `A` / `D` or arrow left/right | Strafe |
+| `Q` / `E` | Roll |
+| Mouse | Mouselook while pointer locked |
+| Left mouse | Fire lasers |
+| Right mouse | Fire missile |
+| `V` | Set nav target from crosshair project |
+| `P` | Toggle autopilot |
+| `C` | Toggle cockpit/chase view |
+| `L` | Land and restock at nearby project station |
+| `T` | Open trade menu while landed |
+| `Space` | Confirm/dismiss station and mission messages |
+| `M` | Toggle TTS radio |
+| `Escape` | Exit flight mode when pointer is unlocked |
 
-4. Open `http://127.0.0.1:3000`.
+## File Structure
 
-## TTS Backend
-
-The browser never receives the OpenRouter API key. `app.js` calls the same-origin `/api/tts` endpoint, and `server.mjs` proxies the request to OpenRouter using `OPENROUTER_API_KEY` from the server environment.
-
-Defaults:
-
-```bash
-OPENROUTER_TTS_MODEL=openai/gpt-audio
-OPENROUTER_TTS_VOICE=onyx
-OPENROUTER_TTS_FORMAT=pcm16
-OPENROUTER_TTS_SAMPLE_RATE=24000
-HOST=127.0.0.1
-PORT=3000
+```text
+index.html
+index.css
+projects.js
+js/
+  main.js
+  engine/
+  flight/
+  tts/
+  ui/
+  economy/trader.js
+docs/
+  ARCHITECTURE.md
+  ECONOMY.md
+  TTS.md
 ```
 
-OpenRouter currently requires streamed `pcm16` output for this audio model. The backend assembles the streamed PCM chunks and returns `audio/wav` to the browser so the existing Web Audio radio chain can decode and process it.
+`projects.js` remains a standalone script and exposes `window.USSY_PROJECTS` and `window.USSY_CATEGORIES` for module code.
 
-Security notes:
+## TTS
 
-- `.env` is ignored by git and must not be committed.
-- `/api/tts` rejects missing-origin and cross-origin POST requests.
-- `HOST=127.0.0.1` keeps the Node server local by default.
-- If exposing this publicly, put it behind a reverse proxy and add rate limiting or authentication to prevent same-origin abuse.
+Browser Web Speech API is used by default. Optional backend/AI voice support can be enabled from the browser console with:
 
-## Tests
-
-Run the default contract tests:
-
-```bash
-npm test
+```js
+window.setTTSKey('your-key')
 ```
 
-Validate the configured OpenRouter model against the public model catalog:
+## Economy
 
-```bash
-npm run test:tts:models
-```
+The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The player starts with credits, fuel, and an empty cargo hold. Project nodes act as stations with deterministic markets: production goods are cheap, demand goods sell high, and prices vary by station/commodity hash.
 
-Run a live backend TTS smoke test using `.env` or an exported `OPENROUTER_API_KEY`:
+## Adding Projects
 
-```bash
-OPENROUTER_LIVE_TTS=1 npm run test:tts:live
-```
-
-Syntax checks:
-
-```bash
-node --check app.js
-node --check server.mjs
-```
+Edit the `USSY_PROJECTS` array in `projects.js`. New projects automatically receive a graph node and a station profile based on category.

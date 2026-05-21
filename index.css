@@ -1592,6 +1592,10 @@ body.flight-active .flight-resource-panel {
   background: rgba(255, 204, 0, 0.9);
 }
 
+.resource-meter.fuel span {
+  background: rgba(0, 255, 102, 0.84);
+}
+
 .resource-meter.armor span {
   background: rgba(203, 213, 225, 0.86);
 }

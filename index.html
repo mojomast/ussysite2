@@ -354,7 +354,7 @@
             <strong id="flight-autopilot">OFF</strong>
           </div>
         </div>
-        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // LMB lasers // RMB missiles // V set nav // P autopilot // C view // SPACE confirm // L land/restock</div>
+        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // LMB lasers // RMB missiles // V set nav // P autopilot // C view // T trade // SPACE confirm // L land/restock</div>
       </div>
       <div></div> <!-- Spacer -->
     </div>
@@ -464,6 +464,8 @@
           <div class="resource-meter shield"><span id="flight-shield-bar"></span></div>
           <div class="resource-row"><span>ENERGY</span><strong id="flight-energy">100</strong></div>
           <div class="resource-meter energy"><span id="flight-energy-bar"></span></div>
+          <div class="resource-row"><span>FUEL</span><strong id="flight-fuel">100</strong></div>
+          <div class="resource-meter fuel"><span id="flight-fuel-bar"></span></div>
         </div>
       </div>
     </div>
@@ -486,6 +488,7 @@
     <div class="cockpit-dash">
       <span>COCKPIT_VIEW</span>
       <span>C_TOGGLES_CHASE_CAM</span>
+      <span>T_STATION_TRADE_WHEN_DOCKED</span>
     </div>
   </div>
 
@@ -497,7 +500,7 @@
   
   <!-- App JavaScript files -->
   <script src="projects.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="js/main.js"></script>
 
   <!-- Lucide Icon Renderer -->
   <script>

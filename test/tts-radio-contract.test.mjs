@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const appSource = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+const appSource = await readFile(new URL('../js/main.js', import.meta.url), 'utf8');
 
 function extractStringConfig(name) {
   const match = appSource.match(new RegExp(`${name}:\\s*'([^']+)'`));
@@ -28,8 +28,10 @@ test('browser TTS config uses the local backend endpoint', () => {
 
 test('browser console API only toggles the backend path', () => {
   assert.match(appSource, /function setTTSBackendEnabled\(enabled = true\)/);
-  assert.match(appSource, /window\.setTTSBackendEnabled = setTTSBackendEnabled/);
-  assert.match(appSource, /window\.__USSY_TTS_DEBUG__/);
+  assert.match(appSource, /function setTTSKey\(key\)/);
+  assert.match(appSource, /window\.setTTSKey = setTTSKey/);
+  assert.doesNotMatch(appSource, /window\.setTTSBackendEnabled/);
+  assert.doesNotMatch(appSource, /window\.__USSY_TTS_DEBUG__/);
 });
 
 test('browser request builder sends only speech options to backend', () => {
