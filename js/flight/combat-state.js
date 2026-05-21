@@ -57,10 +57,13 @@ export function isPlayerDead(state) {
 }
 
 export function respawnFlightState(state, base = {}) {
-  state.armor = base.armor ?? 100;
-  state.shield = base.shield ?? 100;
-  state.fuel = base.fuel ?? 100;
+  const hull = base.hull ?? state.maxHull ?? base.armor ?? state.maxArmor ?? 100;
+  if (Object.hasOwn(state, 'hull') || Object.hasOwn(base, 'hull') || Object.hasOwn(state, 'maxHull')) state.hull = hull;
+  state.armor = base.armor ?? state.maxArmor ?? hull;
+  state.shield = base.shield ?? state.maxShield ?? 100;
+  state.fuel = base.fuel ?? state.maxFuel ?? 100;
   state.fuelDepleted = false;
+  state.combatPhase = base.combatPhase ?? COMBAT_PHASES.IDLE;
   return state;
 }
 

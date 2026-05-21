@@ -252,6 +252,20 @@ export function canFireWeapon(state) {
   return !state.overheated && state.heat < state.maxHeat;
 }
 
+export function applyBurstHeatSequence(state, weapon = {}) {
+  const burstCount = Math.max(1, weapon.burstCount ?? 1);
+  const heatPerShot = weapon.overheatBuildup ?? 0;
+  const fired = [];
+
+  for (let shot = 0; shot < burstCount; shot += 1) {
+    if (!canFireWeapon(state)) break;
+    applyHeatShot(state, heatPerShot);
+    fired.push({ shot: shot + 1, heat: state.heat, overheated: state.overheated });
+  }
+
+  return { state, fired, skipped: burstCount - fired.length };
+}
+
 export function getAdrenalineState({ armor, maxArmor = 100 }, threshold = 0.25) {
   const ratio = maxArmor > 0 ? armor / maxArmor : 0;
   return { active: ratio <= threshold, ratio };

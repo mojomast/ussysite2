@@ -12,6 +12,7 @@ globalThis.THREE = {
 
 const {
   abandonMission,
+  checkMissionExpiry,
   completeMissionObjective,
   createMissionFromGameState,
   resolveMissionReward
@@ -44,5 +45,30 @@ describe('mission unit helpers', () => {
     const abandoned = abandonMission(mission);
     assert.equal(abandoned.status, 'abandoned', 'abandoned mission should set abandoned status');
     assert.equal(abandoned.active, false, 'abandoned mission should not remain active');
+  });
+});
+
+describe('mission expiry', () => {
+  it('expires a TTL mission when tick delta exceeds TTL', () => {
+    const mission = { ...createMissionFromGameState({ tick: 1 }), ttl: 5, startedAt: 10 };
+    const expired = checkMissionExpiry(mission, 16);
+
+    assert.equal(expired.status, 'expired', 'mission should expire after current tick passes startedAt + ttl');
+  });
+
+  it('marks expired missions inactive', () => {
+    const mission = { ...createMissionFromGameState({ tick: 2 }), ttl: 2, startedAt: 3 };
+    const expired = checkMissionExpiry(mission, 6);
+
+    assert.equal(expired.status, 'expired', 'expired mission should carry expired status');
+    assert.equal(expired.active, false, 'expired mission should not remain active');
+  });
+
+  it('does not expire a mission completed before TTL is reached', () => {
+    const active = { ...createMissionFromGameState({ cargoUsed: 1 }), ttl: 5, startedAt: 10 };
+    const complete = completeMissionObjective(active, 1);
+    const checked = checkMissionExpiry(complete, 16);
+
+    assert.equal(checked.status, 'complete', 'completed missions should not be overwritten by expiry checks');
   });
 });

@@ -9,6 +9,7 @@ const {
   ENEMY_CLASSES,
   addCombatXp,
   applyDamageModel,
+  applyBurstHeatSequence,
   applyHeatShot,
   canFireWeapon,
   coolHeat,
@@ -58,6 +59,7 @@ describe('combat class data', () => {
       assert.equal(stats.shieldPips, cls.health > 2 ? cls.health - 1 : 0, `${cls.id} shield pips should follow spawn rule`);
       assert.equal(stats.weaponLoadout.fireRate, cls.fireRate, `${cls.id} fireRate should match class fire rate`);
       assert.equal(stats.weaponLoadout.burstCount, cls.burstCount, `${cls.id} burst count should match class burst count`);
+      assert.equal(stats.weaponLoadout.burstDelay, cls.burstDelay, `${cls.id} burst delay should match class burst delay`);
     }
   });
 
@@ -79,5 +81,52 @@ describe('combat class data', () => {
     addCombatXp(state, eliteReward.xp);
     assert.equal(state.skillPoints, 1, 'elite XP reward should grant one skill point from zero');
     assert.equal(state.xp, 0, 'elite XP reward should roll over exactly at 100 XP');
+  });
+});
+
+describe('burst weapon heat sequences', () => {
+  it('fires every burst shot in one frame and accumulates heat per shot', () => {
+    const scatterCannon = { ...getWeaponDef('scatter_cannon'), burstCount: 3 };
+    const state = { heat: 0, maxHeat: 1000, overheated: false };
+    const result = applyBurstHeatSequence(state, scatterCannon);
+
+    assert.equal(result.fired.length, scatterCannon.burstCount, 'full burst should fire every requested shot');
+    assert.equal(state.heat, scatterCannon.overheatBuildup * scatterCannon.burstCount, 'total heat should equal heat per shot times burst count');
+    assert.equal(result.skipped, 0, 'full burst should not skip shots when heat budget is available');
+  });
+
+  it('stops firing remaining burst shots after mid-burst overheat', () => {
+    const scatterCannon = { ...getWeaponDef('scatter_cannon'), burstCount: 5 };
+    const state = { heat: 0, maxHeat: 50, overheated: false };
+    const result = applyBurstHeatSequence(state, scatterCannon);
+
+    assert.equal(result.fired.length, 3, 'third scatter shot should cross max heat');
+    assert.equal(result.skipped, 2, 'shots after overheat should not fire');
+    assert.equal(state.overheated, true, 'state should remain overheated after the crossing shot');
+  });
+
+  it('cools a full burst back to zero over multiple ticks', () => {
+    const laserBurst = { ...getWeaponDef('laser_mk1'), burstCount: 3 };
+    const state = { heat: 0, maxHeat: 100, overheated: false, heatCoolRate: 6 };
+    applyBurstHeatSequence(state, laserBurst);
+
+    for (let tick = 0; tick < 4; tick += 1) coolHeat(state, 1);
+
+    assert.equal(state.heat, 0, 'four one-second cooldown ticks at 6 heat/s should clear 24 burst heat');
+    assert.equal(state.overheated, false, 'cleared heat should not leave the weapon overheated');
+  });
+
+  it('keeps separate burst weapon heat state independent', () => {
+    const scatterBurst = { ...getWeaponDef('scatter_cannon'), burstCount: 2 };
+    const laserBurst = { ...getWeaponDef('laser_mk2'), burstCount: 3 };
+    const scatterState = { heat: 0, maxHeat: 100, overheated: false };
+    const laserState = { heat: 0, maxHeat: 100, overheated: false };
+
+    applyBurstHeatSequence(scatterState, scatterBurst);
+    applyBurstHeatSequence(laserState, laserBurst);
+    coolHeat(scatterState, 1, 12);
+
+    assert.equal(scatterState.heat, 32, 'scatter heat should cool only in its own state object');
+    assert.equal(laserState.heat, 42, 'laser burst heat should remain unchanged in a separate state object');
   });
 });

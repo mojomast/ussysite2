@@ -15,6 +15,27 @@ class Vector3 {
     return this;
   }
 
+  lengthSq() {
+    return this.x * this.x + this.y * this.y + this.z * this.z;
+  }
+
+  length() {
+    return Math.sqrt(this.lengthSq());
+  }
+
+  setLength(length) {
+    const current = this.length();
+    if (current === 0) return this;
+    return this.multiplyScalar(length / current);
+  }
+
+  multiplyScalar(scale) {
+    this.x *= scale;
+    this.y *= scale;
+    this.z *= scale;
+    return this;
+  }
+
   clone() {
     return new Vector3(this.x, this.y, this.z);
   }
@@ -25,6 +46,8 @@ globalThis.document ??= { getElementById: () => null };
 globalThis.THREE = { Vector3, Quaternion: class {}, Matrix4: class {} };
 
 const {
+  BASE_MAX_VELOCITY,
+  applyVelocityCapAndDrag,
   applyForwardThrust,
   applyReverseThrust,
   applyRoll,
@@ -82,5 +105,44 @@ describe('flight physics helpers', () => {
     assert.equal(canApplyThrust(state), false, 'zero fuel should disable thrust');
     applyForwardThrust(state, new Vector3(0, 0, -1), 1);
     assert.equal(state.vel.z, 0, 'forward thrust should no-op at zero fuel');
+  });
+});
+
+describe('velocity cap and drag', () => {
+  it('keeps repeated forward thrust ticks at or below max velocity', () => {
+    const state = makeState();
+    state.damping = 1;
+
+    for (let tick = 0; tick < 100; tick += 1) {
+      applyForwardThrust(state, new Vector3(0, 0, -1), 1 / 10);
+      applyVelocityCapAndDrag(state, 1 / 60);
+    }
+
+    assert.ok(state.vel.length() <= BASE_MAX_VELOCITY, 'velocity magnitude should not exceed the base max velocity');
+  });
+
+  it('reduces velocity monotonically under drag when no thrust is applied', () => {
+    const state = makeState();
+    state.damping = 0.985;
+    applyForwardThrust(state, new Vector3(0, 0, -1), 1);
+
+    let previous = state.vel.length();
+    for (let tick = 0; tick < 5; tick += 1) {
+      applyVelocityCapAndDrag(state, 1 / 60);
+      const current = state.vel.length();
+      assert.ok(current < previous, 'drag should reduce speed on every tick');
+      previous = current;
+    }
+  });
+
+  it('does not push near-zero positive velocity negative', () => {
+    const state = makeState();
+    state.damping = 0.985;
+    state.vel.x = 1e-9;
+
+    for (let tick = 0; tick < 5; tick += 1) applyVelocityCapAndDrag(state, 1 / 60);
+
+    assert.ok(state.vel.x >= 0, 'positive near-zero velocity should not flip sign under drag');
+    assert.ok(state.vel.length() <= 1e-9, 'drag should keep near-zero velocity moving toward zero');
   });
 });

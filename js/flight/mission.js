@@ -45,3 +45,10 @@ export function resolveMissionReward(playerState, mission) {
 export function abandonMission(mission) {
   return { ...mission, status: 'abandoned', active: false };
 }
+
+export function checkMissionExpiry(mission, currentTick) {
+  if (!mission || mission.status !== 'active' || mission.ttl == null) return mission;
+  const startedAt = mission.startedAt ?? mission.createdAt ?? 0;
+  if ((currentTick - startedAt) <= mission.ttl) return mission;
+  return { ...mission, status: 'expired', active: false };
+}

@@ -10,6 +10,9 @@ export const flightTempVec = typeof THREE !== 'undefined' ? new THREE.Vector3() 
 export const flightTempVec2 = typeof THREE !== 'undefined' ? new THREE.Vector3() : null;
 let skillsApplied = false;
 
+export const BASE_MAX_VELOCITY = 22;
+export const DEFAULT_DAMPING = 0.985;
+
 export function updateFlight(time = 0) {
   if (!skillsApplied) {
     reapplySkills();
@@ -53,6 +56,13 @@ export function drainFuelForThrust(fuelState, dt, isThrusting) {
   fuelState.fuel = Math.max(0, fuelState.fuel - (fuelState.fuelPerSecond ?? 0.35) * dt);
   fuelState.fuelDepleted = fuelState.fuel <= 0;
   return fuelState;
+}
+
+export function applyVelocityCapAndDrag(state, dt, boost = 1) {
+  const maxVelocity = (state.maxVelocity ?? state.maxSpeed ?? BASE_MAX_VELOCITY) * boost;
+  if (state.vel.lengthSq() > maxVelocity * maxVelocity) state.vel.setLength(maxVelocity);
+  state.vel.multiplyScalar(Math.pow(state.damping ?? DEFAULT_DAMPING, dt * 60));
+  return state;
 }
 
 export function updateFlightBasis() {}

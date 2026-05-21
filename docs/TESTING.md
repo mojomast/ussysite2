@@ -19,15 +19,33 @@ npm run test:tts:contract
 
 ## Gameplay Coverage
 
-`combat-overhaul.test.mjs` covers shield bleedthrough, heat and overheat lockout, adrenaline threshold helpers, enemy stat instantiation, and per-class kill rewards.
+`combat-overhaul.test.mjs` covers shield bleedthrough, heat and overheat lockout, burst heat sequencing, adrenaline threshold helpers, enemy stat instantiation, and per-class kill rewards.
 
-`physics.test.mjs` covers pure thrust, reverse thrust, strafe, roll, fuel drain, and zero-fuel thrust no-op behavior with a minimal `THREE.Vector3` stub.
+`physics.test.mjs` covers pure thrust, reverse thrust, strafe, roll, max velocity capping, drag/damping, fuel drain, and zero-fuel thrust no-op behavior with a minimal `THREE.Vector3` stub.
 
 `economy.test.mjs` covers reputation normalization, reputation-aware buy/sell prices, buy/sell mutations, insufficient credit rejection, full cargo rejection, station price variance, and trade pressure.
 
-`mission.test.mjs` covers pure mission creation, objective completion, reward resolution, and abandoned mission clearing.
+`mission.test.mjs` covers pure mission creation, objective completion, TTL expiry, reward resolution, and abandoned mission clearing.
 
-`combat-state.test.mjs` covers pure combat phase transitions, death detection, and respawn restoration.
+`combat-state.test.mjs` covers pure combat phase transitions, death detection, respawn restoration, and orchestrator client-side event gating.
+
+## Resolved Review Gaps
+
+The 9562424 coverage review gaps are now covered by standalone unit tests:
+
+- Burst weapon heat sequences: full burst heat, mid-burst overheat cutoff, cooldown to zero, and separate weapon state independence.
+- Velocity cap and drag: repeated thrust cap enforcement, monotonic damping, and near-zero velocity sign safety.
+- Mission TTL expiry: active mission expiry, inactive expired state, and completed mission immunity from later expiry checks.
+- Orchestrator client-side gating: 45-second cooldown, low-shield combat block, and `SILENCE` shield-gate bypass.
+- Dead to respawn transition: zero hull death, positive hull survival, max hull/armor/shield/fuel restoration, and `IDLE` phase reset.
+
+## Skipped Tests
+
+The three skipped tests remain intentionally opt-in live/integration checks; none were resolved by this pure unit-test pass:
+
+- `test/tts-backend.test.mjs`: live backend TTS smoke request requires `OPENROUTER_LIVE_TTS`.
+- `test/tts-radio-contract.test.mjs`: model validation requires `OPENROUTER_VALIDATE_MODELS`.
+- `test/orchestrator.test.mjs`: live orchestrator smoke request requires `ORCHESTRATOR_LIVE`.
 
 ## Gaps
 
