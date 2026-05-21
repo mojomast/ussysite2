@@ -89,6 +89,41 @@ test('TTS endpoint rejects non-browser or cross-origin requests', async () => {
   }
 });
 
+test('TTS rate limit uses forwarded client IP only from local proxy', async () => {
+  const server = createAppServer();
+  const baseUrl = await listen(server);
+  try {
+    const statuses = [];
+    for (let i = 0; i < 11; i += 1) {
+      const response = await fetch(`${baseUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+          'Origin': baseUrl,
+          'X-Forwarded-For': '198.51.100.10'
+        },
+        body: 'x'
+      });
+      statuses.push(response.status);
+    }
+    assert.deepEqual(statuses.slice(0, 10), Array(10).fill(415));
+    assert.equal(statuses[10], 429);
+
+    const otherIp = await fetch(`${baseUrl}/api/tts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain',
+        'Origin': baseUrl,
+        'X-Forwarded-For': '198.51.100.11'
+      },
+      body: 'x'
+    });
+    assert.equal(otherIp.status, 415);
+  } finally {
+    server.close();
+  }
+});
+
 test('live backend TTS smoke request returns audio', { skip: !process.env.OPENROUTER_LIVE_TTS }, async () => {
   assert.ok(process.env.OPENROUTER_API_KEY, 'Set OPENROUTER_API_KEY to run live backend TTS smoke test');
   const server = createAppServer();

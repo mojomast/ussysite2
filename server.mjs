@@ -124,11 +124,17 @@ function sanitizeClientIp(value) {
   return isIP(withoutMappedPrefix) ? withoutMappedPrefix : null;
 }
 
+function isTrustedProxyIp(ip) {
+  return ip === '127.0.0.1' || ip === '::1';
+}
+
 function getClientIp(req) {
   const socketIp = sanitizeClientIp(req.socket?.remoteAddress);
-  if (socketIp) return socketIp;
   const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return sanitizeClientIp(forwardedFor) || 'unknown';
+  const forwardedIp = sanitizeClientIp(forwardedFor);
+  if (socketIp && isTrustedProxyIp(socketIp) && forwardedIp) return forwardedIp;
+  if (socketIp) return socketIp;
+  return forwardedIp || 'unknown';
 }
 
 function sweepRateLimitState(now = Date.now()) {
