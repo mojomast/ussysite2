@@ -52,6 +52,9 @@ test('game messages wait for TTS audio start before typewriter text advances', (
 test('TTS transmissions are single-owner and radio text avoids spoken slash characters', () => {
   assert.match(appSource, /activeTransmission: 0/);
   assert.match(appSource, /activeRequest: null/);
+  assert.match(appSource, /activePriority: -1/);
+  assert.match(appSource, /function getTtsPriorityRank\(priority = 'normal'\)/);
+  assert.match(appSource, /if \(this\.activePriority > priority \|\| \(priority === 0 && this\.activePriority >= 0\)\) return/);
   assert.match(appSource, /new AbortController\(\)/);
   assert.match(appSource, /fetchTTSSpeech\(radioText, utteranceOptions, requestController\?\.signal\)/);
   assert.match(appSource, /if \(signal\) request\.options\.signal = signal/);
@@ -64,6 +67,14 @@ test('TTS transmissions are single-owner and radio text avoids spoken slash char
   assert.match(appSource, /\$\{numToWord\(left\)\} of \$\{numToWord\(right\)\}/);
   assert.match(appSource, /replace\(\/\\s\*\\\/\{1,\}\\s\*\/g, ', '\)/);
   assert.doesNotMatch(appSource, /' slash '/);
+});
+
+test('mission transmissions outrank low-priority combat barks', () => {
+  assert.match(appSource, /priority: 'high'/);
+  assert.match(appSource, /priority: 'low'/);
+  assert.match(appSource, /ttsEngine\.speak\(text, \{\n\s+\.\.\.getVoicePersona\(source\),\n\s+priority: 'high'/);
+  assert.match(appSource, /ttsEngine\.speak\('FOX TWO', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
+  assert.match(appSource, /ttsEngine\.speak\('TAKING FIRE', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
 });
 
 test('configured OpenRouter model exists and can output audio', { skip: !process.env.OPENROUTER_VALIDATE_MODELS }, async () => {

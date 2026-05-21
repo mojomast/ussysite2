@@ -200,17 +200,26 @@ function preprocessRadioText(text) {
     .trim();
 }
 
+function getTtsPriorityRank(priority = 'normal') {
+  if (priority === 'high' || priority === 'mission') return 2;
+  if (priority === 'low' || priority === 'bark') return 0;
+  return 1;
+}
+
 const ttsEngine = {
   supported: 'speechSynthesis' in window,
   enabled: true,
   activeVoice: null,
   activeTransmission: 0,
   activeRequest: null,
+  activePriority: -1,
 
   async speak(text, options = {}) {
     if (!this.enabled || !text) return;
     const radioText = preprocessRadioText(text);
     if (!radioText) return;
+    const priority = getTtsPriorityRank(options.priority);
+    if (this.activePriority > priority || (priority === 0 && this.activePriority >= 0)) return;
     const transmissionId = this.activeTransmission + 1;
     this.activeTransmission = transmissionId;
     const isCurrentTransmission = () => this.enabled && this.activeTransmission === transmissionId;
@@ -236,6 +245,7 @@ const ttsEngine = {
     }
 
     this.stop(false);
+    this.activePriority = priority;
     const requestController = typeof AbortController === 'function' ? new AbortController() : null;
     this.activeRequest = requestController;
     radioChain.addClickIn();
@@ -257,7 +267,10 @@ const ttsEngine = {
       }
     } finally {
       if (this.activeRequest === requestController) this.activeRequest = null;
-      if (isCurrentTransmission()) radioChain.addClickOut();
+      if (isCurrentTransmission()) {
+        this.activePriority = -1;
+        radioChain.addClickOut();
+      }
     }
   },
 
@@ -265,6 +278,7 @@ const ttsEngine = {
     if (invalidate) this.activeTransmission += 1;
     if (this.activeRequest) this.activeRequest.abort();
     this.activeRequest = null;
+    this.activePriority = -1;
     if (this.supported) window.speechSynthesis.cancel();
     if (typeof radioChain !== 'undefined') radioChain.stopActive();
   },
@@ -1738,7 +1752,7 @@ function enterFlightMode() {
   enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
   playerMissiles.forEach(missile => deactivateCombatObject(missile));
 
-  ttsEngine.speak('USSYVERSE DOGFIGHT MODE ACTIVATED. WELCOME, OPERATOR.', { rate: 1.0, pitch: 0.72 });
+  ttsEngine.speak('USSYVERSE DOGFIGHT MODE ACTIVATED. WELCOME, OPERATOR.', { rate: 1.0, pitch: 0.72, priority: 'high' });
   startTutorialMission();
   updateFlightHud(true);
   updateCockpitRadar(0, true);
@@ -1982,6 +1996,7 @@ function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text 
   renderGameMessage();
   ttsEngine.speak(text, {
     ...getVoicePersona(source),
+    priority: 'high',
     onStart: () => {
       if (!gameMessageState.active || gameMessageState.token !== messageToken) return;
       gameMessageState.ttsWaitUntil = 0;
@@ -2129,7 +2144,7 @@ function registerMissionKill() {
       'BREAKING RIGHT',
       'ENGAGED'
     ];
-    ttsEngine.speak(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85 });
+    ttsEngine.speak(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85, priority: 'low' });
     showGameMessage({
       type: 'MISSION PROGRESS',
       source: 'COMBAT SYSTEM',
@@ -2201,7 +2216,7 @@ function restockAtProject(project) {
   flightState.finalApproachSpoken = false;
   flightState.status = `RESTOCKED AT ${project.name.toUpperCase()}`;
   flightState.statusUntil = performance.now() + 2500;
-  ttsEngine.speak(`DOCKING AT ${project.name.toUpperCase()}. RESTOCKING SUPPLIES.`, { rate: 1.0, pitch: 0.80 });
+  ttsEngine.speak(`DOCKING AT ${project.name.toUpperCase()}. RESTOCKING SUPPLIES.`, { rate: 1.0, pitch: 0.80, priority: 'normal' });
   updateFlightHud(true);
 }
 
@@ -2630,7 +2645,7 @@ function updateFlight(time) {
           flightState.missiles -= 1;
           flightState.energy = Math.max(0, flightState.energy - flightState.missileEnergyCost);
           flightState.status = 'MISSILE AWAY';
-          ttsEngine.speak('FOX TWO', getVoicePersona('COMBAT SYSTEM'));
+          ttsEngine.speak('FOX TWO', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
         }
       }
       flightState.lastMissile = time;
@@ -2668,7 +2683,7 @@ function updateProjectLandingTarget() {
     const isFinalApproach = isMissionApproach && flightState.nearestDistance < activeLandingRange * 1.5;
     if (isFinalApproach && !flightState.finalApproachSpoken) {
       flightState.finalApproachSpoken = true;
-      ttsEngine.speak('FINAL APPROACH', getVoicePersona('NAVIGATION'));
+      ttsEngine.speak('FINAL APPROACH', { ...getVoicePersona('NAVIGATION'), priority: 'normal' });
     } else if (!isFinalApproach) {
       flightState.finalApproachSpoken = false;
     }
@@ -2772,11 +2787,11 @@ function applyPlayerDamage(amount) {
   }
   const shieldDrop = shieldBefore - flightState.shield;
   if (shieldDrop > 15) {
-    ttsEngine.speak('TAKING FIRE', getVoicePersona('COMBAT SYSTEM'));
+    ttsEngine.speak('TAKING FIRE', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
   }
   if (flightState.shield < 25 && !flightState.shieldCriticalSpoken) {
     flightState.shieldCriticalSpoken = true;
-    window.setTimeout(() => ttsEngine.speak('SHIELDS CRITICAL', getVoicePersona('COMBAT SYSTEM')), shieldDrop > 15 ? 450 : 0);
+    window.setTimeout(() => ttsEngine.speak('SHIELDS CRITICAL', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' }), shieldDrop > 15 ? 450 : 0);
   }
 }
 
