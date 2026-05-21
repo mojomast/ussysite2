@@ -9,6 +9,10 @@ import {
   SKILL_TREE_NODES,
   applyDamageModel,
   applyHeatShot,
+  configureCombat,
+  emitCombatEnemyKill,
+  emitCombatMissionComplete,
+  emitCombatPlayerHit,
   getDifficultyTier,
   getEnemyClass,
   getRandomClassForTier,
@@ -19,8 +23,10 @@ import {
   awardXp,
   buyWeapon,
   combatState,
+  deserializeCombatState,
   equipWeapon,
   reapplySkills,
+  serializeCombatState,
   setCombatFlightState,
   unlockSkillNode as unlockCombatSkillNode
 } from './flight/combat-state.js';
@@ -241,6 +247,11 @@ const skillTree = {
 };
 
 setCombatFlightState(flightState);
+configureCombat({
+  onEnemyKill: () => awardXp(25),
+  onPlayerHit: () => awardXp(5),
+  onMissionComplete: () => awardXp(100)
+});
 
 const missionState = {
   active: false,
@@ -957,6 +968,7 @@ const flightHeatCockpit = document.getElementById('flight-heat-cockpit');
 const flightHeatBarCockpit = document.getElementById('flight-heat-bar-cockpit');
 const flightCredits = document.getElementById('flight-credits');
 const flightXpBar = document.getElementById('flight-xp-bar');
+const flightXpLabel = document.getElementById('flight-xp-label');
 const flightSp = document.getElementById('flight-sp');
 const flightWeaponPrimary = document.getElementById('flight-weapon-primary');
 const flightWeaponSecondary = document.getElementById('flight-weapon-secondary');
@@ -996,6 +1008,19 @@ const inspectFeatures = document.getElementById('inspect-features');
 const inspectTelemetry = document.getElementById('inspect-telemetry');
 let inspectHowLabel, inspectHowBody;
 
+function restoreCombatStateFromHash() {
+  const hashMatch = location.hash.match(/#save:([A-Za-z0-9+/=]+)/);
+  if (hashMatch) deserializeCombatState(hashMatch[1]);
+  const creditsMatch = location.hash.match(/cr:(\d+)/);
+  if (creditsMatch) traderState.credits = parseInt(creditsMatch[1], 10);
+  syncCombatCreditsFromTrader();
+}
+
+function saveCombatStateToHash() {
+  const encoded = serializeCombatState();
+  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}`);
+}
+
 // Init application
 function init() {
   configureTrader({
@@ -1005,6 +1030,7 @@ function init() {
     getVoicePersona,
     onTrade: handleTradeCompleted
   });
+  restoreCombatStateFromHash();
   if (objectivesPanel) objectivesPanel.addEventListener('click', handleObjectivesPanelClick);
   renderObjectivesPanel();
 
@@ -1066,6 +1092,8 @@ function init() {
   document.addEventListener('keyup', onGlobalKeyUp);
   document.addEventListener('pointerlockchange', onPointerLockChange);
   document.addEventListener('pointerlockerror', onPointerLockError);
+  window.setInterval(saveCombatStateToHash, 30000);
+  window.addEventListener('beforeunload', saveCombatStateToHash);
   window.addEventListener('blur', clearFlightInput);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) clearFlightInput();
@@ -2297,16 +2325,15 @@ function getVoicePersona(source = '') {
 }
 
 function syncCombatCreditsFromTrader() {
-  combatState.credits = Math.max(0, Math.round(traderState.credits));
+  traderState.credits = Math.max(0, Math.round(traderState.credits));
 }
 
 function setCombatCredits(value) {
-  combatState.credits = Math.max(0, Math.round(value));
-  traderState.credits = combatState.credits;
+  traderState.credits = Math.max(0, Math.round(value));
 }
 
 function addCombatCredits(value) {
-  setCombatCredits(combatState.credits + value);
+  setCombatCredits(traderState.credits + value);
 }
 
 function buildEnemyMaterial(color, opacity = 0.88) {
@@ -2811,6 +2838,8 @@ function startTradingTutorialBuy(projectId) {
 }
 
 function finishTutorialMission(message) {
+  const pointsBefore = combatState.skillPoints;
+  emitCombatMissionComplete({ type: 'tutorial' });
   missionState.active = false;
   missionState.step = 'idle';
   resetContractState();
@@ -2823,6 +2852,7 @@ function finishTutorialMission(message) {
     detail: 'Pick an available objective, trade between project stations, or wait for the director to inject live events.',
     source: 'director'
   });
+  if (combatState.skillPoints > pointsBefore) flightState.status = `MISSION BONUS SP:${combatState.skillPoints}`;
   showGameMessage({ type: 'SYSTEM UPDATE', source: 'USSYVERSE CONTROL', text: message, ttsPriority: 'normal' });
   updateFlightHud(true);
 }
@@ -2995,6 +3025,7 @@ function advanceContractStep() {
 function completeMissionContract() {
   const contract = getMissionContract(missionState.contractId);
   const reward = contract?.rewardCredits || 0;
+  emitCombatMissionComplete({ type: 'contract', contractId: contract?.id });
   if (reward > 0) addCombatCredits(reward);
   const title = contract?.title || 'Objective';
   missionState.active = false;
@@ -3055,6 +3086,8 @@ function handleTradeCompleted(trade) {
 
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
+  const pointsBefore = combatState.skillPoints;
+  emitCombatEnemyKill({ classId: cls.id });
   registerMissionKill();
   if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
     deactivateCombatObject(enemy);
@@ -3078,9 +3111,6 @@ function handleEnemyDestroyed(enemy) {
   }
   flightState.score += Math.max(1, Math.round(cls.xpReward / 10));
   addCombatCredits(cls.creditReward);
-  const pointsBefore = combatState.skillPoints;
-  awardXp(cls.xpReward);
-  reapplySkills();
   if (combatState.skillPoints > pointsBefore) {
     flightState.status = `SKILL POINT EARNED - SP:${combatState.skillPoints}`;
     flightState.statusUntil = performance.now() + 2500;
@@ -3168,7 +3198,7 @@ function openStationMenu(projectId) {
   showGameMessage({
     type: 'STATION SERVICES',
     source: `${stationName(projectId).toUpperCase()} DOCK CONTROL`,
-    text: `DOCKED AT ${stationName(projectId).toUpperCase()}. CREDITS: ${combatState.credits}CR. SELECT SERVICE:`,
+    text: `DOCKED AT ${stationName(projectId).toUpperCase()}. CREDITS: ${traderState.credits}CR. SELECT SERVICE:`,
     choices: [
       { key: '1', code: 'Digit1', label: 'RESTOCK', action: () => restockAtProject(USSY_PROJECTS.find(project => project.id === projectId) || { id: projectId, name: stationName(projectId) }) },
       { key: '2', code: 'Digit2', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
@@ -3193,11 +3223,11 @@ function openEquipmentMarket(projectId) {
       choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${weapon.name} - EQUIP ${slot.toUpperCase()}`, action: () => buyAndEquipWeapon(projectId, weaponId, slot) });
       return `[${idx + 1}] ${weapon.name} - OWNED`;
     }
-    if (combatState.credits >= price) {
+    if (traderState.credits >= price) {
       choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${weapon.name} - ${price}CR`, action: () => buyAndEquipWeapon(projectId, weaponId, slot) });
       return `[${idx + 1}] ${weapon.name} - ${price}CR`;
     }
-    return `${weapon.name} - ${price}CR (NEED ${price - combatState.credits}CR MORE)`;
+    return `${weapon.name} - ${price}CR (NEED ${price - traderState.credits}CR MORE)`;
   });
   choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => openStationMenu(projectId) });
   showGameMessage({
@@ -3235,7 +3265,7 @@ function buyAndEquipWeapon(projectId, weaponId, slot) {
   showGameMessage({
     type: equipResult.success ? 'SYSTEM UPDATED' : 'SYSTEM ERROR',
     source: `${stationName(projectId).toUpperCase()} ARMORY`,
-    text: `${equipResult.message} CREDITS REMAINING: ${combatState.credits}CR.`,
+    text: `${equipResult.message} CREDITS REMAINING: ${traderState.credits}CR.`,
     choices: [
       { key: '1', code: 'Digit1', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
       { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openStationMenu(projectId) }
@@ -4256,6 +4286,7 @@ function updateCombatObjects(dt) {
 
 function applyPlayerDamage(amount) {
   const shieldBefore = flightState.shield;
+  emitCombatPlayerHit({ amount });
   combatState.lastHitAt = performance.now();
   combatState.adrenaline = Math.min(1.0, combatState.adrenaline + 0.15);
   const damage = applyDamageModel({ shield: flightState.shield, armor: flightState.armor }, amount, skillTree.getArmorDamageMultiplier());
@@ -4491,8 +4522,9 @@ function updateFlightHud(force) {
     bar.classList.toggle('heat-over', combatState.overheated);
   });
   if (combatState.overheated && flightStatus) flightStatus.textContent = 'WEAPONS OFFLINE - COOLING';
-  if (flightCredits) flightCredits.textContent = `${combatState.credits}CR`;
+  if (flightCredits) flightCredits.textContent = `${traderState.credits}CR`;
   if (flightXpBar) flightXpBar.style.width = `${Math.min(100, (combatState.xp / combatState.xpToNextPoint) * 100).toFixed(1)}%`;
+  if (flightXpLabel) flightXpLabel.textContent = `XP ${combatState.xp}/${combatState.xpToNextPoint}`;
   if (flightSp) flightSp.textContent = `SP:${combatState.skillPoints}`;
   const primaryWeaponName = WEAPON_DEFS.find(weapon => weapon.id === combatState.primaryWeapon)?.name || '--';
   const secondaryWeaponName = WEAPON_DEFS.find(weapon => weapon.id === combatState.secondaryWeapon)?.name || '--';

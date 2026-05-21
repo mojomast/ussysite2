@@ -122,8 +122,11 @@ export function renderInventoryPanel() {
 export function toggleInventoryPanel() {
   const panel = document.getElementById('inventory-panel');
   if (!panel) return;
-  const hidden = panel.hidden;
-  panel.hidden = !hidden;
-  if (!hidden) return;
-  renderInventoryPanel();
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) renderInventoryPanel();
+}
+
+export function refreshInventoryIfOpen() {
+  const panel = document.getElementById('inventory-panel');
+  if (panel && !panel.hidden) renderInventoryPanel();
 }

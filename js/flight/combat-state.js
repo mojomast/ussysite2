@@ -11,7 +11,6 @@ import { flightState as defaultFlightState } from './state.js';
 let activeFlightState = defaultFlightState;
 
 export const combatState = {
-  credits: 1000,
   xp: 0,
   xpToNextPoint: 100,
   skillPoints: 3,
@@ -78,7 +77,6 @@ export function buyWeapon(weaponId, traderState) {
     return { success: false, message: `INSUFFICIENT CREDITS. NEED ${price}cr.` };
   }
   traderState.credits -= price;
-  combatState.credits = traderState.credits;
   combatState.ownedWeapons.add(weaponId);
   reapplySkills();
   return { success: true, message: `${def.name} PURCHASED. ${price}cr DEDUCTED.` };
@@ -97,4 +95,38 @@ export function equipWeapon(weaponId, slot = 'primary') {
 export function awardXp(amount) {
   addCombatXp(combatState, amount);
   reapplySkills();
+}
+
+export function serializeCombatState() {
+  return btoa(JSON.stringify({
+    xp: combatState.xp,
+    xpToNextPoint: combatState.xpToNextPoint,
+    skillPoints: combatState.skillPoints,
+    unlocked: [...combatState.unlocked],
+    primaryWeapon: combatState.primaryWeapon,
+    secondaryWeapon: combatState.secondaryWeapon,
+    ownedWeapons: [...combatState.ownedWeapons]
+  }));
+}
+
+function replaceSetContents(targetSet, values) {
+  targetSet.clear();
+  values.forEach(value => targetSet.add(value));
+}
+
+export function deserializeCombatState(encoded) {
+  try {
+    const data = JSON.parse(atob(encoded));
+    if (Array.isArray(data.unlocked)) replaceSetContents(combatState.unlocked, data.unlocked);
+    if (Array.isArray(data.ownedWeapons)) replaceSetContents(combatState.ownedWeapons, data.ownedWeapons);
+    if (typeof data.xp === 'number') combatState.xp = data.xp;
+    if (typeof data.xpToNextPoint === 'number') combatState.xpToNextPoint = data.xpToNextPoint;
+    if (typeof data.skillPoints === 'number') combatState.skillPoints = data.skillPoints;
+    if (data.primaryWeapon) combatState.primaryWeapon = data.primaryWeapon;
+    if (data.secondaryWeapon) combatState.secondaryWeapon = data.secondaryWeapon;
+    reapplySkills();
+    return true;
+  } catch {
+    return false;
+  }
 }

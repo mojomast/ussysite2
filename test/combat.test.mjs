@@ -12,6 +12,7 @@ import {
   getStationEquipment,
   simulateBurstFire
 } from '../js/flight/combat-overhaul.js';
+import { awardXp, combatState } from '../js/flight/combat-state.js';
 
 test('ENEMY_CLASSES has five complete entries', () => {
   assert.equal(ENEMY_CLASSES.length, 5);
@@ -72,4 +73,22 @@ test('XP escalation increases threshold after three points', () => {
   addCombatXp(state, 1000);
   assert.ok(state.skillPoints >= 3);
   assert.ok(state.xpToNextPoint > 100);
+});
+
+test('awardXp increments combatState and rolls over skill points', () => {
+  const previous = {
+    xp: combatState.xp,
+    xpToNextPoint: combatState.xpToNextPoint,
+    skillPoints: combatState.skillPoints
+  };
+  combatState.xp = 95;
+  combatState.xpToNextPoint = 100;
+  combatState.skillPoints = 3;
+  awardXp(10);
+  assert.equal(combatState.xp, 5);
+  assert.equal(combatState.skillPoints, 4);
+  assert.ok(combatState.xpToNextPoint > 100);
+  combatState.xp = previous.xp;
+  combatState.xpToNextPoint = previous.xpToNextPoint;
+  combatState.skillPoints = previous.skillPoints;
 });

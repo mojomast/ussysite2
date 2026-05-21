@@ -8,9 +8,13 @@ export function updateFlightHud() {
   const primaryEl = document.getElementById('flight-weapon-primary');
   const secondaryEl = document.getElementById('flight-weapon-secondary');
   const spEl = document.getElementById('flight-sp');
+  const xpBar = document.getElementById('flight-xp-bar');
+  const xpLabel = document.getElementById('flight-xp-label');
   if (primaryEl) primaryEl.textContent = primary;
   if (secondaryEl) secondaryEl.textContent = secondary;
   if (spEl) spEl.textContent = `SP:${combatState.skillPoints}`;
+  if (xpBar) xpBar.style.width = `${Math.min(100, (combatState.xp / combatState.xpToNextPoint) * 100).toFixed(1)}%`;
+  if (xpLabel) xpLabel.textContent = `XP ${combatState.xp}/${combatState.xpToNextPoint}`;
   return traderState.fuel;
 }
 export function updateCockpitRadar() {}

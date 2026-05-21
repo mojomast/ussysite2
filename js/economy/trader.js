@@ -7,6 +7,7 @@ import {
   normalizeStationCategory
 } from '../flight/combat-overhaul.js';
 import { combatState, buyWeapon, equipWeapon, reapplySkills, unlockSkillNode } from '../flight/combat-state.js';
+import { refreshInventoryIfOpen } from '../ui/inventory-panel.js';
 
 export const traderState = {
   credits: 1000,
@@ -206,8 +207,22 @@ function showShipyard(projectId) {
     text: `SHIPYARD ONLINE. CREDITS: ${traderState.credits}CR. SP: ${combatState.skillPoints}. SELECT BAY:`,
     choices: [
       { key: '1', code: 'Digit1', label: 'WEAPONS', action: () => showWeaponShop(projectId, 0) },
-      { key: '2', code: 'Digit2', label: 'SKILLS', action: () => showSkillTree('HULL', projectId) },
+      { key: '2', code: 'Digit2', label: 'SKILL TREE', action: () => showSkillTreeBranchMenu(projectId) },
       { key: '3', code: 'Digit3', label: 'BACK', action: () => openTradeMenu(projectId) }
+    ]
+  });
+}
+
+function showSkillTreeBranchMenu(projectId) {
+  showGameMessageRef({
+    type: 'SKILL TREE',
+    source: `${stationName(projectId).toUpperCase()} SHIPYARD`,
+    text: `SELECT UPGRADE BRANCH. SP: ${combatState.skillPoints}.`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'HULL', action: () => showSkillTree('HULL', projectId) },
+      { key: '2', code: 'Digit2', label: 'SHIELD', action: () => showSkillTree('SHIELD', projectId) },
+      { key: '3', code: 'Digit3', label: 'WEAPONS', action: () => showSkillTree('WEAPONS', projectId) },
+      { key: '4', code: 'Digit4', label: 'ENGINES', action: () => showSkillTree('ENGINES', projectId) }
     ]
   });
 }
@@ -271,6 +286,7 @@ function confirmWeaponBuy(projectId, weaponId, page = 0) {
   const result = buyWeapon(weaponId, traderState);
   reapplySkills();
   updateFlightHudRef(true);
+  refreshInventoryIfOpen();
   showGameMessageRef({
     type: result.success ? 'WEAPON PURCHASED' : 'PURCHASE DENIED',
     source: `${stationName(projectId).toUpperCase()} ARMORY`,
@@ -286,6 +302,7 @@ function confirmWeaponEquip(projectId, weaponId, slot, page = 0) {
   const result = equipWeapon(weaponId, slot);
   reapplySkills();
   updateFlightHudRef(true);
+  refreshInventoryIfOpen();
   showGameMessageRef({
     type: result.success ? 'WEAPON EQUIPPED' : 'EQUIP FAILED',
     source: `${stationName(projectId).toUpperCase()} ARMORY`,
@@ -306,25 +323,24 @@ function skillNodeStatus(node) {
 
 function showSkillTree(branch = 'HULL', projectId) {
   const nodes = SKILL_TREE_NODES.filter(node => node.branch === branch);
-  const choices = [
-    { key: 'h', code: 'KeyH', label: 'HULL', action: () => showSkillTree('HULL', projectId) },
-    { key: 's', code: 'KeyS', label: 'SHIELD', action: () => showSkillTree('SHIELD', projectId) },
-    { key: 'w', code: 'KeyW', label: 'WEAPONS', action: () => showSkillTree('WEAPONS', projectId) },
-    { key: 'e', code: 'KeyE', label: 'ENGINES', action: () => showSkillTree('ENGINES', projectId) }
-  ];
-
-  nodes.forEach((node, idx) => {
-    const status = skillNodeStatus(node);
-    if (status === 'AVAILABLE') {
-      choices.push({ key: String(idx + 1), code: `Digit${idx + 1}`, label: `${node.name} ${node.cost}SP`, action: () => confirmSkillUnlock(projectId, node.id, branch) });
-    }
-  });
-  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => showShipyard(projectId) });
+  const available = nodes.filter(node => skillNodeStatus(node) === 'AVAILABLE').slice(0, 3);
+  const choices = available.map((node, idx) => ({
+    key: String(idx + 1),
+    code: `Digit${idx + 1}`,
+    label: `${node.name} ${node.cost}SP`,
+    action: () => confirmSkillUnlock(projectId, node.id, branch)
+  }));
+  choices.push({ key: '4', code: 'Digit4', label: 'BACK', action: () => showShipyard(projectId) });
 
   showGameMessageRef({
     type: `${branch} SKILLS`,
     source: `${stationName(projectId).toUpperCase()} SHIPYARD`,
-    text: `SP ${combatState.skillPoints}. ${nodes.map(node => `${node.name} ${node.cost}SP ${skillNodeStatus(node)}`).join(' // ')}`,
+    text: `SP ${combatState.skillPoints}. ${nodes.map(node => {
+      const status = skillNodeStatus(node);
+      const requires = node.requires ? ` REQUIRES ${node.requires.toUpperCase()}` : '';
+      const marker = status === 'UNLOCKED' ? 'OK' : (status === 'AVAILABLE' ? 'AVAILABLE' : 'LOCKED');
+      return `${node.name} ${node.cost}SP ${marker}${status === 'LOCKED' ? requires : ''}`;
+    }).join(' // ')}`,
     choices
   });
 }
@@ -333,6 +349,7 @@ function confirmSkillUnlock(projectId, nodeId, branch) {
   const result = unlockSkillNode(nodeId);
   reapplySkills();
   updateFlightHudRef(true);
+  refreshInventoryIfOpen();
   showGameMessageRef({
     type: result.success ? 'SKILL UNLOCKED' : 'SKILL LOCKED',
     source: `${stationName(projectId).toUpperCase()} SHIPYARD`,
@@ -402,6 +419,7 @@ function sellDialog(projectId, commodityId) {
 function confirmTrade(action, projectId, commodityId, qty) {
   const result = executeTrade(action, projectId, commodityId, qty);
   updateFlightHudRef(true);
+  refreshInventoryIfOpen();
   showGameMessageRef({
     type: result.success ? 'TRADE CONFIRMED' : 'TRADE REJECTED',
     source: stationSource(projectId),
@@ -469,6 +487,7 @@ function refuelDialog(projectId) {
 function confirmRefuel(projectId) {
   const result = refuelAt(projectId);
   updateFlightHudRef(true);
+  refreshInventoryIfOpen();
   showGameMessageRef({
     type: result.success ? 'REFUEL COMPLETE' : 'REFUEL DENIED',
     source: stationSource(projectId),

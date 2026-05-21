@@ -86,6 +86,30 @@ export const ENEMY_CLASSES = [
   }
 ];
 
+const combatCallbacks = {
+  onEnemyKill: null,
+  onPlayerHit: null,
+  onMissionComplete: null
+};
+
+export function configureCombat({ onEnemyKill, onPlayerHit, onMissionComplete } = {}) {
+  if (typeof onEnemyKill === 'function') combatCallbacks.onEnemyKill = onEnemyKill;
+  if (typeof onPlayerHit === 'function') combatCallbacks.onPlayerHit = onPlayerHit;
+  if (typeof onMissionComplete === 'function') combatCallbacks.onMissionComplete = onMissionComplete;
+}
+
+export function emitCombatEnemyKill(payload = {}) {
+  if (combatCallbacks.onEnemyKill) combatCallbacks.onEnemyKill(payload);
+}
+
+export function emitCombatPlayerHit(payload = {}) {
+  if (combatCallbacks.onPlayerHit) combatCallbacks.onPlayerHit(payload);
+}
+
+export function emitCombatMissionComplete(payload = {}) {
+  if (combatCallbacks.onMissionComplete) combatCallbacks.onMissionComplete(payload);
+}
+
 export const WEAPON_DEFS = [
   { id: 'laser_mk1', name: 'LASER Mk.I', type: 'beam', damage: 12, cooldown: 140, energyCost: 2.5, ammoCost: 1, projectileSpeed: 155, projectileLife: 1800, color: 0x66ff44, overheatBuildup: 8, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'Standard pulse laser.' },
   { id: 'laser_mk2', name: 'LASER Mk.II', type: 'beam', damage: 20, cooldown: 200, energyCost: 4.0, ammoCost: 1, projectileSpeed: 165, projectileLife: 2000, color: 0x00ffcc, overheatBuildup: 14, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'Upgraded laser. Runs hotter.' },
