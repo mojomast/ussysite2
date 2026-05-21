@@ -8,11 +8,14 @@ let hoveredNode = null;
 let selectedNode = null;
 let activeCategory = 'all';
 let isConsoleActive = false; // Hero state by default
+let isFlightActive = false;
 let heroTouchStartY = 0;
 let pointerDirty = true;
 let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
 let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
 let telemetryLastUpdate = 0;
+let launchCodeBuffer = '';
+let gameRoot, playerShip;
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
@@ -25,6 +28,13 @@ const tempCamBase = new THREE.Vector3();
 const tempCamDrift = new THREE.Vector3();
 const tempColor1 = new THREE.Color();
 const tempColor2 = new THREE.Color();
+const flightForward = new THREE.Vector3();
+const flightRight = new THREE.Vector3();
+const flightUp = new THREE.Vector3();
+const flightTempVec = new THREE.Vector3();
+const flightTempVec2 = new THREE.Vector3();
+const flightQuat = new THREE.Quaternion();
+const flightEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const ignoredRelationTags = new Set(['Featured', 'Active', 'Stable', 'Historical', 'Ecosystem']);
 const manualRelationHints = [
   ['devussy', 'swarmussy'],
@@ -61,6 +71,38 @@ const orbitState = {
   rotateSpeed: 0.005,
   zoomSpeed: 0.0015
 };
+
+const flightState = {
+  keys: new Set(),
+  pos: new THREE.Vector3(0, 2.2, 16),
+  vel: new THREE.Vector3(),
+  yaw: 0,
+  pitch: 0,
+  roll: 0,
+  view: 'cockpit',
+  pointerLocked: false,
+  score: 0,
+  shield: 100,
+  lastTime: 0,
+  lastShot: 0,
+  nearestNode: null,
+  nearestDistance: Infinity,
+  status: 'TYPE USSY TO LAUNCH',
+  lastHudUpdate: 0,
+  mouseSensitivity: 0.0022,
+  thrust: 14,
+  strafe: 8,
+  damping: 0.985,
+  fireCooldown: 140,
+  enemyFireCooldown: 1500
+};
+
+const enemies = [];
+const playerBullets = [];
+const enemyBullets = [];
+const maxEnemies = 7;
+const maxPlayerBullets = 32;
+const maxEnemyBullets = 28;
 
 function getRenderPixelRatio() {
   return Math.min(window.devicePixelRatio || 1, isCoarsePointer ? 1 : 1.25);
@@ -132,6 +174,11 @@ const labelsContainer = document.getElementById('labels-container');
 const customCursor = document.getElementById('custom-cursor');
 const telemetryTimer = document.getElementById('telemetry-timer');
 const telemetryCoord = document.getElementById('telemetry-coord');
+const flightHud = document.getElementById('flight-hud');
+const flightStatus = document.getElementById('flight-status');
+const flightScore = document.getElementById('flight-score');
+const flightShield = document.getElementById('flight-shield');
+const flightTarget = document.getElementById('flight-target');
 
 // Hero elements
 const heroContainer = document.getElementById('hero-container');
@@ -186,6 +233,7 @@ function init() {
   buildRelatedProjectEdges();
   createDeepSpaceEffects();
   createAmbientLighting();
+  createFlightGameObjects();
   syncOrbitFromCamera();
   
   // Populate UI Lists
@@ -204,6 +252,14 @@ function init() {
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
   document.addEventListener('wheel', onSceneWheel, { passive: false });
+  document.addEventListener('keydown', onGlobalKeyDown);
+  document.addEventListener('keyup', onGlobalKeyUp);
+  document.addEventListener('pointerlockchange', onPointerLockChange);
+  document.addEventListener('pointerlockerror', onPointerLockError);
+  window.addEventListener('blur', clearFlightInput);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) clearFlightInput();
+  });
 
   // Scroll Parallax Listener for Hero
   if (heroContainer) {
@@ -443,6 +499,65 @@ function createDeepSpaceEffects() {
     dataRibbonGroup.add(new THREE.Line(ribbonGeo, ribbonMat));
   }
   scene.add(dataRibbonGroup);
+}
+
+function createFlightGameObjects() {
+  gameRoot = new THREE.Group();
+  gameRoot.visible = false;
+  scene.add(gameRoot);
+
+  playerShip = new THREE.Group();
+  const shipBody = new THREE.Mesh(
+    new THREE.ConeGeometry(0.28, 1.25, 4),
+    new THREE.MeshBasicMaterial({ color: 0xdce7ff, wireframe: true, transparent: true, opacity: 0.92 })
+  );
+  shipBody.rotation.x = -Math.PI / 2;
+  playerShip.add(shipBody);
+
+  const wingMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true, transparent: true, opacity: 0.68 });
+  const wingGeo = new THREE.BoxGeometry(1.05, 0.04, 0.24);
+  const wings = new THREE.Mesh(wingGeo, wingMat);
+  wings.position.z = 0.18;
+  playerShip.add(wings);
+
+  const cockpit = new THREE.Mesh(
+    new THREE.SphereGeometry(0.14, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.75 })
+  );
+  cockpit.position.z = -0.22;
+  playerShip.add(cockpit);
+  gameRoot.add(playerShip);
+
+  const enemyGeo = new THREE.ConeGeometry(0.34, 1.1, 5);
+  const enemyMat = new THREE.MeshBasicMaterial({ color: 0xff3355, wireframe: true, transparent: true, opacity: 0.9 });
+  for (let i = 0; i < maxEnemies; i++) {
+    const enemy = new THREE.Mesh(enemyGeo, enemyMat.clone());
+    enemy.rotation.x = Math.PI / 2;
+    enemy.visible = false;
+    enemy.userData = { active: false, health: 1, cooldown: 500 + Math.random() * 1200, radius: 0.62 };
+    gameRoot.add(enemy);
+    enemies.push(enemy);
+  }
+
+  const playerBulletGeo = new THREE.SphereGeometry(0.075, 8, 8);
+  const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.95 });
+  for (let i = 0; i < maxPlayerBullets; i++) {
+    const bullet = new THREE.Mesh(playerBulletGeo, playerBulletMat);
+    bullet.visible = false;
+    bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.16 };
+    gameRoot.add(bullet);
+    playerBullets.push(bullet);
+  }
+
+  const enemyBulletGeo = new THREE.SphereGeometry(0.09, 8, 8);
+  const enemyBulletMat = new THREE.MeshBasicMaterial({ color: 0xff3355, transparent: true, opacity: 0.86 });
+  for (let i = 0; i < maxEnemyBullets; i++) {
+    const bullet = new THREE.Mesh(enemyBulletGeo, enemyBulletMat);
+    bullet.visible = false;
+    bullet.userData = { active: false, velocity: new THREE.Vector3(), life: 0, radius: 0.18 };
+    gameRoot.add(bullet);
+    enemyBullets.push(bullet);
+  }
 }
 
 // 2. Procedural Nodes Graph
@@ -747,11 +862,13 @@ function populateProjectsUI() {
       `;
     
     item.addEventListener('click', () => {
+      if (isFlightActive) return;
       selectProject(proj.id, true);
     });
     item.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
+        if (isFlightActive) return;
         selectProject(proj.id, true);
       }
     });
@@ -768,6 +885,7 @@ function setupUIEventListeners() {
     card.setAttribute('role', 'button');
     card.setAttribute('aria-pressed', card.classList.contains('active') ? 'true' : 'false');
     card.addEventListener('click', () => {
+      if (isFlightActive) return;
       cards.forEach(c => c.classList.remove('active'));
       cards.forEach(c => c.setAttribute('aria-pressed', 'false'));
       card.classList.add('active');
@@ -955,6 +1073,7 @@ function activateConsoleMode() {
 }
 
 function deactivateConsoleMode() {
+  if (isFlightActive) exitFlightMode(false);
   isConsoleActive = false;
   document.body.classList.remove('console-active');
   selectedNode = null;
@@ -973,6 +1092,204 @@ function deactivateConsoleMode() {
   if (heroContainer) {
     heroContainer.scrollTop = 0;
   }
+}
+
+function isTypingTarget(target) {
+  return Boolean(target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]'));
+}
+
+function resetCategoryFilterForFlight() {
+  activeCategory = 'all';
+  document.querySelectorAll('.category-card').forEach(card => {
+    const isAll = card.dataset.category === 'all';
+    card.classList.toggle('active', isAll);
+    card.setAttribute('aria-pressed', isAll ? 'true' : 'false');
+  });
+  projectNodes.forEach(node => {
+    node.visible = true;
+    node.userData.connectionLine.visible = true;
+  });
+  projectLabels.forEach(label => {
+    label.element.style.display = 'block';
+  });
+  populateProjectsUI();
+  updateRelationshipEdges();
+}
+
+function enterFlightMode() {
+  if (!renderer || !renderer.domElement) return;
+  if (!isConsoleActive) activateConsoleMode();
+  resetCategoryFilterForFlight();
+
+  isFlightActive = true;
+  document.body.classList.add('flight-active');
+  document.body.classList.toggle('flight-third-person', flightState.view === 'third');
+  orbitState.dragging = false;
+  document.body.classList.remove('scene-dragging');
+
+  if (gameRoot) gameRoot.visible = true;
+  flightState.keys.clear();
+  flightState.vel.set(0, 0, 0);
+  flightState.score = 0;
+  flightState.shield = 100;
+  flightState.lastTime = 0;
+  flightState.lastShot = 0;
+  flightState.nearestNode = null;
+  flightState.nearestDistance = Infinity;
+  flightState.status = isCoarsePointer ? 'KEYBOARD FLIGHT READY' : 'REQUESTING MOUSELOOK LOCK';
+  flightState.pos.copy(camCurrent.pos.lengthSq() ? camCurrent.pos : camTarget.pos);
+
+  flightTempVec.copy(camCurrent.lookAt).sub(flightState.pos).normalize();
+  if (flightTempVec.lengthSq() > 0) {
+    flightState.yaw = Math.atan2(-flightTempVec.x, -flightTempVec.z);
+    flightState.pitch = THREE.MathUtils.clamp(Math.asin(flightTempVec.y), -1.2, 1.2);
+  }
+  flightState.roll = 0;
+
+  enemies.forEach(enemy => deactivateCombatObject(enemy));
+  playerBullets.forEach(bullet => deactivateCombatObject(bullet));
+  enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
+  for (let i = 0; i < maxEnemies; i++) spawnEnemy(enemies[i], i * 1.7);
+
+  updateFlightHud(true);
+  if (!isCoarsePointer && renderer.domElement.requestPointerLock) {
+    const lockRequest = renderer.domElement.requestPointerLock();
+    if (lockRequest && typeof lockRequest.catch === 'function') {
+      lockRequest.catch(onPointerLockError);
+    }
+  }
+}
+
+function exitFlightMode(releasePointer = true) {
+  isFlightActive = false;
+  flightState.pointerLocked = false;
+  flightState.keys.clear();
+  flightState.vel.set(0, 0, 0);
+  document.body.classList.remove('flight-active', 'pointer-unlocked', 'flight-third-person');
+  if (gameRoot) gameRoot.visible = false;
+  enemies.forEach(enemy => deactivateCombatObject(enemy));
+  playerBullets.forEach(bullet => deactivateCombatObject(bullet));
+  enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
+  if (releasePointer && document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
+    document.exitPointerLock();
+  }
+  syncOrbitFromCamera();
+  updateFlightHud(true);
+}
+
+function onPointerLockChange() {
+  flightState.pointerLocked = document.pointerLockElement === renderer.domElement;
+  if (!flightState.pointerLocked) clearFlightInput();
+  document.body.classList.toggle('pointer-unlocked', isFlightActive && !flightState.pointerLocked);
+  if (isFlightActive) {
+    flightState.status = flightState.pointerLocked ? `MOUSELOOK ${flightState.view.toUpperCase()} VIEW` : 'CLICK VIEWPORT TO RECAPTURE';
+    updateFlightHud(true);
+  }
+}
+
+function onPointerLockError() {
+  if (!isFlightActive) return;
+  flightState.pointerLocked = false;
+  flightState.status = 'CLICK VIEWPORT TO CAPTURE MOUSELOOK';
+  document.body.classList.add('pointer-unlocked');
+  clearFlightInput();
+  updateFlightHud(true);
+}
+
+function clearFlightInput() {
+  if (!isFlightActive) return;
+  flightState.keys.clear();
+}
+
+function toggleFlightView() {
+  flightState.view = flightState.view === 'cockpit' ? 'third' : 'cockpit';
+  document.body.classList.toggle('flight-third-person', flightState.view === 'third');
+  flightState.status = `${flightState.view.toUpperCase()} VIEW ACTIVE`;
+  updateFlightHud(true);
+}
+
+function landOnNearestProject() {
+  updateProjectLandingTarget();
+  if (!flightState.nearestNode || flightState.nearestDistance > 3.2) {
+    flightState.status = 'APPROACH PROJECT NODE TO LAND';
+    updateFlightHud(true);
+    return;
+  }
+  const project = flightState.nearestNode.userData.project;
+  exitFlightMode();
+  selectProject(project.id, true);
+}
+
+function deactivateCombatObject(object) {
+  if (!object) return;
+  object.visible = false;
+  object.userData.active = false;
+  object.userData.life = 0;
+}
+
+function spawnEnemy(enemy, offset = 0) {
+  if (!enemy) return;
+  const angle = Math.random() * Math.PI * 2 + offset;
+  const height = (Math.random() - 0.5) * 12;
+  const radius = 18 + Math.random() * 16;
+  enemy.position.set(
+    flightState.pos.x + Math.cos(angle) * radius,
+    flightState.pos.y + height,
+    flightState.pos.z + Math.sin(angle) * radius
+  );
+  enemy.userData.active = true;
+  enemy.userData.health = 1;
+  enemy.userData.cooldown = 600 + Math.random() * flightState.enemyFireCooldown;
+  enemy.visible = true;
+}
+
+function fireBullet(pool, origin, direction, speed, life) {
+  const bullet = pool.find(item => !item.userData.active);
+  if (!bullet) return;
+  bullet.position.copy(origin);
+  bullet.userData.velocity.copy(direction).multiplyScalar(speed);
+  bullet.userData.life = life;
+  bullet.userData.active = true;
+  bullet.visible = true;
+}
+
+function onGlobalKeyDown(event) {
+  if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+
+  if (event.key.length === 1 && !isFlightActive) {
+    launchCodeBuffer = (launchCodeBuffer + event.key.toLowerCase()).slice(-4);
+    if (launchCodeBuffer === 'ussy') {
+      event.preventDefault();
+      launchCodeBuffer = '';
+      enterFlightMode();
+      return;
+    }
+  }
+
+  if (!isFlightActive) return;
+
+  if (event.code === 'Space') event.preventDefault();
+  if (event.code === 'KeyV') {
+    event.preventDefault();
+    if (!event.repeat) toggleFlightView();
+    return;
+  }
+  if (event.code === 'KeyL') {
+    event.preventDefault();
+    if (!event.repeat) landOnNearestProject();
+    return;
+  }
+  if (event.code === 'Escape' && !flightState.pointerLocked) {
+    event.preventDefault();
+    exitFlightMode();
+    return;
+  }
+  flightState.keys.add(event.code);
+}
+
+function onGlobalKeyUp(event) {
+  if (!isFlightActive) return;
+  flightState.keys.delete(event.code);
 }
 
 // Scroll Parallax Effect
@@ -1030,7 +1347,7 @@ function onHeroTouchEnd(event) {
 }
 
 function resetCameraView() {
-  if (!isConsoleActive) return;
+  if (!isConsoleActive || isFlightActive) return;
   camTarget.pos.set(0, 4, 18);
   camTarget.lookAt.set(0, 0, 0);
   syncOrbitFromCamera();
@@ -1083,6 +1400,7 @@ function applyOrbitToCamera() {
 }
 
 function onPointerDown(event) {
+  if (isFlightActive) return;
   if (!isConsoleActive || event.button !== 0) return;
   if (event.target.closest && (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive'))) return;
 
@@ -1121,6 +1439,7 @@ function onPointerUp(event) {
 }
 
 function onSceneWheel(event) {
+  if (isFlightActive) return;
   if (!isConsoleActive || isCoarsePointer) return;
   if (event.target.closest && (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive'))) return;
   event.preventDefault();
@@ -1129,6 +1448,12 @@ function onSceneWheel(event) {
 }
 
 function onMouseMove(event) {
+  if (isFlightActive && flightState.pointerLocked) {
+    flightState.yaw -= event.movementX * flightState.mouseSensitivity;
+    flightState.pitch -= event.movementY * flightState.mouseSensitivity;
+    flightState.pitch = THREE.MathUtils.clamp(flightState.pitch, -1.18, 1.18);
+    return;
+  }
   customCursor.style.left = event.clientX + 'px';
   customCursor.style.top = event.clientY + 'px';
   updatePointerFromClient(event.clientX, event.clientY);
@@ -1141,6 +1466,12 @@ function onTouchStart(event) {
 }
 
 function onSceneClick(event) {
+  if (isFlightActive) {
+    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock && !(event.target.closest && event.target.closest('.hud-panel, .hud-interactive'))) {
+      renderer.domElement.requestPointerLock();
+    }
+    return;
+  }
   // Disable clicks while simply reading/scrolling hero overlay
   if (!isConsoleActive) return;
   if (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive')) return;
@@ -1155,6 +1486,174 @@ function onSceneClick(event) {
   if (intersects.length > 0) {
     const hitNode = intersects[0].object.userData.node || intersects[0].object;
     selectProject(hitNode.userData.project.id, true);
+  }
+}
+
+function updateFlightBasis() {
+  flightEuler.set(flightState.pitch, flightState.yaw, flightState.roll, 'YXZ');
+  flightQuat.setFromEuler(flightEuler);
+  flightForward.set(0, 0, -1).applyQuaternion(flightQuat).normalize();
+  flightRight.set(1, 0, 0).applyQuaternion(flightQuat).normalize();
+  flightUp.set(0, 1, 0).applyQuaternion(flightQuat).normalize();
+}
+
+function updateFlight(time) {
+  const dt = Math.min(((time - flightState.lastTime) / 1000) || 0.016, 0.05);
+  flightState.lastTime = time;
+  updateFlightBasis();
+
+  if (flightState.pointerLocked || isCoarsePointer) {
+    const boost = flightState.keys.has('ShiftLeft') || flightState.keys.has('ShiftRight') ? 1.75 : 1;
+    if (flightState.keys.has('KeyW') || flightState.keys.has('ArrowUp')) {
+      flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * dt);
+    }
+    if (flightState.keys.has('KeyS') || flightState.keys.has('ArrowDown')) {
+      flightState.vel.addScaledVector(flightForward, -flightState.thrust * 0.58 * dt);
+    }
+    if (flightState.keys.has('KeyA') || flightState.keys.has('ArrowLeft')) {
+      flightState.vel.addScaledVector(flightRight, -flightState.strafe * dt);
+    }
+    if (flightState.keys.has('KeyD') || flightState.keys.has('ArrowRight')) {
+      flightState.vel.addScaledVector(flightRight, flightState.strafe * dt);
+    }
+    if (flightState.keys.has('KeyQ')) flightState.roll += 1.65 * dt;
+    if (flightState.keys.has('KeyE')) flightState.roll -= 1.65 * dt;
+    if (!flightState.keys.has('KeyQ') && !flightState.keys.has('KeyE')) flightState.roll *= Math.pow(0.9, dt * 60);
+
+    const maxSpeed = 22 * boost;
+    if (flightState.vel.lengthSq() > maxSpeed * maxSpeed) flightState.vel.setLength(maxSpeed);
+    if (flightState.keys.has('Space') && time - flightState.lastShot > flightState.fireCooldown) {
+      flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 0.85);
+      fireBullet(playerBullets, flightTempVec, flightForward, 44, 1.5);
+      flightState.lastShot = time;
+    }
+  } else {
+    flightState.roll *= Math.pow(0.92, dt * 60);
+  }
+
+  flightState.vel.multiplyScalar(Math.pow(flightState.damping, dt * 60));
+  flightState.pos.addScaledVector(flightState.vel, dt);
+  flightState.pos.clampLength(1.8, 58);
+
+  updateProjectLandingTarget();
+  updateCombatObjects(dt);
+  updateFlightCamera();
+  updateFlightHud(false);
+}
+
+function updateProjectLandingTarget() {
+  flightState.nearestNode = null;
+  flightState.nearestDistance = Infinity;
+  projectNodes.forEach(node => {
+    if (!node.visible) return;
+    const dist = node.position.distanceTo(flightState.pos);
+    if (dist < flightState.nearestDistance) {
+      flightState.nearestDistance = dist;
+      flightState.nearestNode = node;
+    }
+  });
+  if (flightState.nearestNode) {
+    const projectName = flightState.nearestNode.userData.project.name;
+    flightState.status = flightState.nearestDistance <= 3.2
+      ? `LANDING RANGE: ${projectName}`
+      : `${flightState.view.toUpperCase()} VIEW // ${flightState.pointerLocked || isCoarsePointer ? 'MOUSELOOK ARMED' : 'CLICK TO RECAPTURE'}`;
+  }
+}
+
+function updateCombatObjects(dt) {
+  playerBullets.forEach(bullet => updateBullet(bullet, dt));
+  enemyBullets.forEach(bullet => updateBullet(bullet, dt));
+
+  enemies.forEach(enemy => {
+    if (!enemy.userData.active) return;
+    flightTempVec.copy(flightState.pos).sub(enemy.position);
+    const dist = flightTempVec.length();
+    if (dist > 0.001) flightTempVec.multiplyScalar(1 / dist);
+    enemy.position.addScaledVector(flightTempVec, (3.3 + Math.min(flightState.score * 0.06, 1.8)) * dt);
+    enemy.lookAt(flightState.pos);
+    enemy.userData.cooldown -= dt * 1000;
+
+    if (enemy.userData.cooldown <= 0 && dist < 38) {
+      flightTempVec2.copy(flightState.pos).sub(enemy.position).normalize();
+      fireBullet(enemyBullets, enemy.position, flightTempVec2, 18, 2.1);
+      enemy.userData.cooldown = 900 + Math.random() * flightState.enemyFireCooldown;
+    }
+
+    if (dist < 1.15) {
+      flightState.shield = Math.max(0, flightState.shield - 12);
+      spawnEnemy(enemy, flightState.score);
+    }
+  });
+
+  playerBullets.forEach(bullet => {
+    if (!bullet.userData.active) return;
+    enemies.forEach(enemy => {
+      if (!enemy.userData.active || !bullet.userData.active) return;
+      const radius = enemy.userData.radius + bullet.userData.radius;
+      if (bullet.position.distanceToSquared(enemy.position) < radius * radius) {
+        deactivateCombatObject(bullet);
+        flightState.score += 1;
+        flightState.status = 'BOGEY SPLASHED';
+        spawnEnemy(enemy, flightState.score);
+      }
+    });
+  });
+
+  enemyBullets.forEach(bullet => {
+    if (!bullet.userData.active) return;
+    if (bullet.position.distanceToSquared(flightState.pos) < 0.55) {
+      deactivateCombatObject(bullet);
+      flightState.shield = Math.max(0, flightState.shield - 8);
+    }
+  });
+
+  if (flightState.shield <= 0) {
+    flightState.status = 'SHIELDS REBOOTED // SCORE PENALTY';
+    flightState.shield = 100;
+    flightState.score = Math.max(0, flightState.score - 3);
+    flightState.vel.set(0, 0, 0);
+    flightState.pos.set(0, 2.2, 16);
+    enemies.forEach((enemy, idx) => spawnEnemy(enemy, idx * 1.7));
+  }
+}
+
+function updateBullet(bullet, dt) {
+  if (!bullet.userData.active) return;
+  bullet.position.addScaledVector(bullet.userData.velocity, dt);
+  bullet.userData.life -= dt;
+  if (bullet.userData.life <= 0 || bullet.position.distanceToSquared(flightState.pos) > 3600) {
+    deactivateCombatObject(bullet);
+  }
+}
+
+function updateFlightCamera() {
+  updateFlightBasis();
+  if (playerShip) {
+    playerShip.position.copy(flightState.pos);
+    playerShip.quaternion.copy(flightQuat);
+    playerShip.visible = flightState.view === 'third';
+  }
+
+  if (flightState.view === 'third') {
+    camTarget.pos.copy(flightState.pos).addScaledVector(flightForward, -7).addScaledVector(flightUp, 2.2);
+    camTarget.lookAt.copy(flightState.pos).addScaledVector(flightForward, 8);
+  } else {
+    camTarget.pos.copy(flightState.pos).addScaledVector(flightUp, 0.08);
+    camTarget.lookAt.copy(flightState.pos).addScaledVector(flightForward, 18);
+  }
+}
+
+function updateFlightHud(force) {
+  const now = performance.now();
+  if (!force && now - flightState.lastHudUpdate < 120) return;
+  flightState.lastHudUpdate = now;
+  if (flightStatus) flightStatus.textContent = isFlightActive ? flightState.status : 'TYPE USSY TO LAUNCH';
+  if (flightScore) flightScore.textContent = String(flightState.score);
+  if (flightShield) flightShield.textContent = String(Math.round(flightState.shield));
+  if (flightTarget) {
+    flightTarget.textContent = flightState.nearestNode
+      ? `${flightState.nearestNode.userData.project.name} ${flightState.nearestDistance.toFixed(1)}u`
+      : 'NONE';
   }
 }
 
@@ -1216,7 +1715,11 @@ function animate(time) {
   if (nodesMoved || isConsoleActive) updateRelationshipEdges();
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
-  if (!isConsoleActive && heroContainer) {
+  if (isFlightActive) {
+    updateFlight(time);
+    pointLight1.color.lerp(tempColor1.set(0xffcc00), 0.08);
+    pointLight2.color.lerp(tempColor2.set(0xff3355), 0.08);
+  } else if (!isConsoleActive && heroContainer) {
     const scrollTop = heroContainer.scrollTop;
     const clientHeight = heroContainer.clientHeight || window.innerHeight;
     const sectionFloat = scrollTop / clientHeight;
@@ -1272,7 +1775,7 @@ function animate(time) {
   }
 
   // Raycasting hover highlight (only active in Console mode)
-  if (isConsoleActive && pointerDirty) {
+  if (isConsoleActive && !isFlightActive && pointerDirty) {
     const intersects = getInteractiveHits();
     pointerDirty = false;
     
@@ -1318,7 +1821,7 @@ function animate(time) {
   }
 
   // Smooth LERP camera movement
-  const lerpFactor = isConsoleActive ? 0.06 : 0.02; // Slower, more cinematic drift in Hero mode
+  const lerpFactor = isFlightActive ? (flightState.view === 'cockpit' ? 0.28 : 0.16) : (isConsoleActive ? 0.06 : 0.02); // Slower, more cinematic drift in Hero mode
   camCurrent.pos.lerp(camTarget.pos, lerpFactor);
   camCurrent.lookAt.lerp(camTarget.lookAt, lerpFactor);
   
@@ -1360,7 +1863,12 @@ function animate(time) {
   // Telemetry framerate diagnostics
   const endTime = performance.now();
   if (endTime - telemetryLastUpdate > 250) {
-    telemetryTimer.innerText = `TELEMETRY_LOAD: ${(endTime - startTime).toFixed(2)}ms // DRAW_CALLS: ${renderer.info.render.calls}`;
+    telemetryTimer.innerText = isFlightActive
+      ? `DOGFIGHT_LOAD: ${(endTime - startTime).toFixed(2)}ms // VIEW: ${flightState.view.toUpperCase()} // DRAW_CALLS: ${renderer.info.render.calls}`
+      : `TELEMETRY_LOAD: ${(endTime - startTime).toFixed(2)}ms // DRAW_CALLS: ${renderer.info.render.calls}`;
+    if (isFlightActive) {
+      telemetryCoord.innerText = `X: ${flightState.pos.x.toFixed(2)} Y: ${flightState.pos.y.toFixed(2)} Z: ${flightState.pos.z.toFixed(2)}`;
+    }
     telemetryLastUpdate = endTime;
   }
 }

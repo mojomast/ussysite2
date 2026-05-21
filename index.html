@@ -318,6 +318,27 @@
         <span><i data-lucide="zoom-in"></i> Wheel: Zoom Scope</span>
         <span><i data-lucide="mouse-pointer"></i> Click Node: Inspect Blueprint</span>
       </div>
+      <div class="flight-hud hud-interactive" id="flight-hud" aria-live="polite">
+        <div class="flight-hud-header">
+          <span>DOGFIGHT MODE</span>
+          <span id="flight-status">TYPE USSY TO LAUNCH</span>
+        </div>
+        <div class="flight-hud-grid">
+          <div>
+            <span class="flight-hud-label">KILLS</span>
+            <strong id="flight-score">0</strong>
+          </div>
+          <div>
+            <span class="flight-hud-label">SHIELD</span>
+            <strong id="flight-shield">100</strong>
+          </div>
+          <div>
+            <span class="flight-hud-label">NEAREST PROJECT</span>
+            <strong id="flight-target">NONE</strong>
+          </div>
+        </div>
+        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // SPACE fire // V view // L land // ESC unlock/exit</div>
+      </div>
       <div></div> <!-- Spacer -->
     </div>
 
@@ -400,6 +421,17 @@
       </div>
     </footer>
 
+  </div>
+
+  <div class="cockpit-overlay" id="cockpit-overlay" aria-hidden="true">
+    <div class="cockpit-vignette"></div>
+    <div class="cockpit-reticle"></div>
+    <div class="cockpit-frame cockpit-frame-left"></div>
+    <div class="cockpit-frame cockpit-frame-right"></div>
+    <div class="cockpit-dash">
+      <span>COCKPIT_VIEW</span>
+      <span>V_TOGGLES_CHASE_CAM</span>
+    </div>
   </div>
 
   <!-- Dynamic floating HTML labels for 3D scene overlays -->

@@ -1178,6 +1178,187 @@ body.console-active .hud-layout {
   color: var(--cyber-cyan);
 }
 
+.flight-hud {
+  width: min(560px, calc(100vw - 32px));
+  background: rgba(5, 9, 18, 0.88);
+  border: 1px solid rgba(255, 204, 0, 0.34);
+  border-top: 3px solid rgba(255, 204, 0, 0.58);
+  color: rgba(240, 243, 248, 0.94);
+  font-family: var(--font-mono);
+  padding: 12px 14px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+  transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.48);
+}
+
+body.flight-active .flight-hud {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.flight-hud-header,
+.flight-hud-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flight-hud-header {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.13em;
+  color: rgba(255, 204, 0, 0.92);
+  border-bottom: 1px solid rgba(255, 204, 0, 0.18);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.flight-hud-grid > div {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 8px;
+  min-width: 0;
+}
+
+.flight-hud-label {
+  display: block;
+  color: rgba(148, 163, 184, 0.78);
+  font-size: 0.54rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+
+.flight-hud strong {
+  display: block;
+  color: rgba(240, 243, 248, 0.96);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flight-hud-help {
+  margin-top: 10px;
+  color: rgba(203, 213, 225, 0.7);
+  font-size: 0.6rem;
+  line-height: 1.45;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body.pointer-unlocked .flight-hud-help::before {
+  content: 'CLICK VIEWPORT TO RECAPTURE MOUSELOOK // ';
+  color: rgba(255, 204, 0, 0.95);
+}
+
+body.flight-active .hud-left,
+body.flight-active .hud-right {
+  opacity: 0.32;
+  transition: opacity 0.2s ease;
+}
+
+body.flight-active .hud-left:hover,
+body.flight-active .hud-right:hover,
+body.flight-active.pointer-unlocked .hud-left,
+body.flight-active.pointer-unlocked .hud-right {
+  opacity: 1;
+}
+
+.cockpit-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+body.flight-active:not(.flight-third-person) .cockpit-overlay {
+  opacity: 1;
+}
+
+.cockpit-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 45%, transparent 0 38%, rgba(0, 0, 0, 0.24) 64%, rgba(0, 0, 0, 0.64) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.42), transparent 18% 82%, rgba(0, 0, 0, 0.42));
+}
+
+.cockpit-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 86px;
+  height: 86px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 204, 0, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(3, 6, 15, 0.8), 0 0 24px rgba(255, 204, 0, 0.18);
+}
+
+.cockpit-reticle::before,
+.cockpit-reticle::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 204, 0, 0.78);
+}
+
+.cockpit-reticle::before {
+  left: 50%;
+  top: -18px;
+  width: 1px;
+  height: 122px;
+}
+
+.cockpit-reticle::after {
+  left: -18px;
+  top: 50%;
+  width: 122px;
+  height: 1px;
+}
+
+.cockpit-frame {
+  position: absolute;
+  bottom: -8vh;
+  width: 34vw;
+  height: 38vh;
+  border-top: 3px solid rgba(148, 163, 184, 0.34);
+  background: linear-gradient(180deg, rgba(10, 15, 28, 0.04), rgba(3, 6, 15, 0.72));
+}
+
+.cockpit-frame-left {
+  left: -6vw;
+  transform: skewX(18deg);
+  border-right: 2px solid rgba(148, 163, 184, 0.2);
+}
+
+.cockpit-frame-right {
+  right: -6vw;
+  transform: skewX(-18deg);
+  border-left: 2px solid rgba(148, 163, 184, 0.2);
+}
+
+.cockpit-dash {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 22px;
+  padding: 8px 14px;
+  background: rgba(3, 6, 15, 0.74);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-top: 2px solid rgba(255, 204, 0, 0.38);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  color: rgba(203, 213, 225, 0.74);
+}
+
 /* 4. Right Panel: Inspector Readout */
 .hud-right {
   grid-area: right;
@@ -1523,5 +1704,17 @@ body.console-active .hud-layout {
 
   .portal-link-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .flight-hud-grid {
+    flex-direction: column;
+  }
+
+  .cockpit-dash {
+    width: calc(100vw - 32px);
+    justify-content: space-between;
+    gap: 10px;
   }
 }
