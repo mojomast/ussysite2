@@ -21,6 +21,40 @@ export function updateFlight(time = 0) {
   flightState.fuel = traderState.fuel;
 }
 
+export function canApplyThrust(state) {
+  return (state.fuel ?? 0) > 0 && !state.fuelDepleted;
+}
+
+export function applyForwardThrust(state, forward, dt, multiplier = 1) {
+  if (!canApplyThrust(state)) return state;
+  state.vel.addScaledVector(forward, (state.thrust ?? 14) * multiplier * dt);
+  return state;
+}
+
+export function applyReverseThrust(state, forward, dt) {
+  if (!canApplyThrust(state)) return state;
+  state.vel.addScaledVector(forward, -(state.thrust ?? 14) * 0.58 * dt);
+  return state;
+}
+
+export function applyStrafe(state, right, dt, direction = 1) {
+  if (!canApplyThrust(state)) return state;
+  state.vel.addScaledVector(right, (state.strafe ?? 8) * direction * dt);
+  return state;
+}
+
+export function applyRoll(state, amount) {
+  state.roll = (state.roll ?? 0) + amount;
+  return state;
+}
+
+export function drainFuelForThrust(fuelState, dt, isThrusting) {
+  if (!isThrusting || fuelState.fuel <= 0) return fuelState;
+  fuelState.fuel = Math.max(0, fuelState.fuel - (fuelState.fuelPerSecond ?? 0.35) * dt);
+  fuelState.fuelDepleted = fuelState.fuel <= 0;
+  return fuelState;
+}
+
 export function updateFlightBasis() {}
 export function applyLocalFlightRotation() {}
 export function applyOrbitToCamera() {}

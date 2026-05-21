@@ -38,6 +38,32 @@ export const combatState = {
   lastAdrenalineFrame: 0
 };
 
+export const COMBAT_PHASES = {
+  IDLE: 'IDLE',
+  COMBAT: 'COMBAT',
+  LANDED: 'LANDED',
+  DEAD: 'DEAD'
+};
+
+export function transitionCombatPhase(currentPhase, event = {}) {
+  if ((event.hull ?? event.armor ?? 1) <= 0) return COMBAT_PHASES.DEAD;
+  if (event.type === 'dock') return COMBAT_PHASES.LANDED;
+  if (event.type === 'enemyRange' && event.distance <= (event.range ?? 46)) return COMBAT_PHASES.COMBAT;
+  return currentPhase;
+}
+
+export function isPlayerDead(state) {
+  return (state.armor ?? state.hull ?? 0) <= 0;
+}
+
+export function respawnFlightState(state, base = {}) {
+  state.armor = base.armor ?? 100;
+  state.shield = base.shield ?? 100;
+  state.fuel = base.fuel ?? 100;
+  state.fuelDepleted = false;
+  return state;
+}
+
 export function setCombatFlightState(flightState) {
   if (flightState) activeFlightState = flightState;
   reapplySkills();

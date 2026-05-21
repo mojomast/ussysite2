@@ -3,7 +3,13 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
+    "test:all": "node --test test/*.test.mjs",
     "test:combat": "node --test test/combat.test.mjs",
+    "test:combat:overhaul": "node --test test/combat-overhaul.test.mjs",
+    "test:combat:state": "node --test test/combat-state.test.mjs",
+    "test:economy": "node --test test/economy.test.mjs",
+    "test:mission": "node --test test/mission.test.mjs",
+    "test:physics": "node --test test/physics.test.mjs",
     "test:tts:contract": "node --test test/tts-radio-contract.test.mjs",
     "test:tts:server": "node --test test/tts-backend.test.mjs",
     "test:tts:models": "OPENROUTER_VALIDATE_MODELS=1 node --test test/tts-radio-contract.test.mjs",

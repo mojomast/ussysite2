@@ -242,6 +242,42 @@ export function applyHeatShot(state, overheatBuildup) {
   return state;
 }
 
+export function coolHeat(state, dt, coolRate = state.heatCoolRate ?? 12) {
+  state.heat = Math.max(0, state.heat - coolRate * dt);
+  if (state.overheated && state.heat <= 0) state.overheated = false;
+  return state;
+}
+
+export function canFireWeapon(state) {
+  return !state.overheated && state.heat < state.maxHeat;
+}
+
+export function getAdrenalineState({ armor, maxArmor = 100 }, threshold = 0.25) {
+  const ratio = maxArmor > 0 ? armor / maxArmor : 0;
+  return { active: ratio <= threshold, ratio };
+}
+
+export function createEnemyStats(classId = 'scout') {
+  const cls = getEnemyClass(classId);
+  return {
+    id: cls.id,
+    hull: cls.health,
+    shieldPips: cls.health > 2 ? cls.health - 1 : 0,
+    weaponLoadout: {
+      fireRate: cls.fireRate,
+      burstCount: cls.burstCount,
+      burstDelay: cls.burstDelay,
+      accuracy: cls.accuracy
+    },
+    rewards: getEnemyKillReward(classId)
+  };
+}
+
+export function getEnemyKillReward(classId = 'scout') {
+  const cls = getEnemyClass(classId);
+  return { credits: cls.creditReward, xp: cls.xpReward };
+}
+
 export function simulateBurstFire({ burstCount, burstDelay }, durationMs) {
   const firedAt = [];
   for (let i = 0; i < burstCount; i++) {
