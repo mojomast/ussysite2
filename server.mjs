@@ -30,7 +30,39 @@ const openRouterModel = process.env.OPENROUTER_TTS_MODEL || 'openai/gpt-audio';
 const openRouterVoice = process.env.OPENROUTER_TTS_VOICE || 'onyx';
 const openRouterFormat = process.env.OPENROUTER_TTS_FORMAT || 'pcm16';
 const openRouterSampleRate = Number(process.env.OPENROUTER_TTS_SAMPLE_RATE || 24000);
+const orchestratorModel = process.env.ORCHESTRATOR_MODEL || 'google/gemini-2.5-flash-preview';
+const orchestratorEnabled = process.env.ORCHESTRATOR_ENABLED !== 'false';
 const maxBodyBytes = 16 * 1024;
+
+const ORCHESTRATOR_SYSTEM_PROMPT = `You are the AI game master for USSYVERSE, a space combat and trading easter egg hidden inside a developer portfolio site. The player pilots a scrap-class ship through a constellation of real software project nodes. Your job is to decide what event, if any, fires next in the gameplay loop.
+
+Respond with a single JSON object only. No markdown fences, no explanation.
+Schema:
+{
+  "fire": true | false,
+  "event": {
+    "id": string,
+    "type": "COMBAT" | "COMMS" | "DISTRESS" | "BOUNTY" | "CONTRABAND" | "ANOMALY" | "SILENCE",
+    "source": string,           // who is transmitting (faction/ship name, 8-16 chars uppercase)
+    "title": string,            // message type label shown in HUD, 1-4 words uppercase
+    "text": string,             // full radio message, 1-3 sentences, terse military/sci-fi tone
+    "choices": [
+      { "key": "1"|"2"|"3", "label": string, "outcome": string }
+    ],
+    "spawnEnemies": number,
+    "creditReward": number,
+    "fuelReward": number,
+    "urgency": "low"|"normal"|"high"
+  } | null
+}
+
+If fire is false, event must be null. Fire sparingly - not every call should produce an event. Use the gameState to make sensible decisions:
+- Do not fire combat events if shield < 30.
+- Do not fire distress signals if the player has no credits or cargo to offer.
+- Fire SILENCE type occasionally with a short atmospheric transmission that has no action.
+- Space events out: timeSinceLastEvent < 45 should usually return fire: false.
+- ANOMALY events are rare and reference actual project names from the constellation (nearestStation).
+- Keep text under 180 characters.`;
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -104,6 +136,64 @@ function buildOpenRouterPayload({ text, voiceId, format }) {
     },
     stream: true
   };
+}
+
+function buildOrchestratorOpenRouterPayload(gameState) {
+  return {
+    model: orchestratorModel,
+    messages: [
+      { role: 'system', content: ORCHESTRATOR_SYSTEM_PROMPT },
+      { role: 'user', content: JSON.stringify({ gameState }) }
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.45,
+    max_tokens: 420
+  };
+}
+
+function getOrchestratorFailure(error) {
+  return { fire: false, event: null, error };
+}
+
+function cleanString(value, fallback = '') {
+  return String(value ?? fallback).trim();
+}
+
+function validateOrchestratorEvent(event) {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) throw new Error('event must be an object');
+  const allowedTypes = new Set(['COMBAT', 'COMMS', 'DISTRESS', 'BOUNTY', 'CONTRABAND', 'ANOMALY', 'SILENCE']);
+  const allowedUrgency = new Set(['low', 'normal', 'high']);
+  const type = cleanString(event.type).toUpperCase();
+  if (!allowedTypes.has(type)) throw new Error('invalid event type');
+  const choices = Array.isArray(event.choices) ? event.choices.slice(0, 3).map(choice => {
+    const key = cleanString(choice.key);
+    if (!['1', '2', '3'].includes(key)) throw new Error('invalid choice key');
+    return {
+      key,
+      label: cleanString(choice.label).slice(0, 48),
+      outcome: cleanString(choice.outcome).slice(0, 180)
+    };
+  }) : [];
+  return {
+    id: cleanString(event.id || `${type.toLowerCase()}_${Date.now()}`).replace(/[^a-z0-9_]/gi, '_').toLowerCase().slice(0, 64),
+    type,
+    source: cleanString(event.source || 'UNKNOWN').toUpperCase().slice(0, 16),
+    title: cleanString(event.title || type).toUpperCase().slice(0, 32),
+    text: cleanString(event.text).slice(0, 180),
+    choices,
+    spawnEnemies: Math.max(0, Math.min(5, Math.floor(Number(event.spawnEnemies) || 0))),
+    creditReward: Math.max(0, Math.floor(Number(event.creditReward) || 0)),
+    fuelReward: Math.max(0, Math.floor(Number(event.fuelReward) || 0)),
+    urgency: allowedUrgency.has(event.urgency) ? event.urgency : 'normal'
+  };
+}
+
+export function validateOrchestratorResponse(value) {
+  const data = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('response must be an object');
+  if (typeof data.fire !== 'boolean') throw new Error('fire must be boolean');
+  if (!data.fire) return { fire: false, event: null };
+  return { fire: true, event: validateOrchestratorEvent(data.event) };
 }
 
 function parseOpenRouterAudioStream(streamText) {
@@ -198,6 +288,98 @@ async function fetchOpenRouterSpeech(payload, origin = 'http://localhost') {
   };
 }
 
+export async function fetchOpenRouterOrchestration(gameState, origin = 'http://localhost') {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return { status: 503, error: 'OPENROUTER_API_KEY is not configured on the server' };
+
+  const primaryPayload = buildOrchestratorOpenRouterPayload(gameState);
+  const requestModels = [orchestratorModel];
+  if (orchestratorModel !== 'google/gemini-2.0-flash-001') requestModels.push('google/gemini-2.0-flash-001');
+
+  let lastError = null;
+  for (const model of requestModels) {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': origin,
+        'X-Title': 'USSYVERSE'
+      },
+      body: JSON.stringify({ ...primaryPayload, model })
+    });
+
+    if (!response.ok) {
+      lastError = { status: response.status, error: 'OpenRouter orchestrator request failed', details: await response.text() };
+      continue;
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) return { status: 502, error: 'OpenRouter response did not include orchestrator content' };
+    return { status: 200, data: validateOrchestratorResponse(content) };
+  }
+
+  return lastError || { status: 502, error: 'OpenRouter orchestrator request failed' };
+}
+
+function normalizeOrchestratorGameState(gameState) {
+  const cargo = gameState && typeof gameState.cargo === 'object' && !Array.isArray(gameState.cargo) ? gameState.cargo : {};
+  return {
+    score: Number(gameState?.score) || 0,
+    credits: Number(gameState?.credits) || 0,
+    fuel: Number(gameState?.fuel) || 0,
+    cargo,
+    shield: Number(gameState?.shield) || 0,
+    armor: Number(gameState?.armor) || 0,
+    ammo: Number(gameState?.ammo) || 0,
+    missiles: Number(gameState?.missiles) || 0,
+    kills: Number(gameState?.kills) || 0,
+    nearestStation: cleanString(gameState?.nearestStation || 'unknown').slice(0, 64),
+    dockedAt: gameState?.dockedAt === null || gameState?.dockedAt === undefined ? null : cleanString(gameState.dockedAt).slice(0, 64),
+    lastEvent: gameState?.lastEvent === null || gameState?.lastEvent === undefined ? null : cleanString(gameState.lastEvent).slice(0, 64),
+    timeSinceLastEvent: Number(gameState?.timeSinceLastEvent) || 0,
+    tutorialComplete: Boolean(gameState?.tutorialComplete)
+  };
+}
+
+async function handleOrchestrate(req, res) {
+  if (!isAllowedSameOrigin(req)) {
+    sendJson(res, 403, { error: 'Orchestrator endpoint only accepts same-origin browser requests' });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readRequestJson(req);
+  } catch (error) {
+    sendJson(res, 400, { error: error.message });
+    return;
+  }
+
+  if (!orchestratorEnabled) {
+    sendJson(res, 200, { fire: false, event: null });
+    return;
+  }
+
+  if (!body || typeof body.gameState !== 'object') {
+    sendJson(res, 400, getOrchestratorFailure('Missing gameState'));
+    return;
+  }
+
+  try {
+    const origin = req.headers.origin || `http://${req.headers.host || 'localhost'}`;
+    const result = await fetchOpenRouterOrchestration(normalizeOrchestratorGameState(body.gameState), origin);
+    if (!result.data) {
+      sendJson(res, result.status || 502, getOrchestratorFailure(result.error || 'OpenRouter orchestrator failed'));
+      return;
+    }
+    sendJson(res, 200, result.data);
+  } catch (error) {
+    sendJson(res, 200, getOrchestratorFailure(error.message || 'Invalid orchestrator response'));
+  }
+}
+
 async function handleTTS(req, res) {
   if (!isAllowedSameOrigin(req)) {
     sendJson(res, 403, { error: 'TTS endpoint only accepts same-origin browser requests' });
@@ -269,8 +451,17 @@ export function createAppServer() {
         model: openRouterModel,
         voice: openRouterVoice,
         format: openRouterFormat,
-        sampleRate: openRouterSampleRate
+        sampleRate: openRouterSampleRate,
+        orchestrator: {
+          configured: orchestratorEnabled,
+          model: orchestratorModel
+        }
       });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/orchestrate') {
+      await handleOrchestrate(req, res);
       return;
     }
 

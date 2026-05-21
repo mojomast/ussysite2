@@ -74,7 +74,8 @@ test('TTS transmissions are single-owner and radio text avoids spoken slash char
 test('mission transmissions outrank low-priority combat barks', () => {
   assert.match(appSource, /priority: 'high'/);
   assert.match(appSource, /priority: 'low'/);
-  assert.match(appSource, /ttsEngine\.speak\(text, \{\n\s+\.\.\.getVoicePersona\(source\),\n\s+priority: 'high'/);
+  assert.match(appSource, /ttsPriority = 'high'/);
+  assert.match(appSource, /priority: ttsPriority/);
   assert.match(appSource, /ttsEngine\.speak\('FOX TWO', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
   assert.match(appSource, /ttsEngine\.speak\('TAKING FIRE', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
 });

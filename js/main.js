@@ -1,6 +1,7 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
 import { configureTrader, openTradeMenu, refuelAt, traderState, updateFuelDrain } from './economy/trader.js';
+import { activateEnemyWave, buildOrchestratorGameState } from './flight/orchestrator.js';
 
 const USSY_PROJECTS = window.USSY_PROJECTS || [];
 const USSY_CATEGORIES = window.USSY_CATEGORIES || {};
@@ -158,6 +159,20 @@ const missionState = {
   killGoal: 5,
   kills: 0,
   landingProjectId: 'devussy'
+};
+
+const gameOrchestrator = {
+  enabled: true,
+  polling: false,
+  lastEventTime: 0,
+  lastEventId: null,
+  minInterval: 40000,
+  maxInterval: 90000,
+  nextPollAt: 0,
+  tutorialComplete: false,
+  pendingEvent: null,
+  bountyPendingReward: 0,
+  _lastCheck: 0
 };
 
 const gameMessageState = {
@@ -549,6 +564,9 @@ function setTTSKey(key) {
 }
 
 window.setTTSKey = setTTSKey;
+window.gameOrchestrator = gameOrchestrator;
+window.pollOrchestrator = pollOrchestrator;
+window.buildOrchestratorPayload = buildOrchestratorPayload;
 
 function buildBackendTTSRequest(text, persona = {}) {
   return {
@@ -1743,6 +1761,12 @@ function enterFlightMode() {
   traderState.fuel = traderState.maxFuel;
   traderState.docked = false;
   traderState.dockedStation = null;
+  gameOrchestrator.tutorialComplete = false;
+  gameOrchestrator.pendingEvent = null;
+  gameOrchestrator.bountyPendingReward = 0;
+  gameOrchestrator.nextPollAt = 0;
+  gameOrchestrator.lastEventTime = 0;
+  gameOrchestrator.lastEventId = null;
   flightState.lastTime = 0;
   flightState.lastShot = 0;
   flightState.lastMissile = 0;
@@ -1800,6 +1824,8 @@ function exitFlightMode(releasePointer = true) {
   flightState.vel.set(0, 0, 0);
   traderState.docked = false;
   traderState.dockedStation = null;
+  gameOrchestrator.polling = false;
+  gameOrchestrator.pendingEvent = null;
   document.body.classList.remove('flight-active', 'pointer-unlocked', 'flight-third-person');
   if (gameRoot) gameRoot.visible = false;
   applyFlightUniverseScale(1);
@@ -2003,7 +2029,7 @@ function getVoicePersona(source = '') {
   return { pitch: 0.82, rate: 1.0, voiceId: 'onyx' };
 }
 
-function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18 }) {
+function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18, ttsPriority = 'high' }) {
   const messageToken = Symbol('game-message');
   gameMessageState.active = true;
   gameMessageState.type = type;
@@ -2020,7 +2046,7 @@ function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text 
   renderGameMessage();
   ttsEngine.speak(text, {
     ...getVoicePersona(source),
-    priority: 'high',
+    priority: ttsPriority,
     onStart: () => {
       if (!gameMessageState.active || gameMessageState.token !== messageToken) return;
       gameMessageState.ttsWaitUntil = 0;
@@ -2135,12 +2161,16 @@ function setMissionStep(step) {
     });
     flightState.status = 'MISSION HANDOFF RECEIVED';
     flightState.statusUntil = performance.now() + 3000;
+    missionState.active = false;
+    missionState.step = 'idle';
+    gameOrchestrator.tutorialComplete = true;
+    gameOrchestrator.nextPollAt = performance.now() + 30000;
   }
 }
 
 function updateMission(time) {
-  if (!missionState.active) return;
   updateGameMessage(time);
+  if (!missionState.active) return;
 }
 
 function registerMissionKill() {
@@ -2197,6 +2227,19 @@ function spawnTutorialBogeys() {
 
 function handleEnemyDestroyed(enemy) {
   registerMissionKill();
+  if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
+    deactivateCombatObject(enemy);
+    if (enemies.every(item => !item.userData.active)) {
+      const reward = gameOrchestrator.bountyPendingReward;
+      traderState.credits += reward;
+      flightState.status = `BOUNTY CLAIMED: +${reward}cr`;
+      flightState.statusUntil = performance.now() + 3000;
+      gameOrchestrator.bountyPendingReward = 0;
+      ttsEngine.speak('BOUNTY CLAIMED.', getVoicePersona('USSYVERSE CONTROL'));
+      updateFlightHud(true);
+    }
+    return;
+  }
   if (missionState.active && missionState.step === 'killTutorialBogeys' && missionState.kills < missionState.killGoal) {
     spawnEnemy(enemy, flightState.score + missionState.kills, 1.2 + Math.random() * 1.6);
   } else if (missionState.active && missionState.step !== 'killTutorialBogeys') {
@@ -2313,6 +2356,201 @@ function findNearestEnemy() {
     }
   });
   return nearest;
+}
+
+function buildOrchestratorPayload() {
+  const nearestStation = flightState.nearestNode?.userData?.project?.id || null;
+  return buildOrchestratorGameState({
+    flightState,
+    traderState,
+    missionState,
+    nearestStation,
+    dockedAt: traderState.docked ? traderState.dockedStation : null,
+    lastEvent: gameOrchestrator.lastEventId,
+    lastEventTime: gameOrchestrator.lastEventTime,
+    now: performance.now(),
+    tutorialComplete: gameOrchestrator.tutorialComplete
+  });
+}
+
+async function pollOrchestrator() {
+  if (!gameOrchestrator.enabled || gameOrchestrator.polling || !isFlightActive) return;
+  if (performance.now() < gameOrchestrator.nextPollAt) return;
+  if (gameMessageState.active) return;
+  if (!gameOrchestrator.tutorialComplete) return;
+
+  gameOrchestrator.polling = true;
+  try {
+    const res = await fetch('/api/orchestrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameState: buildOrchestratorPayload() })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.fire && data.event) {
+      gameOrchestrator.pendingEvent = data.event;
+      fireOrchestratedEvent(data.event);
+    }
+  } catch {
+    // Orchestration is opportunistic and must never interrupt the local game loop.
+  } finally {
+    gameOrchestrator.polling = false;
+    const jitter = Math.random() * 20000;
+    gameOrchestrator.nextPollAt = performance.now() + gameOrchestrator.minInterval + jitter;
+  }
+}
+
+function spawnOrchestratedEnemies(event, count = event.spawnEnemies) {
+  const spawned = activateEnemyWave(enemies, Math.min(count || 0, maxEnemies), (enemy, offset, delay) => {
+    spawnEnemy(enemy, offset, delay);
+    enemy.userData.orchestratorEventId = event.id;
+    enemy.userData.bountyEventId = event.type === 'BOUNTY' ? event.id : null;
+  });
+  return spawned;
+}
+
+function getRandomActiveProjectNode() {
+  const visible = projectNodes.filter(node => node.visible);
+  if (!visible.length) return null;
+  return visible[Math.floor(Math.random() * visible.length)];
+}
+
+function showOrchestratorMessage(event, choices, overrides = {}) {
+  showGameMessage({
+    type: event.title || event.type,
+    source: event.source || 'DEEP SPACE',
+    text: event.text || 'NO SIGNAL.',
+    choices,
+    typeSpeed: overrides.typeSpeed ?? (event.urgency === 'high' ? 12 : 20),
+    ttsPriority: overrides.ttsPriority ?? (event.urgency === 'low' ? 'low' : 'high')
+  });
+}
+
+function fireOrchestratedEvent(event) {
+  const normalizedEvent = {
+    id: event.id || `event_${Date.now()}`,
+    type: String(event.type || 'COMMS').toUpperCase(),
+    source: event.source || 'DEEP SPACE',
+    title: event.title || event.type || 'COMMS',
+    text: event.text || 'UNRESOLVED TRANSMISSION.',
+    choices: Array.isArray(event.choices) ? event.choices : [],
+    spawnEnemies: Math.max(0, Math.min(5, Number(event.spawnEnemies) || 0)),
+    creditReward: Math.max(0, Number(event.creditReward) || 0),
+    fuelReward: Math.max(0, Number(event.fuelReward) || 0),
+    urgency: event.urgency || 'normal'
+  };
+  gameOrchestrator.lastEventTime = performance.now();
+  gameOrchestrator.lastEventId = normalizedEvent.id;
+
+  if (normalizedEvent.type === 'COMBAT') {
+    spawnOrchestratedEnemies(normalizedEvent);
+    flightState.status = `HOSTILE CONTACT: ${normalizedEvent.source}`;
+    flightState.statusUntil = performance.now() + 3000;
+  } else if (normalizedEvent.type === 'BOUNTY') {
+    spawnOrchestratedEnemies(normalizedEvent);
+    gameOrchestrator.bountyPendingReward = normalizedEvent.creditReward || 250;
+  }
+
+  if (normalizedEvent.type === 'DISTRESS') {
+    showOrchestratorMessage(normalizedEvent, [
+      {
+        key: '1',
+        code: 'Digit1',
+        label: 'RESPOND',
+        action: () => {
+          dismissGameMessage();
+          const node = getRandomActiveProjectNode();
+          if (node) setNavigationTarget(node, 'mission');
+          window.setTimeout(() => showGameMessage({ type: 'NAVIGATION UPDATED', source: 'USSYVERSE CONTROL', text: 'NAVIGATION UPDATED. PROCEED TO COORDINATES.', typeSpeed: 16 }), 400);
+        }
+      },
+      { key: '2', code: 'Digit2', label: 'IGNORE', action: () => resolveOrchestratedChoice(normalizedEvent, { key: '2', outcome: 'DISTRESS SIGNAL IGNORED. THE CHANNEL FADES INTO STATIC.' }) }
+    ]);
+    return;
+  }
+
+  if (normalizedEvent.type === 'CONTRABAND') {
+    const cargoIds = Object.keys(traderState.cargo).filter(id => traderState.cargo[id] > 0);
+    if (!cargoIds.length) {
+      showOrchestratorMessage({ ...normalizedEvent, text: normalizedEvent.text || 'INSPECTION SWEEP PASSES. NO CONTRABAND SIGNATURE FOUND.' }, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }]);
+      return;
+    }
+    showOrchestratorMessage(normalizedEvent, [
+      {
+        key: '1',
+        code: 'Digit1',
+        label: 'JETTISON CARGO',
+        action: () => {
+          const cargoId = cargoIds[0];
+          delete traderState.cargo[cargoId];
+          traderState.credits = Math.max(0, traderState.credits - 50);
+          updateFlightHud(true);
+          resolveOrchestratedChoice(normalizedEvent, { key: '1', outcome: 'CARGO JETTISONED. ENFORCER SCAN SATISFIED. 50 CREDIT HANDLING FINE PAID.' });
+        }
+      },
+      {
+        key: '2',
+        code: 'Digit2',
+        label: 'REFUSE',
+        action: () => {
+          spawnOrchestratedEnemies({ ...normalizedEvent, source: 'ENFORCERS', type: 'COMBAT' }, 2);
+          flightState.status = 'ENFORCERS DEPLOYED';
+          flightState.statusUntil = performance.now() + 3000;
+          resolveOrchestratedChoice(normalizedEvent, { key: '2', outcome: 'REFUSAL LOGGED. ENFORCER FLIGHT HAS WEAPONS FREE.' });
+        }
+      }
+    ]);
+    return;
+  }
+
+  if (normalizedEvent.type === 'ANOMALY') {
+    const fuelReward = normalizedEvent.fuelReward || (5 + Math.floor(Math.random() * 6));
+    traderState.fuel = Math.min(traderState.maxFuel, traderState.fuel + fuelReward);
+    updateFlightHud(true);
+    showOrchestratorMessage(normalizedEvent, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }], { typeSpeed: 24, ttsPriority: 'low' });
+    return;
+  }
+
+  const choices = normalizedEvent.choices.map(choice => ({
+    key: choice.key,
+    code: `Digit${choice.key}`,
+    label: choice.label,
+    action: () => resolveOrchestratedChoice(normalizedEvent, choice)
+  }));
+
+  if (choices.length === 0) {
+    choices.push({ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() });
+  }
+
+  const typeSpeed = normalizedEvent.type === 'SILENCE' ? 28 : undefined;
+  const ttsPriority = normalizedEvent.type === 'SILENCE' ? 'low' : undefined;
+  showOrchestratorMessage(normalizedEvent, choices, { typeSpeed, ttsPriority });
+}
+
+function resolveOrchestratedChoice(event, choice) {
+  dismissGameMessage();
+  if (choice.outcome) {
+    const outcomeText = choice.outcome.slice(0, 160);
+    window.setTimeout(() => {
+      showGameMessage({
+        type: 'OUTCOME',
+        source: event.source,
+        text: outcomeText,
+        typeSpeed: 16
+      });
+    }, 400);
+  }
+  if (event.type !== 'BOUNTY' && event.creditReward && choice.key === '1') {
+    traderState.credits += event.creditReward;
+    flightState.status = `+${event.creditReward} CREDITS`;
+    flightState.statusUntil = performance.now() + 2500;
+    updateFlightHud(true);
+  }
+  if (event.fuelReward && choice.key === '1') {
+    traderState.fuel = Math.min(traderState.maxFuel, traderState.fuel + event.fuelReward);
+    updateFlightHud(true);
+  }
 }
 
 function onGlobalKeyDown(event) {
@@ -3168,6 +3406,10 @@ function animate(time) {
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
     updateFlight(time);
+    if (time - gameOrchestrator._lastCheck > 1000) {
+      gameOrchestrator._lastCheck = time;
+      pollOrchestrator();
+    }
     pointLight1.color.lerp(tempColor1.set(0xffcc00), 0.08);
     pointLight2.color.lerp(tempColor2.set(0xff3355), 0.08);
   } else if (!isConsoleActive && heroContainer) {
