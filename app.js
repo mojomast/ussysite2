@@ -9,8 +9,10 @@ let selectedNode = null;
 let activeCategory = 'all';
 let isConsoleActive = false; // Hero state by default
 let heroTouchStartY = 0;
+let pointerDirty = true;
 let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
-let starField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
+let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
+let telemetryLastUpdate = 0;
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
@@ -19,6 +21,10 @@ const projectNodeById = new Map();
 const relationshipEdges = [];
 const selectedEdgeLimit = 8;
 const labelTempVec = new THREE.Vector3();
+const tempCamBase = new THREE.Vector3();
+const tempCamDrift = new THREE.Vector3();
+const tempColor1 = new THREE.Color();
+const tempColor2 = new THREE.Color();
 const ignoredRelationTags = new Set(['Featured', 'Active', 'Stable', 'Historical', 'Ecosystem']);
 const manualRelationHints = [
   ['devussy', 'swarmussy'],
@@ -55,6 +61,10 @@ const orbitState = {
   rotateSpeed: 0.005,
   zoomSpeed: 0.0015
 };
+
+function getRenderPixelRatio() {
+  return Math.min(window.devicePixelRatio || 1, isCoarsePointer ? 1 : 1.25);
+}
 
 // Animation state
 const camTarget = {
@@ -151,8 +161,8 @@ function init() {
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   
   // Renderer Setup
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isCoarsePointer ? 1.35 : 1.75));
+  renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(getRenderPixelRatio());
   renderer.setSize(window.innerWidth, window.innerHeight);
   if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
   canvasContainer.appendChild(renderer.domElement);
@@ -222,7 +232,7 @@ function createHolographicCore() {
 
   // Outer Core: Glowing Particle Field
   const particleGeo = new THREE.BufferGeometry();
-  const particleCount = 600;
+  const particleCount = prefersReducedMotion || isCoarsePointer ? 260 : 380;
   const positions = new Float32Array(particleCount * 3);
   
   for(let i = 0; i < particleCount; i++) {
@@ -257,7 +267,7 @@ function createHolographicCore() {
     color: 0x00f0ff,
     size: 0.15,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.55,
     map: pTexture,
     blending: THREE.AdditiveBlending,
     depthWrite: false
@@ -280,35 +290,139 @@ function createHolographicCore() {
 }
 
 function createDeepSpaceEffects() {
-  const starCount = prefersReducedMotion || isCoarsePointer ? 220 : 520;
+  const starCount = prefersReducedMotion ? 900 : (isCoarsePointer ? 1100 : 2400);
   const starGeo = new THREE.BufferGeometry();
   const positions = new Float32Array(starCount * 3);
+  const colors = new Float32Array(starCount * 3);
+  const starCanvas = document.createElement('canvas');
+  starCanvas.width = 32;
+  starCanvas.height = 32;
+  const starCtx = starCanvas.getContext('2d');
+  const starGrad = starCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  starGrad.addColorStop(0, 'rgba(255,255,255,1)');
+  starGrad.addColorStop(0.22, 'rgba(255,255,255,0.85)');
+  starGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  starCtx.fillStyle = starGrad;
+  starCtx.fillRect(0, 0, 32, 32);
+  const starTexture = new THREE.CanvasTexture(starCanvas);
+  const colorPalette = [
+    new THREE.Color(0xdce7ff),
+    new THREE.Color(0xf4f0df),
+    new THREE.Color(0xb8caff),
+    new THREE.Color(0xffdfb0)
+  ];
 
   for (let i = 0; i < starCount; i++) {
-    const radius = 24 + Math.random() * 55;
+    const radius = 28 + Math.pow(Math.random(), 0.45) * 92;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
     positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
     positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
     positions[i * 3 + 2] = radius * Math.cos(phi);
+
+    const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+    const intensity = 0.45 + Math.pow(Math.random(), 3) * 0.55;
+    colors[i * 3] = color.r * intensity;
+    colors[i * 3 + 1] = color.g * intensity;
+    colors[i * 3 + 2] = color.b * intensity;
   }
 
   starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   starField = new THREE.Points(
     starGeo,
     new THREE.PointsMaterial({
-      color: 0x7dfcff,
-      size: 0.045,
+      size: isCoarsePointer ? 0.55 : 0.42,
+      vertexColors: true,
+      map: starTexture,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.95,
       blending: THREE.AdditiveBlending,
-      depthWrite: false
+      depthWrite: false,
+      fog: false
     })
   );
   scene.add(starField);
 
+  const bandCount = prefersReducedMotion ? 360 : (isCoarsePointer ? 520 : 1200);
+  const bandGeo = new THREE.BufferGeometry();
+  const bandPositions = new Float32Array(bandCount * 3);
+  const bandColors = new Float32Array(bandCount * 3);
+  const bandColorA = new THREE.Color(0x9fb2df);
+  const bandColorB = new THREE.Color(0xf0d4aa);
+
+  for (let i = 0; i < bandCount; i++) {
+    const spread = (Math.random() - 0.5) * 86;
+    const thickness = (Math.random() - 0.5) * (5 + Math.random() * 9);
+    const depth = -58 - Math.random() * 36;
+    bandPositions[i * 3] = spread;
+    bandPositions[i * 3 + 1] = thickness + Math.sin(spread * 0.08) * 3.5;
+    bandPositions[i * 3 + 2] = depth + (Math.random() - 0.5) * 18;
+
+    const color = Math.random() > 0.72 ? bandColorB : bandColorA;
+    const intensity = 0.18 + Math.pow(Math.random(), 2) * 0.34;
+    bandColors[i * 3] = color.r * intensity;
+    bandColors[i * 3 + 1] = color.g * intensity;
+    bandColors[i * 3 + 2] = color.b * intensity;
+  }
+
+  bandGeo.setAttribute('position', new THREE.BufferAttribute(bandPositions, 3));
+  bandGeo.setAttribute('color', new THREE.BufferAttribute(bandColors, 3));
+  milkyWayField = new THREE.Points(
+    bandGeo,
+    new THREE.PointsMaterial({
+      size: isCoarsePointer ? 0.85 : 0.7,
+      vertexColors: true,
+      map: starTexture,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    })
+  );
+  milkyWayField.rotation.z = -0.38;
+  milkyWayField.rotation.y = 0.18;
+  scene.add(milkyWayField);
+
+  const brightCount = prefersReducedMotion ? 10 : (isCoarsePointer ? 14 : 30);
+  const brightGeo = new THREE.BufferGeometry();
+  const brightPositions = new Float32Array(brightCount * 3);
+  const brightColors = new Float32Array(brightCount * 3);
+
+  for (let i = 0; i < brightCount; i++) {
+    const radius = 42 + Math.random() * 76;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    brightPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+    brightPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+    brightPositions[i * 3 + 2] = radius * Math.cos(phi);
+
+    const color = Math.random() > 0.5 ? new THREE.Color(0xfff2cf) : new THREE.Color(0xd9e7ff);
+    brightColors[i * 3] = color.r;
+    brightColors[i * 3 + 1] = color.g;
+    brightColors[i * 3 + 2] = color.b;
+  }
+
+  brightGeo.setAttribute('position', new THREE.BufferAttribute(brightPositions, 3));
+  brightGeo.setAttribute('color', new THREE.BufferAttribute(brightColors, 3));
+  brightStarField = new THREE.Points(
+    brightGeo,
+    new THREE.PointsMaterial({
+      size: isCoarsePointer ? 1.65 : 1.25,
+      vertexColors: true,
+      map: starTexture,
+      transparent: true,
+      opacity: 0.86,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    })
+  );
+  scene.add(brightStarField);
+
   dataRibbonGroup = new THREE.Group();
-  const ribbonCount = prefersReducedMotion || isCoarsePointer ? 2 : 5;
+  const ribbonCount = prefersReducedMotion || isCoarsePointer ? 0 : 1;
   for (let i = 0; i < ribbonCount; i++) {
     const points = [];
     const radius = 4.5 + i * 2.2;
@@ -324,7 +438,7 @@ function createDeepSpaceEffects() {
     const ribbonMat = new THREE.LineBasicMaterial({
       color: i % 2 ? 0xff0055 : 0x00f0ff,
       transparent: true,
-      opacity: 0.08
+      opacity: 0.025
     });
     dataRibbonGroup.add(new THREE.Line(ribbonGeo, ribbonMat));
   }
@@ -939,6 +1053,7 @@ canvasContainer.addEventListener('dblclick', resetCameraView);
 function updatePointerFromClient(clientX, clientY) {
   mouse.x = (clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+  pointerDirty = true;
   telemetryCoord.innerText = `X: ${mouse.x.toFixed(2)} Y: ${mouse.y.toFixed(2)} Z: 0.00`;
 }
 
@@ -1046,7 +1161,7 @@ function onSceneClick(event) {
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isCoarsePointer ? 1.35 : 1.75));
+  renderer.setPixelRatio(getRenderPixelRatio());
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
@@ -1067,6 +1182,12 @@ function animate(time) {
     starField.rotation.y += 0.00008;
     starField.rotation.x += 0.00003;
   }
+  if (milkyWayField && !prefersReducedMotion) {
+    milkyWayField.rotation.y += 0.000025;
+  }
+  if (brightStarField && !prefersReducedMotion) {
+    brightStarField.rotation.y -= 0.000045;
+  }
   if (dataRibbonGroup && !prefersReducedMotion) {
     dataRibbonGroup.rotation.y -= 0.00018;
   }
@@ -1075,7 +1196,8 @@ function animate(time) {
   coreMesh.scale.setScalar(pulseScale);
 
   // Floating nodes orbits (slow drift)
-  const orbitSpeed = 0.0003;
+  const orbitSpeed = isConsoleActive ? 0.0003 : 0.00012;
+  let nodesMoved = false;
   projectNodes.forEach(node => {
     if (!prefersReducedMotion && selectedNode !== node) {
       const pos = node.position;
@@ -1088,9 +1210,10 @@ function animate(time) {
       positions[3] = x;
       positions[5] = z;
       node.userData.connectionLine.geometry.attributes.position.needsUpdate = true;
+      nodesMoved = true;
     }
   });
-  updateRelationshipEdges();
+  if (nodesMoved || isConsoleActive) updateRelationshipEdges();
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (!isConsoleActive && heroContainer) {
@@ -1106,17 +1229,17 @@ function animate(time) {
     const posB = sectionCamPositions[nextSectionIdx];
     
     // Interpolated base camera position
-    const baseCamPos = new THREE.Vector3().lerpVectors(posA, posB, t);
+    tempCamBase.lerpVectors(posA, posB, t);
     
     // Add subtle ambient floating/screensaver drift
-    const floatDrift = new THREE.Vector3(
+    tempCamDrift.set(
       Math.sin(time * 0.0005) * 1.5,
       Math.cos(time * 0.0003) * 0.8,
       Math.sin(time * 0.0004) * 1.2
     );
     
     // Set camTarget.pos to base + drift
-    camTarget.pos.copy(baseCamPos).add(floatDrift);
+    camTarget.pos.copy(tempCamBase).add(tempCamDrift);
     camTarget.lookAt.set(0, 0, 0);
 
     // Smoothly LERP point light colors matching each sector
@@ -1125,8 +1248,8 @@ function animate(time) {
     const color2A = sectionColors[sectionIdx].light2;
     const color2B = sectionColors[nextSectionIdx].light2;
     
-    const targetColor1 = new THREE.Color().copy(color1A).lerp(color1B, t);
-    const targetColor2 = new THREE.Color().copy(color2A).lerp(color2B, t);
+    const targetColor1 = tempColor1.copy(color1A).lerp(color1B, t);
+    const targetColor2 = tempColor2.copy(color2A).lerp(color2B, t);
 
     pointLight1.color.lerp(targetColor1, 0.05);
     pointLight2.color.lerp(targetColor2, 0.05);
@@ -1136,21 +1259,22 @@ function animate(time) {
       const proj = selectedNode.userData.project;
       const cat = USSY_CATEGORIES[proj.category];
       const catColorHex = parseInt(cat.color.replace('#', '0x'));
-      const targetColor1 = new THREE.Color(catColorHex);
-      const targetColor2 = new THREE.Color(0xff0055); // Neon Pink contrast
+      const targetColor1 = tempColor1.set(catColorHex);
+      const targetColor2 = tempColor2.set(0xff0055); // Neon Pink contrast
 
       pointLight1.color.lerp(targetColor1, 0.05);
       pointLight2.color.lerp(targetColor2, 0.05);
     } else {
       // Default Console mode colors (Cyan and Pink)
-      pointLight1.color.lerp(new THREE.Color(0x00f0ff), 0.05);
-      pointLight2.color.lerp(new THREE.Color(0xff0055), 0.05);
+      pointLight1.color.lerp(tempColor1.set(0x00f0ff), 0.05);
+      pointLight2.color.lerp(tempColor2.set(0xff0055), 0.05);
     }
   }
 
   // Raycasting hover highlight (only active in Console mode)
-  if (isConsoleActive) {
+  if (isConsoleActive && pointerDirty) {
     const intersects = getInteractiveHits();
+    pointerDirty = false;
     
     if (intersects.length > 0) {
       const node = intersects[0].object.userData.node || intersects[0].object;
@@ -1235,7 +1359,10 @@ function animate(time) {
 
   // Telemetry framerate diagnostics
   const endTime = performance.now();
-  telemetryTimer.innerText = `TELEMETRY_LOAD: ${(endTime - startTime).toFixed(2)}ms // DRAW_CALLS: ${renderer.info.render.calls}`;
+  if (endTime - telemetryLastUpdate > 250) {
+    telemetryTimer.innerText = `TELEMETRY_LOAD: ${(endTime - startTime).toFixed(2)}ms // DRAW_CALLS: ${renderer.info.render.calls}`;
+    telemetryLastUpdate = endTime;
+  }
 }
 
 // Start Application
