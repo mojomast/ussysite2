@@ -1,10 +1,13 @@
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, sep } from 'node:path';
+import { isIP } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
+// HARDENING: Keep a separator-suffixed root for safe static path prefix checks.
+const rootDirSafe = rootDir.endsWith(sep) ? rootDir : rootDir + sep;
 const envPath = join(rootDir, '.env');
 
 function loadLocalEnv() {
@@ -33,6 +36,24 @@ const openRouterSampleRate = Number(process.env.OPENROUTER_TTS_SAMPLE_RATE || 24
 const orchestratorModel = process.env.ORCHESTRATOR_MODEL || 'google/gemini-2.5-flash-preview';
 const orchestratorEnabled = process.env.ORCHESTRATOR_ENABLED !== 'false';
 const maxBodyBytes = 16 * 1024;
+
+// HARDENING: Shared security headers for all HTML and API responses.
+const commonSecurityHeaders = {
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin'
+};
+
+const htmlSecurityHeaders = {
+  ...commonSecurityHeaders,
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://openrouter.ai; img-src 'self' data: blob:; worker-src blob:; frame-ancestors 'none'"
+};
+
+// HARDENING: In-memory per-IP sliding-window rate limiter for API endpoints.
+const rateLimitState = new Map();
+const rateLimitWindowMs = 60 * 1000;
+const rateLimitStaleMs = 5 * 60 * 1000;
+let lastRateLimitSweep = 0;
 
 export const KOKORO_VOICE_MAP = {
   onyx: 'am_adam',
@@ -90,9 +111,66 @@ const contentTypes = {
 function sendJson(res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'X-Content-Type-Options': 'nosniff'
+    ...commonSecurityHeaders
   });
   res.end(JSON.stringify(body));
+}
+
+// HARDENING: Sanitize client IPs before using them as rate-limit Map keys.
+function sanitizeClientIp(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+  const withoutMappedPrefix = trimmed.startsWith('::ffff:') ? trimmed.slice(7) : trimmed;
+  return isIP(withoutMappedPrefix) ? withoutMappedPrefix : null;
+}
+
+function getClientIp(req) {
+  const socketIp = sanitizeClientIp(req.socket?.remoteAddress);
+  if (socketIp) return socketIp;
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return sanitizeClientIp(forwardedFor) || 'unknown';
+}
+
+function sweepRateLimitState(now = Date.now()) {
+  if (now - lastRateLimitSweep < rateLimitWindowMs) return;
+  lastRateLimitSweep = now;
+  for (const [ip, entry] of rateLimitState) {
+    if (now - entry.lastSeen > rateLimitStaleMs) rateLimitState.delete(ip);
+  }
+}
+
+function checkRateLimit(req, bucketName, maxRequests) {
+  const now = Date.now();
+  sweepRateLimitState(now);
+  const ip = getClientIp(req);
+  let entry = rateLimitState.get(ip);
+  if (!entry) {
+    entry = { lastSeen: now, buckets: new Map() };
+    rateLimitState.set(ip, entry);
+  }
+  entry.lastSeen = now;
+  let bucket = entry.buckets.get(bucketName);
+  if (!bucket || now - bucket.windowStart >= rateLimitWindowMs) {
+    bucket = { windowStart: now, count: 0 };
+    entry.buckets.set(bucketName, bucket);
+  }
+  if (bucket.count >= maxRequests) return false;
+  bucket.count += 1;
+  return true;
+}
+
+function enforceRateLimit(req, res, bucketName, maxRequests) {
+  if (checkRateLimit(req, bucketName, maxRequests)) return true;
+  sendJson(res, 429, { error: 'Rate limit exceeded. Try again shortly.' });
+  return false;
+}
+
+// HARDENING: Only accept JSON request bodies on POST API endpoints.
+function enforceJsonContentType(req, res) {
+  const contentType = String(req.headers['content-type'] || '').toLowerCase();
+  if (contentType.startsWith('application/json')) return true;
+  sendJson(res, 415, { error: 'Unsupported Media Type' });
+  return false;
 }
 
 function isAllowedSameOrigin(req) {
@@ -378,10 +456,16 @@ function normalizeOrchestratorGameState(gameState) {
 }
 
 async function handleOrchestrate(req, res) {
+  // HARDENING: Apply orchestrator API rate limit before expensive validation/upstream calls.
+  if (!enforceRateLimit(req, res, 'orchestrator', 20)) return;
+
   if (!isAllowedSameOrigin(req)) {
     sendJson(res, 403, { error: 'Orchestrator endpoint only accepts same-origin browser requests' });
     return;
   }
+
+  // HARDENING: Reject non-JSON orchestrator POST bodies before parsing.
+  if (!enforceJsonContentType(req, res)) return;
 
   let body;
   try {
@@ -415,10 +499,16 @@ async function handleOrchestrate(req, res) {
 }
 
 async function handleTTS(req, res) {
+  // HARDENING: Apply TTS API rate limit before expensive validation/upstream calls.
+  if (!enforceRateLimit(req, res, 'tts', 10)) return;
+
   if (!isAllowedSameOrigin(req)) {
     sendJson(res, 403, { error: 'TTS endpoint only accepts same-origin browser requests' });
     return;
   }
+
+  // HARDENING: Reject non-JSON TTS POST bodies before parsing.
+  if (!enforceJsonContentType(req, res)) return;
 
   let body;
   try {
@@ -450,7 +540,8 @@ async function handleTTS(req, res) {
 
     res.writeHead(200, {
       'Content-Type': result.contentType,
-      'Cache-Control': 'no-store'
+      'Cache-Control': 'no-store',
+      ...commonSecurityHeaders
     });
     res.end(result.buffer);
   } catch (error) {
@@ -460,14 +551,29 @@ async function handleTTS(req, res) {
 
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const requestedPath = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+  let requestedPath;
+  try {
+    requestedPath = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+  } catch {
+    sendJson(res, 400, { error: 'Bad request' });
+    return;
+  }
   const safePath = normalize(requestedPath).replace(/^\.\.(\/|\\|$)/, '');
-  const filePath = join(rootDir, safePath);
+  const resolved = join(rootDir, safePath);
+
+  // HARDENING: Block static path traversal even after normalization.
+  if (!resolved.startsWith(rootDirSafe)) {
+    sendJson(res, 403, { error: 'Forbidden' });
+    return;
+  }
 
   try {
+    const filePath = resolved;
     const body = await readFile(filePath);
+    const extension = extname(filePath);
     res.writeHead(200, {
-      'Content-Type': contentTypes[extname(filePath)] || 'application/octet-stream'
+      'Content-Type': contentTypes[extension] || 'application/octet-stream',
+      ...(extension === '.html' ? htmlSecurityHeaders : commonSecurityHeaders)
     });
     res.end(body);
   } catch {
@@ -495,7 +601,7 @@ export function createAppServer() {
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/orchestrate') {
+    if (req.method === 'POST' && (url.pathname === '/api/orchestrate' || url.pathname === '/api/orchestrator')) {
       await handleOrchestrate(req, res);
       return;
     }
