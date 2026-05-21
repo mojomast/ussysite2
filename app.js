@@ -111,6 +111,8 @@ const flightState = {
   status: 'TYPE USSY TO LAUNCH',
   statusUntil: 0,
   landed: false,
+  shieldCriticalSpoken: false,
+  finalApproachSpoken: false,
   lastHudUpdate: 0,
   mouseSensitivity: 0.0022,
   thrust: 14,
@@ -165,31 +167,81 @@ const gameMessageState = {
 
 const missionIntroText = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. MOUSELOOK TO AIM, W/S TO THRUST, A/D TO STRAFE, Q/E TO ROLL, LEFT CLICK FOR LASERS, RIGHT CLICK FOR MISSILES, V TO SET NAV, P FOR AUTOPILOT, C FOR CHASE CAM, SPACE TO CONFIRM MESSAGES, L TO LAND AND RESTOCK. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
 
+function numToWord(value) {
+  const words = [
+    'zero', 'one', 'two', 'three', 'four',
+    'five', 'six', 'seven', 'eight', 'nine',
+    'ten', 'eleven', 'twelve', 'thirteen', 'fourteen',
+    'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+    'twenty'
+  ];
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 && number <= 20 ? words[number] : String(value);
+}
+
+function preprocessRadioText(text) {
+  return String(text)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&(?:nbsp|amp|lt|gt|quot|#39);/gi, ' ')
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[`*_~#>]/g, '')
+    .replace(/[\[\](){}<>]/g, ' ')
+    .replace(/\//g, ' slash ')
+    .replace(/\b([0-9]|1[0-9]|20)\b/g, match => numToWord(match))
+    .replace(/\b(OPERATOR|CONTROL|CONFIRMED|OBJECTIVE|BOGEY)\b(?![,.;:!?])/gi, '$1,')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const ttsEngine = {
   supported: 'speechSynthesis' in window,
   enabled: true,
   activeVoice: null,
 
-  speak(text, options = {}) {
-    if (!this.supported || !this.enabled || !text) return;
-    window.speechSynthesis.cancel();
+  async speak(text, options = {}) {
+    if (!this.enabled || !text) return;
+    const radioText = preprocessRadioText(text);
+    if (!radioText) return;
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = options.rate ?? 1.1;
-    utterance.pitch = options.pitch ?? 0.85;
-    utterance.volume = options.volume ?? 0.9;
+    const utteranceOptions = {
+      rate: options.rate ?? 1.1,
+      pitch: options.pitch ?? 0.85,
+      volume: options.volume ?? 0.9,
+      longMessage: radioText.length > 80,
+      voiceId: options.voiceId
+    };
 
-    if (options.voice) {
-      utterance.voice = typeof options.voice === 'string' ? this.setVoice(options.voice) : options.voice;
+    const requestedVoice = options.voice ?? options.voiceId;
+    if (requestedVoice && this.supported) {
+      utteranceOptions.voice = typeof requestedVoice === 'string' ? this.setVoice(requestedVoice) : requestedVoice;
     } else if (this.activeVoice) {
-      utterance.voice = this.activeVoice;
+      utteranceOptions.voice = this.activeVoice;
     }
 
-    window.speechSynthesis.speak(utterance);
+    this.stop();
+    radioChain.addClickIn();
+
+    try {
+      if (ttsConfig.enabled) {
+        const blob = await fetchTTSSpeech(radioText, utteranceOptions);
+        if (blob && await radioChain.processBlob(blob)) return;
+      }
+      await radioChain.processSpeechSynthesis(radioText, utteranceOptions);
+    } catch {
+      try {
+        await radioChain.processSpeechSynthesis(radioText, utteranceOptions);
+      } catch {
+        // Keep TTS failures non-blocking for the render/game loop.
+      }
+    } finally {
+      radioChain.addClickOut();
+    }
   },
 
   stop() {
     if (this.supported) window.speechSynthesis.cancel();
+    if (typeof radioChain !== 'undefined') radioChain.stopActive();
   },
 
   setVoice(voiceNameFragment = '') {
@@ -197,13 +249,21 @@ const ttsEngine = {
     const voices = window.speechSynthesis.getVoices();
     if (!voices.length) return null;
 
-    const requested = voiceNameFragment.toLowerCase();
-    const requestedVoice = requested
-      ? voices.find(voice => `${voice.name} ${voice.lang}`.toLowerCase().includes(requested))
-      : null;
-    const preferredNames = ['google uk english male', 'daniel', 'alex'];
-    const preferredVoice = voices.find(voice => preferredNames.some(name => voice.name.toLowerCase().includes(name)));
-    const englishVoice = voices.find(voice => voice.lang.toLowerCase().startsWith('en'));
+    const normalize = value => String(value || '').toLowerCase();
+    const requested = normalize(voiceNameFragment);
+    const matches = (voice, fragment) => `${voice.name} ${voice.lang}`.toLowerCase().includes(fragment);
+    const isLang = (voice, lang) => normalize(voice.lang).startsWith(lang);
+    const voiceGenderKeywords = ['male', 'david', 'daniel', 'alex', 'george', 'james', 'fred', 'tom'];
+    const isMaleSounding = voice => voiceGenderKeywords.some(keyword => normalize(voice.name).includes(keyword));
+    const requestedVoice = requested ? voices.find(voice => matches(voice, requested)) : null;
+    const preferredVoice =
+      voices.find(voice => normalize(voice.name).includes('google uk english male')) ||
+      voices.find(voice => normalize(voice.name).includes('microsoft david')) ||
+      voices.find(voice => normalize(voice.name).includes('daniel')) ||
+      voices.find(voice => normalize(voice.name).includes('alex')) ||
+      voices.find(voice => isLang(voice, 'en-gb')) ||
+      voices.find(voice => isLang(voice, 'en-us') && isMaleSounding(voice));
+    const englishVoice = voices.find(voice => isLang(voice, 'en'));
 
     this.activeVoice = requestedVoice || preferredVoice || englishVoice || voices[0];
     return this.activeVoice;
@@ -213,6 +273,246 @@ const ttsEngine = {
     return this.setVoice();
   }
 };
+
+const radioChain = {
+  ctx: null,
+  activeSource: null,
+  activeNoise: null,
+  speechTimer: null,
+
+  buildChain() {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    if (!this.ctx) this.ctx = new AudioContextCtor();
+
+    const highpass = this.ctx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 300;
+    highpass.Q.value = 0.7;
+
+    const lowpass = this.ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 3400;
+    lowpass.Q.value = 0.8;
+
+    const waveshaper = this.ctx.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i * 2) / 256 - 1;
+      curve[i] = ((Math.PI + 320) * x) / (Math.PI + 320 * Math.abs(x));
+    }
+    waveshaper.curve = curve;
+    waveshaper.oversample = '2x';
+
+    const compressor = this.ctx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 8;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0.002;
+    compressor.release.value = 0.08;
+
+    const gain = this.ctx.createGain();
+    gain.gain.value = 1.1;
+
+    highpass.connect(lowpass);
+    lowpass.connect(waveshaper);
+    waveshaper.connect(compressor);
+    compressor.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    return { ctx: this.ctx, input: highpass };
+  },
+
+  async processBlob(audioBlob) {
+    try {
+      const chain = this.buildChain();
+      if (!chain || chain.ctx.state === 'suspended') return false;
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioBuffer = await chain.ctx.decodeAudioData(arrayBuffer.slice(0));
+
+      return await new Promise(resolve => {
+        const source = chain.ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(chain.input);
+        this.activeSource = source;
+        source.onended = () => {
+          if (this.activeSource === source) this.activeSource = null;
+          resolve(true);
+        };
+        source.start();
+      });
+    } catch {
+      return false;
+    }
+  },
+
+  async processSpeechSynthesis(text, utteranceOptions = {}) {
+    if (!ttsEngine.supported) return false;
+
+    const chain = this.buildChain();
+    if (!chain || chain.ctx.state === 'suspended') {
+      return this.speakRaw(text, utteranceOptions);
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = utteranceOptions.rate ?? 1.1;
+    utterance.pitch = utteranceOptions.pitch ?? 0.85;
+    utterance.volume = utteranceOptions.volume ?? 0.9;
+    if (utteranceOptions.voice) utterance.voice = utteranceOptions.voice;
+
+    const noiseBuffer = chain.ctx.createBuffer(1, Math.floor(chain.ctx.sampleRate * 0.4), chain.ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.035;
+
+    const noise = chain.ctx.createBufferSource();
+    const noiseGain = chain.ctx.createGain();
+    const speechDelay = utteranceOptions.longMessage ? 160 : 0;
+    noise.buffer = noiseBuffer;
+    noise.loop = true;
+    noiseGain.gain.value = 0.04;
+    noise.connect(noiseGain);
+    noiseGain.connect(chain.input);
+    this.activeNoise = { source: noise, gain: noiseGain };
+
+    return await new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        this.fadeNoiseOut(noise, noiseGain);
+        resolve(true);
+      };
+
+      utterance.onend = finish;
+      utterance.onerror = finish;
+      noise.start();
+      this.speechTimer = window.setTimeout(() => {
+        this.speechTimer = null;
+        window.speechSynthesis.speak(utterance);
+      }, speechDelay);
+    });
+  },
+
+  speakRaw(text, utteranceOptions = {}) {
+    return new Promise(resolve => {
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = utteranceOptions.rate ?? 1.1;
+        utterance.pitch = utteranceOptions.pitch ?? 0.85;
+        utterance.volume = utteranceOptions.volume ?? 0.9;
+        if (utteranceOptions.voice) utterance.voice = utteranceOptions.voice;
+        utterance.onend = () => resolve(true);
+        utterance.onerror = () => resolve(false);
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        resolve(false);
+      }
+    });
+  },
+
+  addClickIn() {
+    this.playClick();
+  },
+
+  addClickOut() {
+    this.playClick();
+  },
+
+  playClick() {
+    try {
+      const chain = this.buildChain();
+      if (!chain || chain.ctx.state === 'suspended') return;
+      const oscillator = chain.ctx.createOscillator();
+      const gain = chain.ctx.createGain();
+      const now = chain.ctx.currentTime;
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 1200;
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+      oscillator.connect(gain);
+      gain.connect(chain.input);
+      oscillator.start(now);
+      oscillator.stop(now + 0.02);
+    } catch {
+      // Radio clicks are cosmetic; ignore AudioContext failures.
+    }
+  },
+
+  fadeNoiseOut(noise, noiseGain) {
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      noiseGain.gain.cancelScheduledValues(now);
+      noiseGain.gain.setValueAtTime(noiseGain.gain.value, now);
+      noiseGain.gain.linearRampToValueAtTime(0.001, now + 0.08);
+      noise.stop(now + 0.1);
+    } catch {
+      // Noise may already be stopped by a newer transmission.
+    }
+    if (this.activeNoise && this.activeNoise.source === noise) this.activeNoise = null;
+  },
+
+  resume() {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+  },
+
+  stopActive() {
+    if (this.activeSource) {
+      try { this.activeSource.stop(); } catch {}
+      this.activeSource = null;
+    }
+    if (this.activeNoise) {
+      this.fadeNoiseOut(this.activeNoise.source, this.activeNoise.gain);
+      this.activeNoise = null;
+    }
+    if (this.speechTimer) {
+      window.clearTimeout(this.speechTimer);
+      this.speechTimer = null;
+    }
+  }
+};
+
+const ttsConfig = {
+  openRouterKey: '',
+  model: 'openai/tts-1',
+  voiceId: 'onyx',
+  enabled: false
+};
+
+function setTTSKey(key = '') {
+  ttsConfig.openRouterKey = String(key).trim();
+  ttsConfig.enabled = ttsConfig.openRouterKey.length > 10;
+  return ttsConfig.enabled;
+}
+
+window.setTTSKey = setTTSKey;
+
+async function fetchTTSSpeech(text, persona = {}) {
+  if (!ttsConfig.enabled || !ttsConfig.openRouterKey) return null;
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ttsConfig.openRouterKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'USSYVERSE'
+      },
+      body: JSON.stringify({
+        model: ttsConfig.model,
+        input: text,
+        voice: persona.voiceId || ttsConfig.voiceId,
+        speed: persona.rate ?? 1.0
+      })
+    });
+    if (!response.ok) return null;
+    return await response.blob();
+  } catch {
+    return null;
+  }
+}
 
 if (ttsEngine.supported) {
   window.speechSynthesis.onvoiceschanged = () => ttsEngine.initVoices();
@@ -1368,6 +1668,8 @@ function enterFlightMode() {
   flightState.navEta = '--';
   flightState.autopilot = false;
   flightState.landed = false;
+  flightState.shieldCriticalSpoken = false;
+  flightState.finalApproachSpoken = false;
   flightState.statusUntil = 0;
   flightState.status = isCoarsePointer ? 'KEYBOARD FLIGHT READY' : 'REQUESTING MOUSELOOK LOCK';
   flightState.pos.copy(camCurrent.pos.lengthSq() ? camCurrent.pos : camTarget.pos);
@@ -1603,14 +1905,14 @@ function updateFlightNavLine() {
 function getVoicePersona(source = '') {
   const normalizedSource = String(source).toUpperCase();
 
-  if (normalizedSource.includes('USSYVERSE CONTROL')) return { pitch: 0.80, rate: 1.0 };
-  if (normalizedSource.includes('DEVUSSY DOCK CONTROL')) return { pitch: 0.75, rate: 1.05 };
-  if (normalizedSource.includes('COMBAT SYSTEM')) return { pitch: 0.70, rate: 1.3 };
-  if (normalizedSource.includes('NAVIGATION')) return { pitch: 0.88, rate: 0.95 };
-  if (normalizedSource.includes('DEVUSSY')) return { pitch: 0.78, rate: 1.05 };
-  if (normalizedSource.includes('FACTION')) return { pitch: 0.72, rate: 0.98 };
+  if (normalizedSource.includes('USSYVERSE CONTROL')) return { pitch: 0.80, rate: 0.95, voiceId: 'onyx' };
+  if (normalizedSource.includes('DEVUSSY DOCK CONTROL')) return { pitch: 0.75, rate: 1.0, voiceId: 'echo' };
+  if (normalizedSource.includes('COMBAT SYSTEM')) return { pitch: 0.70, rate: 1.25, voiceId: 'onyx' };
+  if (normalizedSource.includes('NAVIGATION')) return { pitch: 0.88, rate: 0.92, voiceId: 'alloy' };
+  if (normalizedSource.includes('DEVUSSY')) return { pitch: 0.78, rate: 1.0, voiceId: 'echo' };
+  if (normalizedSource.includes('FACTION')) return { pitch: 0.72, rate: 0.96, voiceId: 'fable' };
 
-  return { pitch: 0.82, rate: 1.05 };
+  return { pitch: 0.82, rate: 1.0, voiceId: 'onyx' };
 }
 
 function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18 }) {
@@ -1747,8 +2049,25 @@ function registerMissionKill() {
     enemies.forEach(enemy => deactivateCombatObject(enemy));
     setMissionStep('goLandAtProject');
   } else {
-    const killCallouts = ['SPLASH ONE', 'BOGEY DOWN', 'KILL CONFIRMED', 'TARGET ELIMINATED'];
-    ttsEngine.speak(killCallouts[Math.floor(Math.random() * killCallouts.length)], { rate: 1.3, pitch: 0.75, volume: 0.85 });
+    const killCallouts = [
+      'SPLASH ONE',
+      'BOGEY DOWN',
+      'KILL CONFIRMED',
+      'TARGET ELIMINATED',
+      'FOX TWO AWAY',
+      'TALLY HO',
+      'GUNS GUNS GUNS',
+      'BANDIT DOWN',
+      'CLEARED HOT',
+      'WINCHESTER ACHIEVED',
+      'SPLASH ANOTHER',
+      'GOOD KILL',
+      'RADAR CONTACT LOST',
+      'BINGO BINGO',
+      'BREAKING RIGHT',
+      'ENGAGED'
+    ];
+    ttsEngine.speak(killCallouts[Math.floor(Math.random() * killCallouts.length)], { ...getVoicePersona('COMBAT SYSTEM'), volume: 0.85 });
     showGameMessage({
       type: 'MISSION PROGRESS',
       source: 'COMBAT SYSTEM',
@@ -1816,6 +2135,8 @@ function restockAtProject(project) {
   flightState.ammo = maxPlayerAmmo;
   flightState.missiles = maxPlayerMissilesStored;
   flightState.energy = 100;
+  flightState.shieldCriticalSpoken = false;
+  flightState.finalApproachSpoken = false;
   flightState.status = `RESTOCKED AT ${project.name.toUpperCase()}`;
   flightState.statusUntil = performance.now() + 2500;
   ttsEngine.speak(`DOCKING AT ${project.name.toUpperCase()}. RESTOCKING SUPPLIES.`, { rate: 1.0, pitch: 0.80 });
@@ -1886,6 +2207,7 @@ function findNearestEnemy() {
 }
 
 function onGlobalKeyDown(event) {
+  if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
   if (isTypingTarget(event.target) || event.metaKey || event.altKey) return;
   if (!isFlightActive && event.ctrlKey) return;
 
@@ -2059,6 +2381,7 @@ function applyOrbitToCamera() {
 }
 
 function onPointerDown(event) {
+  if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
   if (isFlightActive) {
     if (event.button === 0 || event.button === 2) {
       event.preventDefault();
@@ -2245,6 +2568,7 @@ function updateFlight(time) {
           flightState.missiles -= 1;
           flightState.energy = Math.max(0, flightState.energy - flightState.missileEnergyCost);
           flightState.status = 'MISSILE AWAY';
+          ttsEngine.speak('FOX TWO', getVoicePersona('COMBAT SYSTEM'));
         }
       }
       flightState.lastMissile = time;
@@ -2277,6 +2601,15 @@ function updateProjectLandingTarget() {
   if (flightState.nearestNode) {
     const projectName = flightState.nearestNode.userData.project.name;
     const activeLandingRange = landingRange * activeUniverseScale;
+    const missionNode = projectNodeById.get(missionState.landingProjectId);
+    const isMissionApproach = missionState.active && missionState.step === 'goLandAtProject' && flightState.nearestNode === missionNode;
+    const isFinalApproach = isMissionApproach && flightState.nearestDistance < activeLandingRange * 1.5;
+    if (isFinalApproach && !flightState.finalApproachSpoken) {
+      flightState.finalApproachSpoken = true;
+      ttsEngine.speak('FINAL APPROACH', getVoicePersona('NAVIGATION'));
+    } else if (!isFinalApproach) {
+      flightState.finalApproachSpoken = false;
+    }
     if (performance.now() > flightState.statusUntil) {
       flightState.status = flightState.nearestDistance <= activeLandingRange
         ? `LANDING RANGE: ${projectName}`
@@ -2365,6 +2698,7 @@ function updateCombatObjects(dt) {
 }
 
 function applyPlayerDamage(amount) {
+  const shieldBefore = flightState.shield;
   let remaining = amount;
   if (flightState.shield > 0) {
     const absorbed = Math.min(flightState.shield, remaining);
@@ -2373,6 +2707,14 @@ function applyPlayerDamage(amount) {
   }
   if (remaining > 0) {
     flightState.armor = Math.max(0, flightState.armor - remaining);
+  }
+  const shieldDrop = shieldBefore - flightState.shield;
+  if (shieldDrop > 15) {
+    ttsEngine.speak('TAKING FIRE', getVoicePersona('COMBAT SYSTEM'));
+  }
+  if (flightState.shield < 25 && !flightState.shieldCriticalSpoken) {
+    flightState.shieldCriticalSpoken = true;
+    window.setTimeout(() => ttsEngine.speak('SHIELDS CRITICAL', getVoicePersona('COMBAT SYSTEM')), shieldDrop > 15 ? 450 : 0);
   }
 }
 
