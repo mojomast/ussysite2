@@ -23,6 +23,7 @@
   <div class="scanlines"></div>
   <div class="cyber-bg-grid"></div>
   <div class="cyber-bg-gradient"></div>
+  <div id="adrenaline-vignette" aria-hidden="true"></div>
 
   <!-- Custom neon interactive cursor -->
   <div class="custom-cursor" id="custom-cursor"></div>
@@ -330,8 +331,29 @@
             <strong id="flight-score">0</strong>
           </div>
           <div>
+            <span class="flight-hud-label">CREDITS</span>
+            <strong id="flight-credits">1000CR</strong>
+          </div>
+          <div>
             <span class="flight-hud-label">SHIELD</span>
             <strong id="flight-shield">100</strong>
+          </div>
+          <div>
+            <span class="flight-hud-label">HEAT</span>
+            <strong id="flight-heat">0/100</strong>
+          </div>
+          <div>
+            <span class="flight-hud-label">XP</span>
+            <div class="mini-meter"><span id="flight-xp-bar"></span></div>
+            <strong id="flight-sp">SP:0</strong>
+          </div>
+          <div>
+            <span class="flight-hud-label">PRIMARY</span>
+            <strong id="flight-weapon-primary">LASER Mk.I</strong>
+          </div>
+          <div>
+            <span class="flight-hud-label">SECONDARY</span>
+            <strong id="flight-weapon-secondary">MISSILE RACK</strong>
           </div>
           <div>
             <span class="flight-hud-label">NEAREST PROJECT</span>
@@ -354,7 +376,8 @@
             <strong id="flight-autopilot">OFF</strong>
           </div>
         </div>
-        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // LMB lasers // RMB missiles // V set nav // P autopilot // C view // SPACE confirm // L land/restock</div>
+        <div class="mini-meter heat"><span id="flight-heat-bar" class="heat-bar-fill"></span></div>
+        <div class="flight-hud-help">MOUSELOOK pilot // W/S thrust // A/D strafe // Q/E roll // LMB primary // RMB secondary // V nav // P autopilot // C view // L land // T station // U upgrades // SPACE confirm</div>
       </div>
       <div></div> <!-- Spacer -->
     </div>
@@ -464,6 +487,10 @@
           <div class="resource-meter shield"><span id="flight-shield-bar"></span></div>
           <div class="resource-row"><span>ENERGY</span><strong id="flight-energy">100</strong></div>
           <div class="resource-meter energy"><span id="flight-energy-bar"></span></div>
+          <div class="resource-row"><span>HEAT</span><strong id="flight-heat-cockpit">0</strong></div>
+          <div class="resource-meter heat"><span id="flight-heat-bar-cockpit" class="heat-bar-fill"></span></div>
+          <div class="resource-row"><span>FUEL</span><strong id="flight-fuel">100</strong></div>
+          <div class="resource-meter fuel"><span id="flight-fuel-bar"></span></div>
         </div>
       </div>
     </div>
@@ -486,6 +513,7 @@
     <div class="cockpit-dash">
       <span>COCKPIT_VIEW</span>
       <span>C_TOGGLES_CHASE_CAM</span>
+      <span>T_STATION_TRADE_WHEN_DOCKED</span>
     </div>
   </div>
 
@@ -497,7 +525,7 @@
   
   <!-- App JavaScript files -->
   <script src="projects.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="js/main.js"></script>
 
   <!-- Lucide Icon Renderer -->
   <script>

@@ -1,0 +1,75 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  ENEMY_CLASSES,
+  WEAPON_DEFS,
+  addCombatXp,
+  applyDamageModel,
+  applyHeatShot,
+  applySkillEffects,
+  getDifficultyTier,
+  getMaxShield,
+  getStationEquipment,
+  simulateBurstFire
+} from '../js/flight/combat-overhaul.js';
+
+test('ENEMY_CLASSES has five complete entries', () => {
+  assert.equal(ENEMY_CLASSES.length, 5);
+  for (const cls of ENEMY_CLASSES) {
+    for (const field of ['id', 'label', 'color', 'wingColor', 'health', 'speed', 'fireRate', 'accuracy', 'burstCount', 'creditReward', 'xpReward', 'approachSpeed', 'geometry']) {
+      assert.ok(Object.hasOwn(cls, field), `${cls.id} missing ${field}`);
+    }
+  }
+});
+
+test('WEAPON_DEFS has seven complete entries', () => {
+  assert.equal(WEAPON_DEFS.length, 7);
+  for (const weapon of WEAPON_DEFS) {
+    for (const field of ['cooldown', 'damage', 'energyCost', 'overheatBuildup']) {
+      assert.ok(Object.hasOwn(weapon, field), `${weapon.id} missing ${field}`);
+    }
+  }
+});
+
+test('getDifficultyTier boundaries', () => {
+  assert.deepEqual([0, 1, 499, 500, 1499, 1500, 3999, 4000].map(getDifficultyTier), [0, 1, 1, 2, 2, 3, 3, 4]);
+});
+
+test('applyPlayerDamage bleedthrough model', () => {
+  const result = applyDamageModel({ shield: 20, armor: 100 }, 10);
+  assert.ok(Math.abs(result.shield - 6.5) <= 0.2);
+  assert.ok(Math.abs(result.armor - 96.5) <= 0.2);
+});
+
+test('skillTree.applyAll equivalent unlocks eng_1 thrust', () => {
+  const flightState = { thrust: 14, damping: 0.985, energy: 100 };
+  const combatState = { maxHeat: 100, shieldRegenDelay: 5000 };
+  applySkillEffects(new Set(['eng_1']), flightState, combatState);
+  assert.equal(flightState.thrust, 17);
+});
+
+test('shield_1 max shield is 125', () => {
+  assert.equal(getMaxShield(new Set(['shield_1'])), 125);
+});
+
+test('burst fire schedules three shots within 400ms', () => {
+  assert.equal(simulateBurstFire({ burstCount: 3, burstDelay: 120 }, 400).length, 3);
+});
+
+test('heat overheats after four heavy shots', () => {
+  const state = { heat: 0, maxHeat: 100, overheated: false };
+  for (let i = 0; i < 4; i++) applyHeatShot(state, 30);
+  assert.equal(state.heat, 120);
+  assert.equal(state.overheated, true);
+});
+
+test('security station equipment includes railgun', () => {
+  assert.ok(getStationEquipment('security').includes('railgun'));
+});
+
+test('XP escalation increases threshold after three points', () => {
+  const state = { xp: 0, xpToNextPoint: 100, skillPoints: 0 };
+  addCombatXp(state, 1000);
+  assert.ok(state.skillPoints >= 3);
+  assert.ok(state.xpToNextPoint > 100);
+});

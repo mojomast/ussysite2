@@ -1,0 +1,344 @@
+import { ttsEngine } from '../tts/engine.js';
+
+export const traderState = {
+  credits: 1000,
+  fuel: 100,
+  maxFuel: 100,
+  fuelPerSecond: 0.35,
+  fuelCostPerUnit: 8,
+  cargo: {},
+  maxCargo: 20,
+  cargoUsed: 0,
+  lastTrade: null,
+  tradeLog: [],
+  docked: false,
+  dockedStation: null
+};
+
+export const COMMODITIES = [
+  { id: 'devplans', name: 'DEVPLANS', basePrice: 45, category: 'core' },
+  { id: 'agents', name: 'AGENT CORES', basePrice: 120, category: 'core' },
+  { id: 'audiodata', name: 'AUDIO DATA', basePrice: 70, category: 'creative' },
+  { id: 'mediafiles', name: 'MEDIA FILES', basePrice: 55, category: 'creative' },
+  { id: 'govdata', name: 'GOV DATA', basePrice: 90, category: 'governance' },
+  { id: 'shellcreds', name: 'SHELL CREDS', basePrice: 150, category: 'infrastructure' },
+  { id: 'exploitkit', name: 'EXPLOIT KIT', basePrice: 200, category: 'security' },
+  { id: 'rawlogs', name: 'RAW LOGS', basePrice: 30, category: 'tools' }
+];
+
+const stationProfiles = new Map();
+const noop = () => {};
+let showGameMessageRef = noop;
+let dismissGameMessageRef = noop;
+let updateFlightHudRef = noop;
+let getVoicePersonaRef = () => ({});
+
+export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona } = {}) {
+  if (typeof showGameMessage === 'function') showGameMessageRef = showGameMessage;
+  if (typeof dismissGameMessage === 'function') dismissGameMessageRef = dismissGameMessage;
+  if (typeof updateFlightHud === 'function') updateFlightHudRef = updateFlightHud;
+  if (typeof getVoicePersona === 'function') getVoicePersonaRef = getVoicePersona;
+}
+
+function getProject(projectId) {
+  return (window.USSY_PROJECTS || []).find(project => project.id === projectId) || null;
+}
+
+function normalizeCategory(category) {
+  if (category === 'infra') return 'infrastructure';
+  if (category === 'ai') return 'security';
+  return category;
+}
+
+export function getStationProfile(projectId) {
+  if (stationProfiles.has(projectId)) return stationProfiles.get(projectId);
+  const category = normalizeCategory(getProject(projectId)?.category);
+  let produces = ['rawlogs'];
+  let demands = ['devplans'];
+
+  if (category === 'core') {
+    produces = ['devplans', 'agents'];
+    demands = ['shellcreds'];
+  } else if (category === 'creative') {
+    produces = ['audiodata', 'mediafiles'];
+    demands = ['devplans'];
+  } else if (category === 'infrastructure') {
+    produces = ['shellcreds'];
+    demands = ['rawlogs'];
+  } else if (category === 'security') {
+    produces = ['exploitkit'];
+    demands = ['govdata'];
+  } else if (category === 'governance') {
+    produces = ['govdata'];
+    demands = ['agents'];
+  } else if (category === 'tools') {
+    produces = ['rawlogs'];
+    demands = ['audiodata'];
+  }
+
+  const profile = { produces, demands, fuelAvailable: true, fuelStock: 100 };
+  stationProfiles.set(projectId, profile);
+  return profile;
+}
+
+export function getMarketPrice(projectId, commodityId, action = 'buy') {
+  const commodity = COMMODITIES.find(item => item.id === commodityId);
+  if (!commodity) return 0;
+  const profile = getStationProfile(projectId);
+  let multiplier = 1;
+  if (profile.produces.includes(commodityId)) multiplier = 0.78;
+  if (profile.demands.includes(commodityId)) multiplier = 1.35;
+  if (action === 'sell' && !profile.demands.includes(commodityId)) multiplier *= 0.88;
+  const hashSource = `${projectId}:${commodityId}`;
+  const hash = Array.from(hashSource).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const noise = ((hash % 100) / 100) * 0.24 - 0.12;
+  return Math.max(1, Math.round(commodity.basePrice * (multiplier + noise)));
+}
+
+export function getCargoUsed() {
+  traderState.cargoUsed = Object.values(traderState.cargo).reduce((sum, qty) => sum + qty, 0);
+  return traderState.cargoUsed;
+}
+
+function getCommodityName(commodityId) {
+  return COMMODITIES.find(item => item.id === commodityId)?.name || commodityId.toUpperCase();
+}
+
+function stationName(projectId) {
+  return getProject(projectId)?.name || 'UNKNOWN';
+}
+
+function stationSource(projectId) {
+  return `${stationName(projectId).toUpperCase()} DOCK CONTROL`;
+}
+
+export function openTradeMenu(projectId) {
+  traderState.docked = true;
+  traderState.dockedStation = projectId;
+  const projectName = stationName(projectId);
+  showGameMessageRef({
+    type: 'STATION COMMS',
+    source: stationSource(projectId),
+    text: `WELCOME TO ${projectName.toUpperCase()} STATION. CREDITS: ${traderState.credits}. FUEL: ${Math.round(traderState.fuel)}%. CARGO: ${getCargoUsed()}/${traderState.maxCargo} UNITS. SELECT SERVICE:`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'VIEW MARKET', action: () => showMarket(projectId, 0) },
+      { key: '2', code: 'Digit2', label: 'REFUEL', action: () => refuelDialog(projectId) },
+      { key: '3', code: 'Digit3', label: 'VIEW CARGO', action: () => showCargoHold(projectId) },
+      { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessageRef() }
+    ]
+  });
+}
+
+export function closeTradeMenu() {
+  dismissGameMessageRef();
+}
+
+function sortedMarket(projectId) {
+  const profile = getStationProfile(projectId);
+  return [...COMMODITIES].sort((a, b) => {
+    const score = id => (profile.produces.includes(id) ? 2 : 0) + (profile.demands.includes(id) ? 3 : 0);
+    return score(b.id) - score(a.id) || a.name.localeCompare(b.name);
+  });
+}
+
+function showMarket(projectId, page = 0) {
+  const items = sortedMarket(projectId);
+  const start = page * 3;
+  const visible = items.slice(start, start + 3);
+  const choices = visible.map((commodity, idx) => {
+    const buyPrice = getMarketPrice(projectId, commodity.id, 'buy');
+    const sellPrice = getMarketPrice(projectId, commodity.id, 'sell');
+    const stock = traderState.cargo[commodity.id] || 0;
+    return {
+      key: String(idx + 1),
+      code: `Digit${idx + 1}`,
+      label: `${commodity.name} BUY ${buyPrice}cr SELL ${sellPrice}cr HOLD:${stock}`,
+      action: () => tradeActionDialog(projectId, commodity.id)
+    };
+  });
+  if (start + 3 < items.length) {
+    choices.push({ key: '4', code: 'Digit4', label: 'NEXT MARKET PAGE', action: () => showMarket(projectId, page + 1) });
+  } else {
+    choices.push({ key: '4', code: 'Digit4', label: 'BACK', action: () => openTradeMenu(projectId) });
+  }
+  showGameMessageRef({
+    type: 'STATION MARKET',
+    source: stationSource(projectId),
+    text: `MARKET PAGE ${page + 1}. PRODUCTION GOODS ARE CHEAP. DEMAND GOODS PAY PREMIUMS. SELECT COMMODITY:`,
+    choices
+  });
+}
+
+function tradeActionDialog(projectId, commodityId) {
+  const commodityName = getCommodityName(commodityId);
+  const stock = traderState.cargo[commodityId] || 0;
+  showGameMessageRef({
+    type: 'TRADE CONSOLE',
+    source: stationSource(projectId),
+    text: `${commodityName}. BUY PRICE ${getMarketPrice(projectId, commodityId, 'buy')}cr. SELL PRICE ${getMarketPrice(projectId, commodityId, 'sell')}cr. HOLDING ${stock}. SELECT ACTION:`,
+    choices: [
+      { key: '1', code: 'Digit1', label: `BUY ${commodityName}`, action: () => buyDialog(projectId, commodityId) },
+      { key: '2', code: 'Digit2', label: `SELL ${commodityName}`, action: () => sellDialog(projectId, commodityId) },
+      { key: '3', code: 'Digit3', label: 'BACK TO MARKET', action: () => showMarket(projectId, 0) },
+      { key: '4', code: 'Digit4', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
+    ]
+  });
+}
+
+function quantityChoices(max, onSelect, backAction) {
+  const amounts = [1, 5, 10, max].filter((qty, idx, arr) => qty > 0 && qty <= max && arr.indexOf(qty) === idx);
+  const choices = amounts.slice(0, 4).map((qty, idx) => ({
+    key: String(idx + 1),
+    code: `Digit${idx + 1}`,
+    label: qty === max ? `MAX ${qty}` : `${qty} UNIT${qty === 1 ? '' : 'S'}`,
+    action: () => onSelect(qty)
+  }));
+  if (choices.length < 4) choices.push({ key: '4', code: 'Digit4', label: 'BACK', action: backAction });
+  return choices;
+}
+
+function buyDialog(projectId, commodityId) {
+  const price = getMarketPrice(projectId, commodityId, 'buy');
+  const cargoSpace = traderState.maxCargo - getCargoUsed();
+  const affordable = Math.floor(traderState.credits / price);
+  const max = Math.min(affordable, cargoSpace);
+  const name = getCommodityName(commodityId);
+  showGameMessageRef({
+    type: 'BUY ORDER',
+    source: stationSource(projectId),
+    text: `BUY ${name} AT ${price}cr EACH. YOU HAVE ${traderState.credits}cr. HOW MANY? MAX ${max}.`,
+    choices: max > 0
+      ? quantityChoices(max, qty => confirmTrade('buy', projectId, commodityId, qty), () => tradeActionDialog(projectId, commodityId))
+      : [{ key: '1', code: 'Digit1', label: 'BACK', action: () => tradeActionDialog(projectId, commodityId) }]
+  });
+}
+
+function sellDialog(projectId, commodityId) {
+  const price = getMarketPrice(projectId, commodityId, 'sell');
+  const max = traderState.cargo[commodityId] || 0;
+  const name = getCommodityName(commodityId);
+  showGameMessageRef({
+    type: 'SELL ORDER',
+    source: stationSource(projectId),
+    text: `SELL ${name} AT ${price}cr EACH. HOLDING ${max}. HOW MANY?`,
+    choices: max > 0
+      ? quantityChoices(max, qty => confirmTrade('sell', projectId, commodityId, qty), () => tradeActionDialog(projectId, commodityId))
+      : [{ key: '1', code: 'Digit1', label: 'BACK', action: () => tradeActionDialog(projectId, commodityId) }]
+  });
+}
+
+function confirmTrade(action, projectId, commodityId, qty) {
+  const result = executeTrade(action, projectId, commodityId, qty);
+  updateFlightHudRef(true);
+  showGameMessageRef({
+    type: result.success ? 'TRADE CONFIRMED' : 'TRADE REJECTED',
+    source: stationSource(projectId),
+    text: result.message,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'MARKET', action: () => showMarket(projectId, 0) },
+      { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
+    ]
+  });
+}
+
+export function executeTrade(action, projectId, commodityId, qty) {
+  const quantity = Math.max(0, Math.floor(qty));
+  const commodity = COMMODITIES.find(item => item.id === commodityId);
+  if (!commodity || quantity <= 0) return { success: false, message: 'INVALID TRADE ORDER.' };
+  const price = getMarketPrice(projectId, commodityId, action);
+  const total = price * quantity;
+
+  if (action === 'buy') {
+    if (traderState.credits < total) return { success: false, message: 'INSUFFICIENT CREDITS FOR PURCHASE.' };
+    if (getCargoUsed() + quantity > traderState.maxCargo) return { success: false, message: 'CARGO HOLD CAPACITY EXCEEDED.' };
+    traderState.credits -= total;
+    traderState.cargo[commodityId] = (traderState.cargo[commodityId] || 0) + quantity;
+    recordTrade(action, projectId, commodity, quantity, price);
+    ttsEngine.speak('CARGO LOADED. CREDITS DEDUCTED.', getVoicePersonaRef('USSYVERSE CONTROL'));
+    return { success: true, message: `CARGO LOADED: ${quantity} ${commodity.name}. ${total} CREDITS DEDUCTED.` };
+  }
+
+  if (action === 'sell') {
+    if ((traderState.cargo[commodityId] || 0) < quantity) return { success: false, message: 'REQUESTED CARGO IS NOT IN HOLD.' };
+    traderState.credits += total;
+    traderState.cargo[commodityId] -= quantity;
+    if (traderState.cargo[commodityId] <= 0) delete traderState.cargo[commodityId];
+    recordTrade(action, projectId, commodity, quantity, price);
+    ttsEngine.speak('CARGO SOLD. CREDITS RECEIVED.', getVoicePersonaRef('USSYVERSE CONTROL'));
+    return { success: true, message: `CARGO SOLD: ${quantity} ${commodity.name}. ${total} CREDITS RECEIVED.` };
+  }
+
+  return { success: false, message: 'UNKNOWN TRADE ACTION.' };
+}
+
+function recordTrade(action, stationId, commodity, qty, price) {
+  getCargoUsed();
+  traderState.lastTrade = { stationId, commodity: commodity.id, action, qty, price };
+  traderState.tradeLog.unshift(traderState.lastTrade);
+  traderState.tradeLog = traderState.tradeLog.slice(0, 10);
+}
+
+function refuelDialog(projectId) {
+  const missing = Math.max(0, traderState.maxFuel - traderState.fuel);
+  const cost = Math.round(missing * traderState.fuelCostPerUnit);
+  showGameMessageRef({
+    type: 'REFUEL SERVICE',
+    source: stationSource(projectId),
+    text: `REFUEL COST: ${cost}cr FOR ${Math.ceil(missing)} UNITS. CREDITS: ${traderState.credits}.`,
+    choices: [
+      { key: '1', code: 'Digit1', label: 'CONFIRM REFUEL', action: () => confirmRefuel(projectId) },
+      { key: '2', code: 'Digit2', label: 'BACK', action: () => openTradeMenu(projectId) }
+    ]
+  });
+}
+
+function confirmRefuel(projectId) {
+  const result = refuelAt(projectId);
+  updateFlightHudRef(true);
+  showGameMessageRef({
+    type: result.success ? 'REFUEL COMPLETE' : 'REFUEL DENIED',
+    source: stationSource(projectId),
+    text: result.message,
+    choices: [{ key: '1', code: 'Digit1', label: 'STATION MENU', action: () => openTradeMenu(projectId) }]
+  });
+}
+
+export function refuelAt(projectId, options = {}) {
+  const profile = getStationProfile(projectId);
+  const missing = Math.max(0, traderState.maxFuel - traderState.fuel);
+  const available = profile.fuelAvailable ? Math.min(missing, profile.fuelStock) : 0;
+  const cost = options.free ? 0 : Math.round(available * traderState.fuelCostPerUnit);
+  if (available <= 0) return { success: true, message: 'FUEL TANKS ALREADY FULL OR STATION STOCK EMPTY.' };
+  if (!options.free && traderState.credits < cost) return { success: false, message: 'INSUFFICIENT CREDITS FOR REFUELING.' };
+  traderState.credits -= cost;
+  traderState.fuel = Math.min(traderState.maxFuel, traderState.fuel + available);
+  profile.fuelStock = Math.max(0, profile.fuelStock - available);
+  if (!options.silent) ttsEngine.speak('FUELING COMPLETE.', getVoicePersonaRef('USSYVERSE CONTROL'));
+  return { success: true, message: `FUELING COMPLETE. ${Math.round(available)} UNITS LOADED. COST ${cost}cr.` };
+}
+
+function showCargoHold(projectId) {
+  const rows = Object.entries(traderState.cargo)
+    .filter(([, qty]) => qty > 0)
+    .map(([commodityId, qty]) => `${getCommodityName(commodityId)}:${qty}`);
+  const summary = rows.length ? rows.join(' // ') : 'CARGO HOLD EMPTY';
+  showGameMessageRef({
+    type: 'CARGO HOLD',
+    source: stationSource(projectId),
+    text: `${summary}. USED ${getCargoUsed()}/${traderState.maxCargo}. RECENT: ${getTradeLogSummary() || 'NO TRADES LOGGED'}.`,
+    choices: [{ key: '1', code: 'Digit1', label: 'STATION MENU', action: () => openTradeMenu(projectId) }]
+  });
+}
+
+export function updateFuelDrain(dt, isThrusting) {
+  if (!isThrusting || traderState.fuel <= 0) return traderState.fuel <= 0;
+  traderState.fuel = Math.max(0, traderState.fuel - traderState.fuelPerSecond * dt);
+  return traderState.fuel <= 0;
+}
+
+export function getTradeLogSummary() {
+  return traderState.tradeLog
+    .slice(0, 10)
+    .map(entry => `${entry.action.toUpperCase()} ${entry.qty} ${getCommodityName(entry.commodity)} @ ${entry.price}cr`)
+    .join(' | ');
+}

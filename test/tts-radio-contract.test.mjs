@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const appSource = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+const appSource = await readFile(new URL('../js/main.js', import.meta.url), 'utf8');
 
 function extractStringConfig(name) {
   const match = appSource.match(new RegExp(`${name}:\\s*'([^']+)'`));
@@ -30,6 +30,8 @@ test('browser console API only toggles the backend path', () => {
   assert.match(appSource, /function setTTSBackendEnabled\(enabled = true\)/);
   assert.match(appSource, /window\.setTTSBackendEnabled = setTTSBackendEnabled/);
   assert.match(appSource, /window\.__USSY_TTS_DEBUG__/);
+  assert.doesNotMatch(appSource, /function setTTSKey\(key\)/);
+  assert.doesNotMatch(appSource, /window\.setTTSKey/);
 });
 
 test('browser request builder sends only speech options to backend', () => {
@@ -72,9 +74,10 @@ test('TTS transmissions are single-owner and radio text avoids spoken slash char
 test('mission transmissions outrank low-priority combat barks', () => {
   assert.match(appSource, /priority: 'high'/);
   assert.match(appSource, /priority: 'low'/);
-  assert.match(appSource, /ttsEngine\.speak\(text, \{\n\s+\.\.\.getVoicePersona\(source\),\n\s+priority: 'high'/);
   assert.match(appSource, /combatAudio\.bark\('FOX TWO', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
   assert.match(appSource, /combatAudio\.bark\('TAKING FIRE', \{ \.\.\.getVoicePersona\('COMBAT SYSTEM'\), priority: 'low' \}\)/);
+  assert.match(appSource, /ttsPriority = 'high'/);
+  assert.match(appSource, /priority: ttsPriority/);
 });
 
 test('configured OpenRouter model exists and can output audio', { skip: !process.env.OPENROUTER_VALIDATE_MODELS }, async () => {

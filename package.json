@@ -1,11 +1,15 @@
 {
+  "type": "module",
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
+    "test:combat": "node --test test/combat.test.mjs",
     "test:tts:contract": "node --test test/tts-radio-contract.test.mjs",
     "test:tts:server": "node --test test/tts-backend.test.mjs",
     "test:tts:models": "OPENROUTER_VALIDATE_MODELS=1 node --test test/tts-radio-contract.test.mjs",
     "test:tts:live": "OPENROUTER_LIVE_TTS=1 node --test test/tts-backend.test.mjs",
-    "test:kokoro": "node --test test/kokoro-tts.test.mjs"
+    "test:kokoro": "node --test test/kokoro-tts.test.mjs",
+    "test:orchestrator": "node --test test/orchestrator.test.mjs",
+    "test:orchestrator:live": "ORCHESTRATOR_LIVE=1 node --test test/orchestrator.test.mjs"
   }
 }
