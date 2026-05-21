@@ -464,12 +464,46 @@
       </div>
     </div>
 
-    <!-- BOTTOM RIGHT: Combat/Nav Stats -->
+    <!-- BOTTOM CENTER: Weapons / Targeting / Nav -->
+    <div class="cockpit-dash-center" id="cockpit-dash-center" aria-live="polite">
+      <div class="cockpit-dash-center-inner">
+        <div class="dash-center-title">COMBAT // NAV</div>
+        <div class="dash-center-grid">
+          <div class="dash-cell">
+            <span class="dash-label">PRIMARY WPN</span>
+            <strong id="flight-weapon-primary-c">LASER Mk.I</strong>
+          </div>
+          <div class="dash-cell dash-cell-wide">
+            <span class="dash-label">CROSSHAIR</span>
+            <strong id="flight-crosshair-c">NO TARGET</strong>
+          </div>
+          <div class="dash-cell">
+            <span class="dash-label">SECONDARY</span>
+            <strong id="flight-weapon-secondary-c">MISSILES</strong>
+          </div>
+          <div class="dash-cell">
+            <span class="dash-label">NAV TARGET</span>
+            <strong id="flight-nav-target-c">NONE</strong>
+          </div>
+          <div class="dash-cell">
+            <span class="dash-label">ETA</span>
+            <strong id="flight-nav-eta-c">--</strong>
+          </div>
+          <div class="dash-cell">
+            <span class="dash-label">AUTOPILOT</span>
+            <strong id="flight-autopilot-c">OFF</strong>
+          </div>
+        </div>
+        <div class="dash-center-help">MOUSELOOK // W/S THRUST // LMB FIRE // V NAV // P AUTO // C CAM // T TRADE</div>
+      </div>
+    </div>
+
+    <!-- BOTTOM RIGHT: Economy / Status -->
     <div class="flight-hud hud-interactive" id="flight-hud" aria-live="polite">
       <div class="flight-hud-inner">
         <div id="tts-status" class="tts-status-indicator" aria-live="polite" aria-label="TTS status"></div>
         <div class="flight-hud-header">
-          <span>COMBAT / NAV</span>
+          <span>ECON / STATUS</span>
           <span id="flight-status">TYPE USSY TO LAUNCH</span>
         </div>
         <div class="flight-hud-grid">
@@ -491,35 +525,13 @@
             <strong id="flight-sp">SP:0</strong>
           </div>
           <div>
-            <span class="flight-hud-label">PRIMARY WEAPON</span>
-            <strong id="flight-weapon-primary">LASER Mk.I</strong>
-          </div>
-          <div>
             <span class="flight-hud-label">NEAREST PROJECT</span>
             <strong id="flight-target">NONE</strong>
           </div>
-          <div>
-            <span class="flight-hud-label">CROSSHAIR TARGET</span>
-            <strong id="flight-crosshair-target">NO PROJECT</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">NAV TARGET</span>
-            <strong id="flight-nav-target">NONE</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">ETA</span>
-            <strong id="flight-nav-eta">--</strong>
-          </div>
-          <div>
-            <span class="flight-hud-label">AUTOPILOT</span>
-            <strong id="flight-autopilot">OFF</strong>
-          </div>
         </div>
         <div class="mini-meter heat"><span id="flight-heat-bar" class="heat-bar-fill"></span></div>
-        <div class="flight-hud-help">MOUSELOOK // W/S THRUST // LMB FIRE // V NAV // P AUTO</div>
         <div class="hud-hidden-telemetry" aria-hidden="true">
           <strong id="flight-score">0</strong>
-          <strong id="flight-weapon-secondary">MISSILE RACK</strong>
         </div>
       </div>
     </div>
@@ -531,11 +543,12 @@
       <span id="flight-ammo-bar"></span>
       <strong id="flight-missiles">8</strong>
       <span id="flight-missile-bar"></span>
-    </div>
-    <div class="cockpit-dash">
-      <span>COCKPIT_VIEW</span>
-      <span>C_TOGGLES_CHASE_CAM</span>
-      <span>T_STATION_TRADE_WHEN_DOCKED</span>
+      <strong id="flight-weapon-primary">LASER Mk.I</strong>
+      <strong id="flight-crosshair-target">NO PROJECT</strong>
+      <strong id="flight-nav-target">NONE</strong>
+      <strong id="flight-nav-eta">--</strong>
+      <strong id="flight-autopilot">OFF</strong>
+      <strong id="flight-weapon-secondary">MISSILE RACK</strong>
     </div>
   </div>
 
@@ -552,6 +565,37 @@
   <!-- Lucide Icon Renderer -->
   <script>
     lucide.createIcons();
+  </script>
+  <script>
+    // Mirror cockpit center panel IDs from engine-updated source IDs.
+    (function syncCockpitCenter() {
+      const map = {
+        'flight-weapon-primary': 'flight-weapon-primary-c',
+        'flight-crosshair-target': 'flight-crosshair-c',
+        'flight-nav-target': 'flight-nav-target-c',
+        'flight-nav-eta': 'flight-nav-eta-c',
+        'flight-autopilot': 'flight-autopilot-c',
+        'flight-weapon-secondary': 'flight-weapon-secondary-c',
+      };
+
+      const sync = () => {
+        for (const [srcId, dstId] of Object.entries(map)) {
+          const src = document.getElementById(srcId);
+          const dst = document.getElementById(dstId);
+          if (src && dst && src.textContent !== dst.textContent) {
+            dst.textContent = src.textContent;
+          }
+        }
+      };
+
+      const observer = new MutationObserver(sync);
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const targets = document.querySelectorAll('.hud-hidden-telemetry, #flight-hud');
+        targets.forEach((target) => observer.observe(target, { subtree: true, characterData: true, childList: true }));
+        sync();
+      });
+    })();
   </script>
 </body>
 </html>

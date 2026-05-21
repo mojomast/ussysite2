@@ -2579,23 +2579,21 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  width: clamp(260px, 24vw, 360px);
-  height: clamp(220px, 24vh, 320px);
+  width: clamp(300px, 28vw, 420px);
+  height: clamp(280px, 30vh, 400px);
   z-index: 9100;
   overflow: hidden;
-  /* Parallelogram: left edge vertical, right edge diagonal */
   clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%);
   background:
-    linear-gradient(135deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
-  border-right: 1px solid rgba(0, 240, 255, 0.4);
-  border-bottom: 1px solid rgba(0, 240, 255, 0.25);
-  box-shadow: inset -20px 0 40px rgba(0, 240, 255, 0.04), 2px 0 18px rgba(0, 0, 0, 0.5);
+    linear-gradient(135deg, rgba(0, 20, 35, 0.96) 0%, rgba(3, 8, 20, 0.92) 100%);
+  border-right: 1px solid rgba(0, 240, 255, 0.45);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+  box-shadow: inset -20px 0 40px rgba(0, 240, 255, 0.05), 2px 0 24px rgba(0, 0, 0, 0.6);
 }
 
 .radar-panel-inner {
   position: absolute;
   inset: 0;
-  /* Counter-skew content slightly so text reads straight */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2613,14 +2611,13 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
 }
 
-/* Make the canvas square and large — the whole point of the radar */
 .cockpit-radar {
-  width: clamp(160px, 17vw, 240px) !important;
-  height: clamp(160px, 17vw, 240px) !important;
+  width: clamp(200px, 20vw, 300px) !important;
+  height: clamp(200px, 20vw, 300px) !important;
   display: block;
-  border: 1px solid rgba(0, 240, 255, 0.4);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 16px rgba(0, 240, 255, 0.08);
-  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.2), inset 0 0 20px rgba(0, 240, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .radar-range {
@@ -2670,30 +2667,49 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
-/* ── BOTTOM LEFT: SHIP STATUS — full skewed trapezoid ── */
+/* ── SHARED BOTTOM DASH RAIL ── */
+/* A continuous glowing line connecting all 3 bottom panels */
+.cockpit-frame.cockpit-frame-left::before,
+.cockpit-dash-center::before,
+#flight-hud::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(0, 240, 255, 0.6) 20%,
+    rgba(0, 240, 255, 0.9) 50%,
+    rgba(0, 240, 255, 0.6) 80%,
+    transparent 100%
+  );
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ── BOTTOM LEFT: SHIP STATUS ── */
 .cockpit-frame.cockpit-frame-left {
   position: fixed;
   bottom: 0;
   left: 0;
-  width: clamp(280px, 26vw, 400px);
-  height: clamp(220px, 26vh, 320px);
+  width: clamp(260px, 24vw, 360px);
+  height: clamp(220px, 26vh, 310px);
   z-index: 9100;
   overflow: hidden;
-  /* Trapezoid: bottom-left and top-left flush, top-right diagonal */
-  clip-path: polygon(0 16%, 12% 0, 100% 0, 100% 100%, 0 100%);
+  clip-path: polygon(0 14%, 11% 0, 100% 0, 100% 100%, 0 100%);
   background:
-    linear-gradient(315deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
-  border-right: 1px solid rgba(0, 240, 255, 0.35);
-  border-top: 1px solid rgba(0, 240, 255, 0.25);
-  box-shadow: inset 0 -20px 40px rgba(0, 240, 255, 0.04), 0 -2px 18px rgba(0, 0, 0, 0.5);
-  /* Subtle overall panel skew — cockpit lean */
+    linear-gradient(160deg, rgba(0, 20, 35, 0.96) 0%, rgba(3, 8, 20, 0.92) 100%);
+  border-right: 1px solid rgba(0, 240, 255, 0.3);
   transform: none;
 }
 
 .cockpit-frame.cockpit-frame-left .cockpit-frame-content {
   position: absolute;
   inset: 0;
-  padding: clamp(10px, 1.4vw, 20px) clamp(14px, 1.6vw, 24px);
+  padding: clamp(12px, 1.6vw, 22px) clamp(14px, 1.8vw, 26px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -2768,22 +2784,112 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
 .resource-meter.ammo span   { background: var(--cyber-yellow); color: var(--cyber-yellow); }
 .resource-meter.missile span { background: var(--cyber-pink); color: var(--cyber-pink); }
 
-/* ── BOTTOM RIGHT: COMBAT/NAV STATS ── */
+/* ── BOTTOM CENTER: WEAPONS / TARGETING / NAV — NEW ── */
+.cockpit-dash-center {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Width fills the gap between left and right panels */
+  width: clamp(320px, 36vw, 560px);
+  height: clamp(180px, 22vh, 270px);
+  z-index: 9100;
+  overflow: hidden;
+  /* Flat top with slight diagonal cuts on both corners */
+  clip-path: polygon(3% 0, 97% 0, 100% 8%, 100% 100%, 0 100%, 0 8%);
+  background:
+    linear-gradient(180deg, rgba(0, 18, 30, 0.97) 0%, rgba(3, 8, 20, 0.93) 100%);
+  border-left: 1px solid rgba(0, 240, 255, 0.2);
+  border-right: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.cockpit-dash-center-inner {
+  position: absolute;
+  inset: 0;
+  padding: clamp(10px, 1.4vw, 18px) clamp(14px, 2vw, 28px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dash-center-title {
+  font-family: var(--font-display);
+  font-size: clamp(8px, 0.72vw, 11px);
+  letter-spacing: 0.2em;
+  color: var(--cyber-cyan);
+  text-align: center;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+.dash-center-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 4px 12px;
+  flex: 1;
+  align-content: start;
+  overflow: hidden;
+}
+
+.dash-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dash-cell-wide {
+  /* crosshair target gets extra width */
+}
+
+.dash-label {
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 0.58vw, 9px);
+  color: rgba(148, 200, 220, 0.6);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.dash-cell strong {
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 0.88vw, 13px);
+  color: var(--cyber-yellow);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-center-help {
+  font-family: var(--font-mono);
+  font-size: clamp(6px, 0.52vw, 8px);
+  color: rgba(148, 200, 220, 0.35);
+  letter-spacing: 0.06em;
+  margin-top: auto;
+  padding-top: 5px;
+  border-top: 1px solid rgba(0, 240, 255, 0.08);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── BOTTOM RIGHT: ECONOMY / STATUS ── */
 #flight-hud {
   position: fixed;
   bottom: 0;
   right: 0;
-  width: clamp(280px, 28vw, 420px);
-  height: clamp(220px, 26vh, 320px);
+  width: clamp(240px, 22vw, 340px);
+  height: clamp(220px, 26vh, 310px);
   z-index: 9100;
   overflow: hidden;
-  /* Mirror of bottom-left: diagonal on top-left corner */
-  clip-path: polygon(0 0, 88% 0, 100% 16%, 100% 100%, 0 100%);
+  clip-path: polygon(0 0, 89% 0, 100% 14%, 100% 100%, 0 100%);
   background:
-    linear-gradient(225deg, rgba(0, 30, 45, 0.94) 0%, rgba(3, 8, 20, 0.88) 100%);
-  border-left: 1px solid rgba(0, 240, 255, 0.35);
-  border-top: 1px solid rgba(0, 240, 255, 0.25);
-  box-shadow: inset 0 -20px 40px rgba(0, 240, 255, 0.04), 0 -2px 18px rgba(0, 0, 0, 0.5);
+    linear-gradient(200deg, rgba(0, 20, 35, 0.96) 0%, rgba(3, 8, 20, 0.92) 100%);
+  border-left: 1px solid rgba(0, 240, 255, 0.3);
   transform: none;
   padding: 0;
   box-shadow: none;
@@ -2796,7 +2902,7 @@ body.flight-active #flight-hud {
 .flight-hud-inner {
   position: absolute;
   inset: 0;
-  padding: clamp(10px, 1.4vw, 20px) clamp(14px, 1.6vw, 22px);
+  padding: clamp(10px, 1.4vw, 20px) clamp(14px, 1.8vw, 24px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -2808,26 +2914,27 @@ body.flight-active #flight-hud {
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-display);
-  font-size: clamp(9px, 0.75vw, 12px);
-  letter-spacing: 0.15em;
+  font-size: clamp(8px, 0.72vw, 11px);
+  letter-spacing: 0.18em;
   color: var(--cyber-cyan);
   margin-bottom: 8px;
   padding-bottom: 5px;
-  border-bottom: 1px solid rgba(0, 240, 255, 0.22);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
 #flight-status {
-  font-size: clamp(8px, 0.65vw, 10px);
+  font-size: clamp(7px, 0.58vw, 9px);
   color: var(--cyber-green);
   letter-spacing: 0.1em;
-  text-shadow: 0 0 6px rgba(0, 255, 100, 0.5);
+  text-shadow: 0 0 6px rgba(0, 255, 100, 0.4);
 }
 
+/* Only 5 cells now — 2 column grid */
 .flight-hud-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px 12px;
+  gap: 5px 14px;
   flex: 1;
   overflow: hidden;
   align-content: start;
@@ -2836,23 +2943,23 @@ body.flight-active #flight-hud {
 .flight-hud-grid > div {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 
 .flight-hud-label {
   font-family: var(--font-mono);
-  font-size: clamp(7px, 0.6vw, 9px);
-  color: rgba(148, 200, 220, 0.65);
-  letter-spacing: 0.08em;
-  line-height: 1;
+  font-size: clamp(7px, 0.58vw, 9px);
+  color: rgba(148, 200, 220, 0.6);
+  letter-spacing: 0.09em;
   text-transform: uppercase;
+  line-height: 1;
 }
 
 .flight-hud strong,
 .flight-hud-grid strong {
   font-family: var(--font-mono);
-  font-size: clamp(10px, 0.9vw, 13px);
+  font-size: clamp(11px, 0.95vw, 14px);
   color: var(--cyber-yellow);
   line-height: 1.3;
   white-space: nowrap;
@@ -2861,37 +2968,20 @@ body.flight-active #flight-hud {
   letter-spacing: 0.04em;
 }
 
-.flight-hud-help {
+/* TTS indicator sits top-right of the panel */
+.tts-status-indicator {
+  position: absolute;
+  top: 8px;
+  right: 12px;
   font-family: var(--font-mono);
-  font-size: clamp(6px, 0.55vw, 8px);
-  color: rgba(148, 200, 220, 0.4);
-  letter-spacing: 0.06em;
-  margin-top: auto;
-  padding-top: 6px;
-  border-top: 1px solid rgba(0, 240, 255, 0.1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: clamp(6px, 0.5vw, 8px);
+  color: var(--cyber-green);
+  letter-spacing: 0.1em;
 }
 
-/* ── COCKPIT DASH BAR — center bottom ── */
+/* ── REMOVE old .cockpit-dash ── */
 .cockpit-dash {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 20px;
-  padding: 5px 20px;
-  font-family: var(--font-mono);
-  font-size: clamp(7px, 0.62vw, 9px);
-  color: rgba(148, 200, 220, 0.5);
-  letter-spacing: 0.08em;
-  background: rgba(3, 8, 20, 0.7);
-  border-top: 1px solid rgba(0, 240, 255, 0.12);
-  z-index: 9200;
-  pointer-events: none;
-  white-space: nowrap;
+  display: none !important;
 }
 
 /* ── CORNER ACCENT LINES — pure decoration ── */
@@ -2928,6 +3018,23 @@ body.flight-active #flight-hud {
   clip-path: inset(50%) !important;
   white-space: nowrap !important;
   pointer-events: none !important;
+}
+
+@media (max-width: 1280px) {
+  .cockpit-frame.cockpit-frame-left {
+    width: clamp(220px, 22vw, 300px);
+    height: clamp(200px, 24vh, 280px);
+  }
+
+  #flight-hud {
+    width: clamp(200px, 20vw, 280px);
+    height: clamp(200px, 24vh, 280px);
+  }
+
+  .cockpit-dash-center {
+    width: clamp(280px, 38vw, 480px);
+    height: clamp(160px, 20vh, 240px);
+  }
 }
 
 /* ── Z-INDEX GUARD ── */
