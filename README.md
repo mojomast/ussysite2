@@ -27,14 +27,17 @@ Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, 
 | Left mouse | Fire lasers |
 | Right mouse | Fire missile |
 | `V` | Set nav target from crosshair project |
-| `P` | Toggle autopilot |
-| `C` | Toggle cockpit/chase view |
-| `L` | Land and restock at nearby project station |
-| `T` | Open station services while landed |
+| `Y` | Toggle autopilot |
+| `Shift+C` | Toggle cockpit/chase view |
+| `L` | Approach/land at nearby project station |
+| `B` | Open mission board while landed and no modal is active |
+| `R` | Toggle throttle hold |
+| `T` | Reserved target cycle |
 | `U` | Open skill tree while landed |
 | `Space` | Confirm/dismiss station and mission messages |
-| `M` | Toggle TTS radio |
-| `Escape` | Exit flight mode when pointer is unlocked |
+| `M` | Toggle system map |
+| `Shift+M` | Toggle TTS radio |
+| `Escape` / `Backspace` | Close overlays/back; Escape exits flight mode when pointer is unlocked |
 
 ## File Structure
 

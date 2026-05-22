@@ -433,7 +433,7 @@ function weaponDetailDialog(projectId, weaponId, page = 0) {
     choices.push({ key: '1', code: 'Digit1', label: 'EQUIP PRIMARY', action: () => confirmWeaponEquip(projectId, weaponId, 'primary', page) });
     choices.push({ key: '2', code: 'Digit2', label: 'EQUIP SECONDARY', action: () => confirmWeaponEquip(projectId, weaponId, 'secondary', page) });
   }
-  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => showWeaponShop(projectId, page) });
+  choices.push({ key: 'Esc', code: 'Escape', aliases: ['Backspace'], label: 'BACK', action: () => showWeaponShop(projectId, page) });
   showGameMessageRef({
     type: 'WEAPON DETAIL',
     source: `${stationName(projectId).toUpperCase()} ARMORY`,

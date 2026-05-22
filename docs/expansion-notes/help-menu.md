@@ -32,7 +32,7 @@ Recommended binding behavior:
 | `H` | Toggle help overlay. |
 | `F1` | Toggle help overlay and call `event.preventDefault()` to suppress browser help. |
 | `Escape` | Close help if open before lower-priority back/exit behavior. |
-| `P` | Pause/menu, after moving current autopilot from `P` to `Y` or `Shift+P`. |
+| `P` | Pause/menu, reserved after moving autopilot to `Y`. |
 
 ## HTML Structure
 
@@ -241,7 +241,7 @@ Input priority recommendation:
 
 1. `Escape` closes topmost overlay: combat debrief if applicable, help, loadout, inventory, system map, game message, pause menu.
 2. `H`/`F1` toggles help and pauses active flight.
-3. `P` toggles pause/menu only after current autopilot conflict is resolved.
+3. `P` toggles pause/menu only after pause/menu exists; autopilot now uses `Y`.
 4. Flight controls are ignored while `flightState.paused` is true.
 
 ## Content Outline
@@ -264,7 +264,7 @@ Flight:
 | `Shift` | Afterburner when unlocked. |
 | `G` | Match speed / emergency brake. |
 | `F` | Cold jump when unlocked. Do not advertise as help. |
-| `R` | Recommended throttle hold replacement for current `T`. |
+| `R` | Current throttle hold replacement for old `T`. |
 | `Z` / `X` | Throttle level up/down while throttle mode is enabled. Current code: `Z` increases, `X` decreases. |
 
 Combat:
@@ -274,14 +274,14 @@ Combat:
 | Left mouse | Primary fire. |
 | Right mouse | Secondary fire. |
 | `C` | Evasion roll. |
-| `T` | Recommended Phase 6 target cycle after moving throttle off `T`. |
+| `T` | Reserved Phase 6 target cycle; runtime is currently a safe no-op. |
 
 Navigation:
 
 | Input | Action |
 |---|---|
 | `V` | Set navigation target from crosshair. |
-| `Y` or `Shift+P` | Recommended autopilot replacement for current `P`. |
+| `Y` | Current autopilot replacement for old `P`. |
 | `M` | System map. |
 | `L` | Surface approach / land. |
 | Wheel in console | Zoom orbit camera. |
@@ -292,9 +292,9 @@ UI:
 | Input | Action |
 |---|---|
 | `H` / `F1` | Help overlay. Confirmed unbound. |
-| `P` | Pause/menu after moving autopilot. |
+| `P` | Pause/menu reserved after moving autopilot. |
 | `I` | Inventory/manifest. |
-| `B` | Recommended mission board after moving modal Back to `Escape`/Backspace. |
+| `B` | Mission board when no modal/message is active. |
 | `O` | Objectives. |
 | `U` | Upgrades/skills while landed. |
 | `Escape` | Close topmost overlay/back; exit flight only from clear state. |
@@ -306,9 +306,9 @@ Conflict callouts to include at bottom of CONTROLS:
 
 | Conflict | Help Copy |
 |---|---|
-| `P` currently autopilot | Phase 6 should move autopilot to `Y` or `Shift+P`, then reserve `P` for pause. |
-| `T` currently throttle/station access | Phase 6 should move throttle to `R`, then reserve `T` for target cycle. |
-| `B` currently modal Back | Phase 6 should make `Escape`/Backspace back, then reserve `B` for mission board. |
+| `P` previously autopilot | Resolved: autopilot moved to `Y`; `P` is reserved for pause. |
+| `T` previously throttle/station access | Resolved: throttle moved to `R`; `T` is reserved for target cycle. |
+| `B` previously modal Back | Resolved: `Escape`/Backspace are modal Back; `B` is mission board outside active modals/messages. |
 | `Escape` partial close | Phase 6 should make Escape a topmost-overlay dispatcher. |
 
 ### HOW TO PLAY
@@ -350,7 +350,7 @@ Suggested tips:
 | Match speed | Use `G` to match a target or brake in emergencies. |
 | Dock often | Docking restocks ammo, missiles, shields, armor, energy, and fuel depending on services/state. |
 | Use objectives panel | Toggle `O` or use the objectives tabs to find current and available objectives. |
-| Mission board | Once `B` is reserved, use it only outside active modal text. Until then use station service choices. |
+| Mission board | `B` is reserved; use it only outside active modal text. Station service choices remain available. |
 | Map awareness | Use `M` to understand station/planet routes and route autopilot context. |
 | Skill unlocks | Engine skills unlock afterburner/cold jump behaviors; combat skills change survivability and weapon uptime. |
 | Mobile/coarse pointers | Current controls are keyboard/mouse oriented; no gamepad bindings were found. |

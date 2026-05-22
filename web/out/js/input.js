@@ -111,6 +111,10 @@ function isTypingTarget(target) {
   return Boolean(target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]'));
 }
 
+export function isBackOrCloseKey(event) {
+  return event?.code === 'Escape' || event?.code === 'Backspace';
+}
+
 export function clearFlightInput() {
   const { isFlightActive } = requireDeps();
   if (!isFlightActive()) return;
@@ -191,6 +195,7 @@ function onGlobalKeyDown(event) {
     openStationMenu,
     radioChain,
     setNavigationFromCrosshair,
+    showFactionMission,
     toggleAutopilot,
     toggleFlightTts,
     toggleFlightView,
@@ -217,11 +222,24 @@ function onGlobalKeyDown(event) {
   if (!isFlightActive()) return;
   if (typeof unlockAudio === 'function') unlockAudio();
 
-  if (event.code === 'Escape') {
+  if (isBackOrCloseKey(event)) {
+    const loadoutPanel = documentRef.getElementById('loadout-panel');
+    if (loadoutPanel && !loadoutPanel.hidden) {
+      event.preventDefault();
+      loadoutPanel.hidden = true;
+      return;
+    }
     const invPanel = documentRef.getElementById('inventory-panel');
     if (invPanel && !invPanel.hidden) {
       event.preventDefault();
       invPanel.hidden = true;
+      return;
+    }
+    const systemMapOverlay = documentRef.getElementById('system-map-overlay');
+    if (systemMapOverlay && !systemMapOverlay.classList.contains('hidden')) {
+      event.preventDefault();
+      systemMapOverlay.classList.add('hidden');
+      systemMapOverlay.setAttribute('aria-hidden', 'true');
       return;
     }
   }
@@ -230,9 +248,18 @@ function onGlobalKeyDown(event) {
     event.preventDefault();
     return;
   }
+  if (isBackOrCloseKey(event) && gameMessageState.active) {
+    event.preventDefault();
+    dismissGameMessage();
+    return;
+  }
   if (event.code === 'Space') {
     event.preventDefault();
     dismissGameMessage();
+    return;
+  }
+  if (event.code === 'Backspace') {
+    event.preventDefault();
     return;
   }
 
@@ -242,7 +269,7 @@ function onGlobalKeyDown(event) {
     if (!event.repeat) setNavigationFromCrosshair();
     return;
   }
-  if (event.code === 'KeyP') {
+  if (event.code === 'KeyY') {
     event.preventDefault();
     if (!event.repeat) toggleAutopilot();
     return;
@@ -262,9 +289,21 @@ function onGlobalKeyDown(event) {
     if (!event.repeat) landOnNearestProject();
     return;
   }
+  if (event.code === 'KeyB') {
+    event.preventDefault();
+    if (!event.repeat && flightState.landed && traderState.dockedStation && !gameMessageState.active) showFactionMission(traderState.dockedStation);
+    return;
+  }
   if (event.code === 'KeyT') {
     event.preventDefault();
-    if (!event.repeat && flightState.landed && traderState.dockedStation && !gameMessageState.active) openStationMenu(traderState.dockedStation);
+    return;
+  }
+  if (event.code === 'KeyH' || event.code === 'F1') {
+    event.preventDefault();
+    if (!event.repeat) {
+      flightState.status = 'HELP MENU RESERVED';
+      flightState.statusUntil = performance.now() + 1200;
+    }
     return;
   }
   if (event.code === 'KeyI') {

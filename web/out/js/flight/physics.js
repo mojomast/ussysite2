@@ -18,7 +18,7 @@ let deps = null;
 let coldJumpKeyWasDown = false;
 let throttleZWasDown = false;
 let throttleXWasDown = false;
-let throttleTWasDown = false;
+let throttleRWasDown = false;
 let matchSpeedKeyWasDown = false;
 let evasionKeyWasDown = false;
 
@@ -181,8 +181,8 @@ export function updateFlight(time = 0) {
     }
     evasionKeyWasDown = evasionKeyDown;
 
-    const throttleTDown = flightState.keys.has('KeyT');
-    if (throttleTDown && !throttleTWasDown) {
+    const throttleRDown = flightState.keys.has('KeyR');
+    if (throttleRDown && !throttleRWasDown) {
       flightState.throttleEnabled = !flightState.throttleEnabled;
       flightState.throttleLevel = flightState.throttleLevel ?? 0.5;
       flightState.status = flightState.throttleEnabled
@@ -190,7 +190,7 @@ export function updateFlight(time = 0) {
         : 'THROTTLE DISENGAGED';
       flightState.statusUntil = performance.now() + 1600;
     }
-    throttleTWasDown = throttleTDown;
+    throttleRWasDown = throttleRDown;
 
     if (flightState.throttleEnabled) {
       const throttleZDown = flightState.keys.has('KeyZ');

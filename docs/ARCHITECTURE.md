@@ -213,7 +213,7 @@ Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/f
 | `W/S` | Forward/reverse thrust |
 | `A/D` | Strafe |
 | `Q/E` | Roll ship |
-| `T` | Toggle static throttle |
+| `R` | Toggle static throttle |
 | `Z/X` | Increase/decrease throttle setting |
 | `G` | Match nearest target velocity or emergency brake |
 | `C` | Evasion roll |
@@ -221,7 +221,7 @@ Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/f
 | `F` | Cold jump when unlocked |
 | `M` | Toggle system map overlay |
 | `V` | Set navigation from crosshair |
-| `P` | Toggle autopilot |
+| `Y` | Toggle autopilot |
 
 ## Weapon Definitions
 

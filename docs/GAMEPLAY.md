@@ -8,14 +8,14 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 
 | Key | Action |
 | --- | --- |
-| `T` | Toggle static throttle |
+| `R` | Toggle static throttle |
 | `Z` / `X` | Increase / decrease throttle |
 | `G` | Match nearest enemy velocity, or brake if no target is available |
 | `C` | Evasion roll with cockpit flash and roll camera kick |
 | `F` | Cold jump when the engine skill is unlocked |
 | `M` | Toggle the system map overlay |
 | `V` | Set nav target from the crosshair |
-| `P` | Toggle autopilot |
+| `Y` | Toggle autopilot |
 | `Shift+C` | Toggle cockpit / third-person camera |
 
 ## Star System

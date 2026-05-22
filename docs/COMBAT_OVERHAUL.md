@@ -84,7 +84,7 @@ Dogfight mode has optional assist controls layered on top of direct WASD flight:
 
 | Key | Assist | Behavior |
 | --- | --- | --- |
-| `T` | Static throttle | Toggles throttle hold at the current throttle level. |
+| `R` | Static throttle | Toggles throttle hold at the current throttle level. |
 | `Z` / `X` | Throttle up/down | Raises or lowers static throttle in 10% steps while throttle is engaged. |
 | `G` | Match speed | LERPs the ship velocity toward the nearest active enemy; without a target it emergency-brakes toward zero velocity. |
 | `C` | Evasion roll | Applies a lateral/upward barrel-roll burst with a short cooldown. |

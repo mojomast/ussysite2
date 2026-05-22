@@ -126,6 +126,20 @@ export function renderGameMessage() {
   }
 }
 
+export function isBackNavigationKey(event) {
+  return event?.code === 'Escape' || event?.code === 'Backspace';
+}
+
+export function choiceMatchesKeyboardEvent(choice, event) {
+  if (!choice || !event) return false;
+  const key = event.key.toLowerCase();
+  const code = event.code.toLowerCase();
+  const aliases = choice.aliases || [];
+  return choice.key.toLowerCase() === key
+    || choice.code?.toLowerCase() === code
+    || aliases.some(alias => String(alias).toLowerCase() === key || String(alias).toLowerCase() === code);
+}
+
 function activateGameMessageChoice(choice) {
   const { gameMessageState, ttsEngine } = deps;
   if (!choice || choice.disabled || !gameMessageState?.active) return false;
@@ -165,9 +179,7 @@ export function handleGameMessageChoice(event) {
   const { gameMessageState } = deps;
   const allChoices = [...(gameMessageState?.choices || []), ...(gameMessageState?.ui?.footerChoices || [])];
   if (!gameMessageState?.active || allChoices.length === 0) return false;
-  const key = event.key.toLowerCase();
-  const code = event.code.toLowerCase();
-  const choice = allChoices.find(item => item.key.toLowerCase() === key || item.code?.toLowerCase() === code);
+  const choice = allChoices.find(item => choiceMatchesKeyboardEvent(item, event));
   if (!choice) return false;
   return activateGameMessageChoice(choice);
 }

@@ -885,6 +885,7 @@ export function init() {
     sectionCamPositions,
     selectProject,
     setNavigationFromCrosshair,
+    showFactionMission,
     telemetryCoord,
     toggleAutopilot,
     toggleFlightTts,
@@ -1750,7 +1751,7 @@ function updateSystemDocking() {
 function registerFlightAssistKeyCapture() {
   if (flightAssistKeyCaptureRegistered) return;
   flightAssistKeyCaptureRegistered = true;
-  const assistKeys = new Set(['KeyT', 'KeyC']);
+  const assistKeys = new Set(['KeyR', 'KeyC']);
   window.addEventListener('keydown', event => {
     if (!isFlightActive || !assistKeys.has(event.code)) return;
     flightState.keys.add(event.code);
@@ -2206,7 +2207,7 @@ function showFactionMission(projectId) {
       action: () => acceptLoreMission(projectId, mission)
     };
   });
-  const backChoice = { key: 'b', code: 'KeyB', label: 'STATION MENU', action: () => openStationMenu(projectId) };
+  const backChoice = { key: 'Esc', code: 'Escape', aliases: ['Backspace'], label: 'STATION MENU', action: () => openStationMenu(projectId) };
   const rows = stationMissions.map((mission, idx) => {
     const status = stationMissionAvailable(mission) ? 'AVAILABLE' : 'LOCKED';
     return `[${idx + 1}] ${status}: ${mission.type} // ${mission.title} TO ${stationName(mission.deliverTo).toUpperCase()} // ${mission.description} // REWARD ${stationMissionRewardText(mission)} // ${stationMissionCargoText(mission)}`;
@@ -2586,7 +2587,7 @@ function openEquipmentMarket(projectId) {
     }
     return `${weapon.name} - ${price}CR (NEED ${price - traderState.credits}CR MORE)`;
   });
-  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => openStationMenu(projectId) });
+  choices.push({ key: 'Esc', code: 'Escape', aliases: ['Backspace'], label: 'BACK', action: () => openStationMenu(projectId) });
   showGameMessage({
     type: 'EQUIPMENT MARKET',
     source: `${stationName(projectId).toUpperCase()} ARMORY`,
@@ -2659,7 +2660,7 @@ function showSkillBranch(branch) {
     const need = node.requires ? SKILL_TREE_NODES.find(item => item.id === node.requires)?.name : `${node.cost}SP`;
     return `LOCK ${node.name} (need: ${need})`;
   });
-  choices.push({ key: 'b', code: 'KeyB', label: 'BACK', action: () => openSkillTree() });
+  choices.push({ key: 'Esc', code: 'Escape', aliases: ['Backspace'], label: 'BACK', action: () => openSkillTree() });
   showGameMessage({
     type: `${branch} UPGRADES`,
     source: 'LOADOUT TERMINAL',
@@ -3023,7 +3024,7 @@ function openVolumeMenu(kind) {
         label: volumePercent(value),
         action: () => { setter(value); openAudioSettingsMenu(); }
       })),
-      { key: 'b', code: 'KeyB', label: 'BACK', action: () => openAudioSettingsMenu() }
+      { key: 'Esc', code: 'Escape', aliases: ['Backspace'], label: 'BACK', action: () => openAudioSettingsMenu() }
     ],
     ttsPriority: 'low'
   });

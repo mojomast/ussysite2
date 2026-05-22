@@ -1,6 +1,6 @@
 # Controls Audit
 
-Phase 1 research source of truth for Phase 6 control/help-menu work.
+Phase 1 research source of truth for Phase 6 control/help-menu work. Phase 2 Agent 2A resolved the hard conflicts called out below.
 
 Scope read in full: `index.html`; all current source files under `js/`; all files under `js/flight/`; all files under `js/engine/`. Search scope covered the requested key, pointer, click, wheel, scroll, and gamepad patterns. No application code changes were made.
 
@@ -13,11 +13,11 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | Message choice key or code | Activates current game-message choice | `js/input.js` | 229 | UI |
 | `Space` | Dismiss game message | `js/input.js` | 233 | UI |
 | `KeyV` | Set navigation target from crosshair | `js/input.js` | 240 | NAVIGATION |
-| `KeyP` | Toggle autopilot | `js/input.js` | 245 | NAVIGATION |
+| `KeyY` | Toggle autopilot | `js/input.js` | 251 | NAVIGATION |
 | `Shift+KeyC` | Toggle cockpit/third-person flight view | `js/input.js` | 250 | FLIGHT |
 | `KeyO` | Toggle objectives view | `js/input.js` | 255 | UI |
 | `KeyL` | Land on nearest project node | `js/input.js` | 260 | NAVIGATION |
-| `KeyT` while landed at station and no message | Open station menu | `js/input.js` | 265 | UI |
+| `KeyB` while landed at station and no message | Open mission board | `js/input.js` | 271 | UI |
 | `KeyI` | Toggle inventory panel | `js/input.js` | 270 | UI |
 | `KeyU` while landed and no message | Open skill tree | `js/input.js` | 275 | UI |
 | `KeyM` | Set key state for system map toggle | `js/input.js` | 280 | NAVIGATION |
@@ -53,7 +53,9 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | `KeyF` | Cold jump if engine skill `eng_5` unlocked | `js/flight/physics.js` | 127 | FLIGHT |
 | `KeyG` | Match target velocity or emergency brake | `js/flight/physics.js` | 137 | FLIGHT |
 | `KeyC` | Evasion roll | `js/flight/physics.js` | 165 | COMBAT |
-| `KeyT` | Toggle throttle mode | `js/flight/physics.js` | 184 | FLIGHT |
+| `KeyT` | Reserved for target cycle; no runtime target behavior yet | `js/input.js` | 276 | COMBAT |
+| `KeyH` / `F1` | Reserved help-menu key, prevents browser/default flight action | `js/input.js` | 280 | UI |
+| `KeyR` | Toggle throttle mode | `js/flight/physics.js` | 184 | FLIGHT |
 | `KeyZ` | Increase throttle level while throttle mode is enabled | `js/flight/physics.js` | 196 | FLIGHT |
 | `KeyX` | Decrease throttle level while throttle mode is enabled | `js/flight/physics.js` | 197 | FLIGHT |
 | Left pointer held | Fire primary weapon | `js/flight/physics.js` | 246 | COMBAT |
@@ -62,7 +64,7 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | Navigation engage button click | Plot route autopilot | `js/flight/state.js` | 1712 | NAVIGATION |
 | Navigation abort button click | Disengage route autopilot | `js/flight/state.js` | 1713 | NAVIGATION |
 | System map close button click | Hide system map overlay | `js/flight/state.js` | 1717 | UI |
-| Capture-phase `KeyT` | Force throttle key into flight key state despite normal handler returning | `js/flight/state.js` | 1753 | FLIGHT |
+| Capture-phase `KeyR` | Force throttle key into flight key state despite normal handler returning | `js/flight/state.js` | 1754 | FLIGHT |
 | Capture-phase `KeyC` | Force evasion key into flight key state despite `Shift+C` view binding | `js/flight/state.js` | 1753 | COMBAT |
 | Objectives panel click on view tab | Switch objectives panel view | `js/flight/state.js` | 610, 1854 | UI |
 | Objectives panel click on start objective | Start selected mission contract | `js/flight/state.js` | 1854 | UI |
@@ -73,14 +75,14 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | `Digit1` in faction mission | Accept generated mission when available | `js/flight/state.js` | 2178 | UI |
 | `Digit2` in faction mission | Return to station menu/trade menu | `js/flight/state.js` | 2175 | UI |
 | Number keys in mission board | Accept mission row | `js/flight/state.js` | 2196 | UI |
-| `KeyB` in mission board | Back to station menu | `js/flight/state.js` | 2209 | UI |
+| `Escape` / `Backspace` in mission board | Back to station menu | `js/flight/state.js` | 2210 | UI |
 | `Digit1` in station services | Restock | `js/flight/state.js` | 2559 | UI |
 | `Digit2` in station services | Equipment | `js/flight/state.js` | 2560 | UI |
 | `Digit3` in station services | Cargo market | `js/flight/state.js` | 2561 | UI |
 | `Digit4` in station services | Mission board | `js/flight/state.js` | 2562 | UI |
 | `Space` in station services | Dismiss | `js/flight/state.js` | 2563 | UI |
 | Number keys in equipment market | Buy/equip selected weapon | `js/flight/state.js` | 2580 | UI |
-| `KeyB` in equipment market | Back to station menu | `js/flight/state.js` | 2589 | UI |
+| `Escape` / `Backspace` in equipment market | Back to station menu | `js/flight/state.js` | 2590 | UI |
 | `Digit1` in purchase denied | Return to equipment | `js/flight/state.js` | 2612 | UI |
 | `Digit1` in system updated | Return to equipment | `js/flight/state.js` | 2627 | UI |
 | `Digit2` in system updated | Return to station menu | `js/flight/state.js` | 2628 | UI |
@@ -90,7 +92,7 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | `Digit4` in ship upgrades | Engines branch | `js/flight/state.js` | 2643 | UI |
 | `Space` in ship upgrades | Close | `js/flight/state.js` | 2644 | UI |
 | Number keys in skill branch | Confirm selected unlock path | `js/flight/state.js` | 2656 | UI |
-| `KeyB` in skill branch | Back to skill tree | `js/flight/state.js` | 2662 | UI |
+| `Escape` / `Backspace` in skill branch | Back to skill tree | `js/flight/state.js` | 2663 | UI |
 | `Digit1` in unlock confirm | Confirm skill unlock | `js/flight/state.js` | 2680 | UI |
 | `Digit2` in unlock confirm | Cancel skill unlock | `js/flight/state.js` | 2681 | UI |
 | `Space` in orchestrator acknowledgement | Acknowledge/dismiss event | `js/flight/state.js` | 2798 | UI |
@@ -107,7 +109,7 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | `Digit5` in audio settings | Restore quiet defaults | `js/flight/state.js` | 2999 | UI |
 | `Space` in audio settings | Dismiss | `js/flight/state.js` | 3000 | UI |
 | Number keys in volume menu | Apply selected volume preset | `js/flight/state.js` | 3020 | UI |
-| `KeyB` in volume menu | Back to audio settings | `js/flight/state.js` | 3026 | UI |
+| `Escape` / `Backspace` in volume menu | Back to audio settings | `js/flight/state.js` | 3027 | UI |
 | Game message choice button click | Activate rendered choice | `js/flight/messages.js` | 101 | UI |
 | Game message footer choice click | Activate footer choice | `js/flight/messages.js` | 117 | UI |
 | `event.key` or `event.code` matching active choices | Activate game-message choice | `js/flight/messages.js` | 168 | UI |
@@ -124,7 +126,7 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | `Digit6` in trade menu | Missions | `js/economy/trader.js` | 217 | UI |
 | Number keys in trade hub/market/black market | Select market page/action/back row | `js/economy/trader.js` | 247, 296, 323 | UI |
 | Number keys in weapon shop/shipyard/skill tree | Select shop, buy, equip, unlock, or back | `js/economy/trader.js` | 368, 381, 399, 430, 433, 487 | UI |
-| `KeyB` in weapon detail | Back to weapon shop | `js/economy/trader.js` | 436 | UI |
+| `Escape` / `Backspace` in weapon detail | Back to weapon shop | `js/economy/trader.js` | 436 | UI |
 | Number keys in trade/refuel/cargo dialogs | Confirm/refuse/select quantity/back | `js/economy/trader.js` | 530, 540, 655, 696 | UI |
 | Hero container scroll | Update hero section nav and camera/light state | `js/ui/hero.js` | 67 | UI |
 | Hero container wheel on final card | Enter console mode | `js/ui/hero.js` | 68 | UI |
@@ -144,7 +146,7 @@ Scope read in full: `index.html`; all current source files under `js/`; all file
 | Inventory close inline click | Hide inventory panel | `index.html` | 619 | UI |
 | Browser scroll/wheel/click/double-click described in copy | User-facing graph instruction text only | `index.html` | 199 | UI |
 | `Space` displayed in message footer | User-facing dismiss hint | `index.html` | 407 | UI |
-| Cockpit help text: mouselook, W/S, A/D, T, Z/X, G, C, LMB, RMB, V, P, I | User-facing help strip | `index.html` | 552 | UI |
+| Cockpit help text: mouselook, W/S, A/D, R, Z/X, G, C, LMB, RMB, V, Y, L, B, T, H/F1, I | User-facing help strip | `index.html` | 552 | UI |
 
 ## Requested Pattern Match Notes
 
@@ -154,9 +156,9 @@ Requested keydown/keyup, `event.key`, `event.code`, pointer, click, wheel, scrol
 
 | Severity | Inputs | Conflict | Evidence | Recommendation |
 |---|---|---|---|---|
-| HARD CONFLICT | `KeyT` | Existing throttle toggle and landed station-menu reopen conflict with requested Phase 6 target cycle `T`. | `js/input.js:265`, `js/flight/physics.js:184`, `js/flight/state.js:1753`; help strip says `T THROTTLE` at `index.html:552`. | Reserve `T` for target cycle in flight. Move throttle mode to `R` or `Alt+W`/`Alt+S`, and keep station services on `B`/interaction menu while landed. |
-| HARD CONFLICT | `KeyP` | Existing autopilot toggle conflicts with common expected `P` pause. | `js/input.js:245`; HUD says `P AUTO` at `index.html:552`. | Move autopilot to `Y` or `Shift+P`; reserve `P` for pause/menu overlay. |
-| HARD CONFLICT | `KeyB` | Existing message/menu Back key conflicts with requested mission board `B`. | `js/flight/state.js:2209`, `2589`, `2662`, `3026`; `js/economy/trader.js:436`. | Use `B` for mission board only when no modal/message is active; keep modal Back as `Escape` or `Backspace`. |
+| RESOLVED HARD CONFLICT | `KeyT` | Throttle moved to `R`; landed station no-message `T` handler removed; `T` is reserved as a no-op target-cycle key until target cycling exists. | `js/input.js:276`, `js/flight/physics.js:184`, `js/flight/state.js:1754`; help strip says `R THROTTLE` and `T TARGET` at `index.html:552`. | Keep `T` reserved for target cycle. |
+| RESOLVED HARD CONFLICT | `KeyP` | Autopilot moved to `Y`; `P` is no longer bound by flight input. | `js/input.js:251`; HUD says `Y AUTO` at `index.html:552`. | Keep `P` reserved for pause/menu overlay. |
+| RESOLVED HARD CONFLICT | `KeyB` | Modal Back choices moved to `Escape` with `Backspace` aliases; `B` opens mission board only when docked/landed and no message is active. | `js/input.js:271`; `js/flight/state.js:2210`, `2590`, `2663`, `3027`; `js/economy/trader.js:436`. | Keep `B` global mission board outside active modals/messages. |
 | CONTEXT CONFLICT | `KeyC` and `Shift+KeyC` | Unmodified `C` is evasion roll; modified `Shift+C` toggles camera view. Capture-phase assist key capture intentionally keeps `C` in flight key state. | `js/input.js:250`, `js/flight/physics.js:165`, `js/flight/state.js:1753`. | Keep only if help clearly distinguishes `C Evade` and `Shift+C View`. |
 | CONTEXT CONFLICT | `Space` | Space dismisses game messages and activates focused UI controls in hero/console. | `js/input.js:233`, `js/ui/hero.js:85`, `js/ui/console.js:60`, `js/ui/console.js:108`. | Keep modal priority; document that Space is not a flight action. |
 | CONTEXT CONFLICT | `Escape` | Escape closes inventory only, exits flight only when pointer is unlocked, and does not close several overlays/messages. | `js/input.js:220`, `js/input.js:288`, `index.html:619`. | Canonicalize Escape as universal close/back/pause, with flight exit requiring hold or confirmation. |
@@ -168,13 +170,13 @@ Requested keydown/keyup, `event.key`, `event.code`, pointer, click, wheel, scrol
 
 | Gap | Current State | Recommendation |
 |---|---|---|
-| `P` pause | `P` is autopilot. | Reserve `P` for pause/menu. Move autopilot off `P`. |
+| `P` pause | `P` is unbound after moving autopilot to `Y`. | Reserve `P` for pause/menu. |
 | `H` help | No `KeyH` binding. | Add `H` and `F1` help overlay bindings. |
 | `F1` help | No `F1` binding. | Add as alternate help key. |
 | `Tab` target cycle | No `Tab` binding. | Avoid browser focus conflict unless using pointer lock and `preventDefault`; prefer `T` per requested new feature. |
-| `T` target cycle | `T` is throttle/station menu. | Resolve hard conflict by moving throttle/station access. |
-| `B` mission board | `B` is modal Back. Mission board currently appears as digit choices in station menus. | Use `B` as mission board when no active modal; use `Escape`/Backspace for Back. |
-| `Escape` overlay close | Escape only closes inventory or exits flight when pointer is unlocked. | Make Escape close topmost overlay/message/map/loadout/inventory first. |
+| `T` target cycle | `T` is reserved as a no-op target-cycle key; throttle is `R`. | Implement target cycle behavior in a later build. |
+| `B` mission board | `B` opens the mission board while landed/docked and no modal is active. | Keep modal Back on `Escape`/Backspace. |
+| `Escape` overlay close | Escape closes inventory, triggers modal Back choices, dismisses active messages, or exits flight when pointer is unlocked. | Continue expanding topmost overlay coverage for future overlays. |
 | Ambient traffic debug | No explicit debug key found. | Add debug-only chord such as `Shift+F9`; do not occupy single-letter flight keys. |
 | Bounty escape | No explicit escape/evade bounty binding beyond general `C` evasion/cold jump skill. | Assign `J` for jump/escape or use objective choice UI; avoid `B` because mission board. |
 | Surface approach `L` | `L` currently lands on nearest project. | Keep `L` as surface approach/land if feature is an extension of landing. Rename help to `L Approach/Land`. |
@@ -200,18 +202,18 @@ Requested keydown/keyup, `event.key`, `event.code`, pointer, click, wheel, scrol
 | `F` | Cold jump | FLIGHT | Current behavior when unlocked; do not use for help because requested help alternate is `F1`. |
 | `L` | Surface approach / land | NAVIGATION | Current land binding, renamed for Phase 6. |
 | `V` | Set nav target from crosshair | NAVIGATION | Current behavior. |
-| `Y` or `Shift+P` | Toggle autopilot | NAVIGATION | Recommended replacement for current `P`. |
+| `Y` | Toggle autopilot | NAVIGATION | Current replacement for old `P`. |
 | `M` | System map | NAVIGATION | Current behavior. |
-| `T` | Cycle target | COMBAT | Requested Phase 6 binding; requires moving throttle. |
-| `R` | Toggle throttle hold | FLIGHT | Recommended replacement for current `T`. |
+| `T` | Cycle target | COMBAT | Reserved as safe no-op until target cycling exists. |
+| `R` | Toggle throttle hold | FLIGHT | Current replacement for old `T`. |
 | `Z` / `X` | Throttle level up/down | FLIGHT | Current behavior after throttle mode. Consider `Z` decrease, `X` increase if using left-to-right semantics; current code has `Z` increase and `X` decrease. |
 | `I` | Inventory/manifest | UI | Current behavior. |
-| `B` | Mission board | UI | Requested Phase 6 binding; modal Back must move away from `B`. |
+| `B` | Mission board | UI | Opens while landed/docked and no modal/message is active. |
 | `O` | Objectives | UI | Current behavior. |
 | `U` | Upgrades/skills | UI | Current behavior while landed. |
 | `H` / `F1` | Help overlay | UI | Requested Phase 6 binding. |
-| `P` | Pause/menu | UI | Expected common key; requires moving autopilot. |
-| `Escape` | Close topmost overlay/back; exit flight only from clear state | UI | Required cleanup for overlays. |
+| `P` | Pause/menu | UI | Reserved; no runtime pause/menu behavior yet. |
+| `Escape` / `Backspace` | Close topmost overlay/back; exit flight only from clear state | UI | Modal Back uses `Escape` with `Backspace` alias. |
 | `Space` | Dismiss message / activate focused UI | UI | Current behavior. |
 | `1`-`6` | Modal/menu choices | UI | Current behavior. |
 | Click UI button/card | Activate UI action | UI | Current behavior. |
@@ -223,17 +225,17 @@ Requested keydown/keyup, `event.key`, `event.code`, pointer, click, wheel, scrol
 | Feature | Needed Key | Status | Recommendation |
 |---|---|---|---|
 | Surface approach | `L` | Existing land binding | Keep and rename as approach/land. |
-| Mission board | `B` | Conflicts with modal Back | Reserve `B`; move Back to `Escape`/Backspace. |
+| Mission board | `B` | Reserved/resolved | Opens mission board when docked/landed and no modal is active. |
 | Ambient traffic debug | Suggested `Shift+F9` | Unused | Use debug chord only; avoid single-letter bindings. |
 | Bounty escape | Suggested `J` | Unused | Add as jump/escape objective action if feature needs active input. |
 | Help | `H` / `F1` | Unused | Add both. |
-| Target cycle | `T` | Hard conflict | Reserve `T`; move throttle. |
-| Escape overlay close | `Escape` | Partial | Make universal topmost overlay close. |
+| Target cycle | `T` | Reserved/resolved | `T` is a safe no-op until target cycling is implemented. |
+| Escape overlay close | `Escape` | Partial/resolved for current modals | Closes inventory, message Back choices, active messages, and clear-state flight exit. |
 
 ## Hard Conflict Resolution Recommendations
 
-1. Move autopilot from `P` to `Y` or `Shift+P`, then reserve `P` for pause/menu.
-2. Move throttle toggle from `T` to `R`, then reserve `T` for target cycle.
-3. Move modal Back from `B` to `Escape`/Backspace, then reserve `B` for mission board.
+1. RESOLVED: Autopilot moved from `P` to `Y`; `P` is reserved for pause/menu.
+2. RESOLVED: Throttle toggle moved from `T` to `R`; `T` is reserved for target cycle.
+3. RESOLVED: Modal Back moved from `B` to `Escape`/`Backspace`; `B` opens mission board outside active modals/messages.
 4. Implement Escape as a topmost-overlay dispatcher in this order: loadout, inventory, system map, game message, help, pause, pointer unlock/flight exit.
 5. Update `index.html:552` help strip and any Phase 6 help overlay from the canonical set above, not ad hoc text.

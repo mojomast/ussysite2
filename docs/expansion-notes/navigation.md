@@ -59,7 +59,7 @@ Position is driven by this frame sequence:
    - `KeyF` cold-jump directly adds `40` units along `flightForward`.
    - `KeyG` match-speed lerps `vel` toward nearest enemy velocity or zero.
    - `KeyC` evasion adds lateral/up velocity and rolls orientation.
-   - `KeyT` toggles throttle, `KeyZ`/`KeyX` adjust throttle level.
+   - `KeyR` toggles throttle, `KeyZ`/`KeyX` adjust throttle level; `KeyT` is reserved for target cycle.
    - `W/S` or arrows add forward/reverse velocity; throttle can add continuous forward velocity even without `W`.
    - `A/D` or arrows add lateral velocity.
    - `applyVelocityCapAndDrag(flightState, 0, boost)` caps velocity but does not apply drag because `dt` is `0` here.
