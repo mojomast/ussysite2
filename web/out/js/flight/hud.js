@@ -5,6 +5,12 @@ import { combatState } from './combat-state.js';
 
 let deps = {};
 let radarLastUpdate = 0;
+let killFeedLastUpdate = 0;
+
+const KILL_FEED_MAX_ENTRIES = 4;
+const KILL_FEED_MAX_AGE_MS = 4000;
+const KILL_FEED_RENDER_INTERVAL_MS = 80;
+let bossHudLastUpdate = 0;
 const killFeedEntries = [];
 const RADAR_TRAJECTORY_SECONDS = 1.2;
 const RADAR_TRAJECTORY_MAX_PX = 14;
@@ -13,16 +19,48 @@ export function configureHud(options = {}) {
   deps = { ...deps, ...options };
 }
 
-export function addKillFeedEntry(text, { type = 'info', now = performance.now() } = {}) {
-  const entry = { text, type, at: now };
-  killFeedEntries.unshift(entry);
-  killFeedEntries.length = Math.min(killFeedEntries.length, 6);
-  const { flightState } = deps;
-  if (flightState && text) {
-    flightState.status = text;
-    flightState.statusUntil = now + (type === 'warning' ? 3000 : 1800);
+export function addKillFeedEntry(text, colorOrOptions = 'var(--cyber-cyan)') {
+  if (!text) return combatState.killFeed;
+  const options = typeof colorOrOptions === 'object' && colorOrOptions !== null ? colorOrOptions : {};
+  const now = options.now ?? performance.now();
+  const color = typeof colorOrOptions === 'string' ? colorOrOptions : (options.color || 'var(--cyber-cyan)');
+  const latest = combatState.killFeed[combatState.killFeed.length - 1];
+  if (latest?.text === text && now - latest.ts < 650) return combatState.killFeed;
+  combatState.killFeed.push({ text, color, ts: now });
+  if (combatState.killFeed.length > KILL_FEED_MAX_ENTRIES) {
+    combatState.killFeed.splice(0, combatState.killFeed.length - KILL_FEED_MAX_ENTRIES);
   }
-  return entry;
+  combatState.killFeedDirty = true;
+  const { flightState } = deps;
+  if (flightState) {
+    flightState.status = text;
+    flightState.statusUntil = now + (options.type === 'warning' ? 3000 : 1800);
+  }
+  return combatState.killFeed;
+}
+
+export function updateKillFeed(time = performance.now(), documentRef = deps.documentRef || document, force = false) {
+  if (!force && time - killFeedLastUpdate < KILL_FEED_RENDER_INTERVAL_MS) return false;
+  killFeedLastUpdate = time;
+
+  const beforeLength = combatState.killFeed.length;
+  combatState.killFeed = combatState.killFeed.filter(entry => time - entry.ts <= KILL_FEED_MAX_AGE_MS);
+  const pruned = combatState.killFeed.length !== beforeLength;
+  if (!combatState.killFeedDirty && !pruned) return false;
+
+  const feedEl = documentRef?.getElementById?.('kill-feed');
+  if (!feedEl) return false;
+  const rows = [...combatState.killFeed].reverse().map((entry, index) => {
+    const row = documentRef.createElement('div');
+    row.className = 'kill-feed-entry';
+    row.textContent = entry.text;
+    row.style.setProperty('--kill-feed-entry-color', entry.color);
+    row.style.opacity = index === KILL_FEED_MAX_ENTRIES - 1 ? '0.4' : '1';
+    return row;
+  });
+  feedEl.replaceChildren(...rows);
+  combatState.killFeedDirty = false;
+  return true;
 }
 
 export function mapRadarPoint(targetPos, radius) {
@@ -184,6 +222,30 @@ export function updateCockpitRadar(time = performance.now(), force = false) {
   ctx.restore();
 }
 
+export function updateBossHealthBar(state = combatState, time = performance.now(), force = false, documentRef = deps.documentRef || document) {
+  if (!force && time - bossHudLastUpdate < 120) return false;
+  bossHudLastUpdate = time;
+  const panel = documentRef.getElementById('boss-health-hud');
+  if (!panel) return false;
+  const boss = state.bossEnemyRef;
+  const active = Boolean(state.bossActive && boss?.userData?.active && boss.userData.isBoss);
+  panel.classList.toggle('active', active);
+  panel.setAttribute('aria-hidden', active ? 'false' : 'true');
+  if (!active) return true;
+  const shield = Math.max(0, boss.userData.shieldHp || 0);
+  const maxShield = Math.max(1, boss.userData.maxShieldHp || 1);
+  const health = Math.max(0, boss.userData.health || 0);
+  const maxHealth = Math.max(1, boss.userData.maxHealth || 1);
+  const phase = boss.userData.bossPhase || 1;
+  const text = (id, value) => { const node = documentRef.getElementById(id); if (node) node.textContent = value; };
+  const width = (id, value) => { const node = documentRef.getElementById(id); if (node) node.style.width = value; };
+  text('boss-health-label', `HERMES-DREADNOUGHT // PHASE ${phase}`);
+  text('boss-health-value', `${health}/${maxHealth} HULL // ${shield}/${maxShield} SHD`);
+  width('boss-health-bar', `${Math.min(100, (health / maxHealth) * 100).toFixed(1)}%`);
+  width('boss-shield-bar', `${Math.min(100, (shield / maxShield) * 100).toFixed(1)}%`);
+  return true;
+}
+
 export function updateFlightHud(force = false) {
   const {
     camera,
@@ -200,6 +262,7 @@ export function updateFlightHud(force = false) {
   } = deps;
   if (!flightState || !skillTree) return traderState.fuel;
   const now = performance.now();
+  updateKillFeed(now, documentRef);
   if (!force && now - flightState.lastHudUpdate < 120) return traderState.fuel;
   flightState.lastHudUpdate = now;
   syncCombatCreditsFromTrader?.();
@@ -207,6 +270,7 @@ export function updateFlightHud(force = false) {
   const maxShield = skillTree.getMaxShield();
   const maxEnergy = skillTree.getMaxEnergy();
   updateTtsStatusIndicator();
+  updateBossHealthBar(combatState, now, force, documentRef);
 
   const el = id => documentRef.getElementById(id);
   const flightStatus = el('flight-status');

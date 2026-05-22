@@ -21,6 +21,9 @@ js/flight/state.js
 js/flight/combat-state.js
   -> combat loadout, skills, kill streaks, session stats, debrief queue
 
+js/flight/loadout.js
+  -> dock loadout panel rendering, weapon buy/equip, armor and shield service actions
+
 js/flight/enemies.js
   -> enemy pools, formation roles, movement, projectile collision, debrief trigger
 
@@ -41,7 +44,7 @@ user input -> updateFlight physics -> combat objects -> objective/mission state 
 
 Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, landing checks, objective progression, HUD updates, and radio messages. Flight assists are stateful: static throttle stores `throttleEnabled` and `throttleLevel`, match-speed stores `matchSpeedActive`, `matchSpeedTarget`, and `matchSpeedUntil`, and combat evasion uses `combatState.evasionCooldown` plus `flightState.cameraRollTarget` / `cameraRollCurrent` for the cockpit roll effect.
 
-Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStreakMultiplier`, `lastKillTime`, and `peakKillStreak`. Runtime sortie counters track `sessionKills`, `sessionCredits`, `sessionXp`, `shotsFired`, and `shotsHit`; when a wave clears, `debriefPending` and `debriefData` hand a snapshot to `js/flight/debrief.js`.
+Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStreakMultiplier`, `lastKillTime`, and `peakKillStreak`. Runtime sortie counters track `sessionKills`, `sessionCredits`, `sessionXp`, `shotsFired`, and `shotsHit`; when a wave clears, `debriefPending` and `debriefData` hand a snapshot to `js/flight/debrief.js`. Boss runtime fields live on `combatState.bossActive`, `bossEnemyRef`, and `bossThresholdIdx`, with `BOSS_SCORE_THRESHOLDS` defining the one-time score gates.
 
 ## Space Visuals
 
@@ -51,7 +54,7 @@ Flight mode adds camera-relative depth cues only while `isFlightActive` is true:
 
 Weapon VFX use fixed pools: four muzzle lights, six impact rings, four death explosions, long sci-fi laser trail line buffers, and missile exhaust particle buffers. Pool exhaustion logs a warning instead of allocating or throwing, and frame-lifetime updates return objects to the pool automatically. Enemy movement records per-tick velocity on `enemy.userData.velocity` so HUD lead prediction and match-speed assist can use the same combat-object data. Formation roles are assigned on spawn: `aggressor` steers directly toward the player, `flanker` steers toward a side-offset orbit target, and `support` holds longer range. Elites that are not support units add a `flightRight`-relative strafe oscillation after their base role movement.
 
-Enemy pool entries carry visual runtime data in `enemy.userData`: `rotationRate`, `rotationAxis`, `engineGlow`, `phantomPhase`, `spawnApproach`, `modelRoot`, `baseRadius`, and `radius`. `rotationRate` / `rotationAxis` are assigned per spawn and applied to the enemy group after `lookAt()`. `spawnApproach` is set only for delayed spawns and consumed on the first active tick to add a velocity burst and visible lunge toward the player.
+Enemy pool entries carry visual runtime data in `enemy.userData`: `rotationRate`, `rotationAxis`, `engineGlow`, `phantomPhase`, `spawnApproach`, `modelRoot`, `baseRadius`, and `radius`. Boss enemies additionally set `isBoss`, `reward`, `bossPhase`, `bossBurstCount`, `bossFireCooldownMs`, and `lastBossEscortAt`. `rotationRate` / `rotationAxis` are assigned per spawn and applied to the enemy group after `lookAt()`. `spawnApproach` is set only for delayed spawns and consumed on the first active tick to add a velocity burst and visible lunge toward the player.
 
 Engine glow is a pooled `PointLight` attached once in `createEnemyPool()`. `buildEnemyFromClass()` keeps the geometry group as `enemy.children[0]` and reattaches the glow after it, `spawnEnemy()` recolors the light from the resolved enemy class and resets intensity to zero, `updateCombatObjects()` pulses intensity for active visible enemies and boosts it during bursts, and `deactivateCombatObject()` turns it off when the pooled object is recycled. Death handling can briefly spike the light before cleanup and uses the class color for cockpit overlay flash.
 
@@ -61,7 +64,7 @@ Engine glow is a pooled `PointLight` attached once in `createEnemyPool()`. `buil
 flight loop -> fuel drain -> dock at project node -> trade menu -> traderState -> HUD/TTS
 ```
 
-Fuel drains while thrusting or using autopilot. Landing calls restock/refuel behavior and opens the station menu. Trade choices reuse the existing message choice system and emit a trade-completed callback so objectives can advance without coupling mission code to market internals.
+Fuel drains while thrusting or using autopilot. Landing calls restock/refuel behavior and opens the station menu. Trade choices reuse the existing message choice system and emit a trade-completed callback so objectives can advance without coupling mission code to market internals. The dock `LOADOUT` choice opens `renderLoadoutScreen(traderState, weaponDefs, combatState, options)` from `js/flight/loadout.js`; it is a visual panel layered over the existing dock message flow and returns to the station menu on close.
 
 ## Audio Data Flow
 
@@ -82,6 +85,8 @@ Objective progression is browser-authoritative. Kills advance kill objectives, l
 ## Persistence
 
 The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions. Kill streaks, wave announcements, shot accuracy, and debrief data are runtime-only and are reset on new sorties or respawn.
+
+`js/flight/persist.js` owns session run-state persistence via `sessionStorage` key `ussysite2.runState.v1`. It exports `saveRunState(combatState, traderState, reputationState, skillTree)`, `loadRunState()`, `clearRunState()`, and `applyRunState(data, combatState, traderState, reputationState, skillTree)`. Schema `v: 1` stores `ts`, `combat` (`score`, `wave`, `credits`, `hull`, `shieldHp`, `maxShieldHp`, `maxHull`, `bossThresholdIdx`, `killCount`), `trader` (`equippedPrimary`, `equippedSecondary`, inventory item IDs), `rep`, and purchased skill IDs from `skillTree.unlocked`. Apply validates the full payload before assignment and rejects corrupted data such as negative score, wave below one, or hull outside `[1,maxHull]`.
 
 ## AI Gameplay Loop
 
@@ -112,7 +117,7 @@ Choice resolution dismisses the current message, applies any choice-1 credit/fue
 | State | Purpose |
 | --- | --- |
 | `flightState` | Ship resources, position, velocity, input, nav, landing, view state, throttle and match-speed assist state, evasion camera roll fields |
-| `combatState` | XP/skills/loadout, weapon heat, assist cooldowns, kill streak multiplier, wave metadata, session stats, debrief queue |
+| `combatState` | XP/skills/loadout, weapon heat, assist cooldowns, kill streak multiplier, wave metadata, boss threshold/ref fields, session stats, debrief queue |
 | `missionState` | Current objective, tutorial/free-roam state, multi-step contract progress |
 | `gameMessageState` | Active message, typed text, choices, dismissal handler |
 | `traderState` | Credits, fuel, cargo, docked station, trade log |
@@ -141,6 +146,10 @@ Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/f
 ## Weapon Definitions
 
 `WEAPON_DEFS` in `js/flight/combat-overhaul.js` is the source of truth for weapon name, type, damage, cooldown, energy cost, ammo cost, projectile speed/life, heat, pellets/spread, missile count, AOE radius, and description. The HUD lead pip reads the equipped primary weapon `projectileSpeed`.
+
+## Loadout Renderer
+
+`renderLoadoutScreen(traderState, weaponDefs, combatState, options)` reads `traderState.credits`, `combatState.primaryWeapon`, `combatState.secondaryWeapon`, and `combatState.ownedWeapons`. It writes bought weapon IDs back into `ownedWeapons`, updates the equipped slot field directly, and uses optional `options.onChange` / `options.onClose` callbacks so dock integrations can refresh HUD credits and restore the station services menu.
 
 ## Skill Tree Branches
 

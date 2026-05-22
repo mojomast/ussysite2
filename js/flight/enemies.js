@@ -1,5 +1,5 @@
 import { FORMATION_ROLES, getDifficultyMultiplier, getDifficultyTier, getEnemyClass, getRandomClassForTier, applyDamageModel } from './combat-overhaul.js';
-import { combatState, queueCombatDebrief, recordCombatHit } from './combat-state.js';
+import { BOSS_SCORE_THRESHOLDS, combatState, queueCombatDebrief, recordCombatHit } from './combat-state.js';
 import { sfxEngine } from './sfx.js';
 import {
   deactivateCombatObject,
@@ -19,6 +19,7 @@ export const enemies = [];
 
 export const ENEMY_BASE_RADIUS = 0.62;
 export const DREADNOUGHT_SCALE = 2.4;
+export const BOSS_DREADNOUGHT_SCALE = 3.2;
 
 let deps = null;
 let combatWasActive = false;
@@ -162,6 +163,25 @@ export function applyEnemyScaleForClass(enemy, cls) {
   return scale;
 }
 
+export function applyBossOverrides(enemy) {
+  if (!enemy) return null;
+  enemy.scale?.setScalar?.(BOSS_DREADNOUGHT_SCALE);
+  enemy.userData.isBoss = true;
+  enemy.userData.health = 18;
+  enemy.userData.maxHealth = 18;
+  enemy.userData.shieldHp = 6;
+  enemy.userData.maxShieldHp = 6;
+  enemy.userData.reward = 800;
+  enemy.userData.radius = ENEMY_BASE_RADIUS * BOSS_DREADNOUGHT_SCALE;
+  enemy.userData.bossPhase = 1;
+  enemy.userData.bossLastPhase = 1;
+  enemy.userData.bossBurstCount = 4;
+  enemy.userData.bossFireCooldownMs = 900;
+  enemy.userData.lastBossEscortAt = 0;
+  buildEnemyHealthPips(enemy);
+  return enemy;
+}
+
 /** Turns off an enemy engine glow without removing the pooled light. */
 export function setEnemyEngineGlowInactive(enemy) {
   const glow = enemy?.userData?.engineGlow;
@@ -241,6 +261,113 @@ export function updateEnemyHealthPips(enemy, now = performance.now()) {
   });
 }
 
+export function restoreEnemyOpacity(enemy) {
+  if (!enemy?.userData) return;
+  const cls = getEnemyClass(enemy.userData.classId || 'scout');
+  const bodyOpacity = cls.geometry === 'phantom' ? 0.55 : 0.95;
+  if (enemy.userData.bodyMaterial) enemy.userData.bodyMaterial.opacity = bodyOpacity;
+  enemy.userData.modelRoot?.children?.forEach(child => {
+    if (!child.material || child.userData?.isPip) return;
+    child.material.opacity = child.userData?.enemyBody ? bodyOpacity : 0.78;
+  });
+}
+
+export function checkBossSpawnThreshold(state = combatState, enemyPool = enemies, flightState = {}) {
+  if (!state || state.bossActive) return false;
+  const thresholdIdx = state.bossThresholdIdx || 0;
+  const threshold = BOSS_SCORE_THRESHOLDS[thresholdIdx];
+  if (!Number.isFinite(threshold) || (flightState.score || 0) < threshold) return false;
+  state.bossThresholdIdx = thresholdIdx + 1;
+  return triggerBossEncounter(state, enemyPool, flightState);
+}
+
+export function triggerBossEncounter(state = combatState, enemyPool = enemies, flightState = {}) {
+  const { addKillFeedEntry, flightForward, showGameMessage, windowRef = globalThis } = requireDeps();
+  if (!state || state.bossActive) return false;
+  state.bossActive = true;
+  state.bossEnemyRef = null;
+  showGameMessage?.({
+    type: 'BOSS SIGNAL DETECTED',
+    source: 'USSYVERSE CONTROL',
+    text: 'ANOMALOUS CAPITAL-SHIP SIGNATURE ON INTERCEPT VECTOR.',
+    choices: []
+  });
+  windowRef.setTimeout?.(() => showGameMessage?.({
+    type: 'THREAT LEVEL CRITICAL',
+    source: 'TACTICAL',
+    text: 'HERMES-DREADNOUGHT INBOUND. BRACE FOR BOSS ENCOUNTER.',
+    choices: []
+  }), 1000);
+  addKillFeedEntry?.('DREADNOUGHT INBOUND');
+  windowRef.setTimeout?.(() => {
+    const boss = enemyPool.find(enemy => !enemy.userData?.active);
+    if (!boss) {
+      state.bossActive = false;
+      return;
+    }
+    spawnEnemy(boss, 0, 0, 'dreadnought');
+    const forward = flightForward?.clone?.() || new THREE.Vector3(0, 0, -1);
+    if (forward.lengthSq() <= 0.000001) forward.set(0, 0, -1);
+    forward.normalize();
+    boss.position.copy(flightState.pos).addScaledVector(forward, 80);
+    applyBossOverrides(boss);
+    state.bossEnemyRef = boss;
+    showGameMessage?.({
+      type: 'BOSS ENCOUNTER',
+      source: 'TACTICAL',
+      text: 'HERMES-DREADNOUGHT HAS ENTERED WEAPONS RANGE.',
+      choices: []
+    });
+    sfxEngine.playFlat('explosion_large', { volume: 0.3 });
+  }, 2800);
+  return true;
+}
+
+export function updateBossAttackPhase(boss, cls, state = combatState, now = performance.now()) {
+  if (!boss?.userData?.isBoss) return 0;
+  const maxHealth = Math.max(1, boss.userData.maxHealth || cls?.health || 1);
+  const ratio = Math.max(0, boss.userData.health || 0) / maxHealth;
+  const previousPhase = boss.userData.bossPhase || 1;
+  let phase = 1;
+  let burstCount = 4;
+  let cooldownMs = 900;
+  if (ratio <= 1 / 3) {
+    phase = 3;
+    burstCount = 8;
+    cooldownMs = 500;
+  } else if (ratio <= 2 / 3) {
+    phase = 2;
+    burstCount = 6;
+    cooldownMs = 700;
+  }
+  boss.userData.bossPhase = phase;
+  boss.userData.bossBurstCount = burstCount;
+  boss.userData.bossFireCooldownMs = cooldownMs;
+  boss.userData.bossPhaseChanged = phase !== previousPhase;
+  boss.userData.bossPhaseChangedAt = boss.userData.bossPhaseChanged ? now : (boss.userData.bossPhaseChangedAt || 0);
+  state.bossEnemyRef = boss;
+  return phase;
+}
+
+export function handleBossDeath(state = combatState, boss, flightState = {}, options = {}) {
+  if (!boss?.userData?.isBoss) return false;
+  const { addCombatCredits, addKillFeedEntry, showGameMessage } = options;
+  state.bossActive = false;
+  state.bossEnemyRef = null;
+  flightState.score = (flightState.score || 0) + 1200;
+  addCombatCredits?.(1200);
+  showGameMessage?.({
+    type: 'BOSS DESTROYED',
+    source: 'TACTICAL',
+    text: 'HERMES-DREADNOUGHT DESTROYED. CAPITAL-SHIP THREAT CLEARED.',
+    choices: []
+  });
+  addKillFeedEntry?.('DREADNOUGHT DESTROYED +1200CR');
+  sfxEngine.playFlat('explosion_large', { volume: 1 });
+  deactivateCombatObject(boss);
+  return true;
+}
+
 export function buildEnemyFromClass(enemy, classId) {
   const cls = getEnemyClass(classId);
   const glow = enemy.userData.engineGlow;
@@ -276,7 +403,12 @@ export function applyEnemyHit(enemy, rawDamage = 12) {
     enemy.userData.health = Math.max(0, enemy.userData.health - damageUnits);
   }
   updateEnemyHealthPips(enemy, 0);
+  if (tryEliteCloak(enemy, cls)) {
+    flightState.status = `SIGNATURE FADE - ${cls.label}`;
+    flightState.statusUntil = performance.now() + 1200;
+  }
   if (enemy.userData.health <= 0) {
+    if (tryPhantomSplit(enemy, enemies, cls, combatState)) return;
     handleEnemyDestroyed(enemy);
   } else {
     flightState.status = `HIT - ${cls.label} ${enemy.userData.health}/${enemy.userData.maxHealth}HP`;
@@ -298,6 +430,109 @@ export function applyPhantomOpacityFlicker(enemy, time) {
       + Math.sin(time * 5.5 + phase + i * 0.9) * 0.05);
   });
   return bodyOpacity;
+}
+
+export function tryEliteCloak(enemy, cls) {
+  if (!enemy?.userData || cls.id !== 'elite' || enemy.userData.cloakUsed || enemy.userData.health <= 0) return false;
+  if (enemy.userData.health > enemy.userData.maxHealth * 0.5) return false;
+  enemy.userData.cloakUsed = true;
+  enemy.userData.cloakUntil = performance.now() + 2200;
+  if (enemy.userData.bodyMaterial) enemy.userData.bodyMaterial.opacity = 0.04;
+  enemy.userData.modelRoot?.children?.forEach(child => {
+    if (child.material && !child.userData?.isPip) child.material.opacity = 0.04;
+  });
+  sfxEngine.playFlat('shield_hit', { volume: 0.4 });
+  return true;
+}
+
+function activateEnemyLikePoolObject(enemy, cls, position) {
+  buildEnemyFromClass(enemy, cls.id);
+  applyEnemyScaleForClass(enemy, cls);
+  enemy.position.copy(position);
+  enemy.visible = true;
+  enemy.userData.active = true;
+  enemy.userData.velocity = new THREE.Vector3();
+  enemy.userData._prevPos = null;
+  enemy.userData.rotationRate = assignRotationRate(cls);
+  enemy.userData.rotationAxis = assignRotationAxis(cls);
+  enemy.userData.phantomPhase = Math.random() * Math.PI * 2;
+  enemy.userData.classId = cls.id;
+  enemy.userData.health = cls.health;
+  enemy.userData.maxHealth = cls.health;
+  enemy.userData.shieldHp = cls.health > 2 ? cls.health - 1 : 0;
+  enemy.userData.maxShieldHp = enemy.userData.shieldHp;
+  enemy.userData.burstRemaining = 0;
+  enemy.userData.burstNextAt = 0;
+  enemy.userData.evasionTimer = 0;
+  enemy.userData.stunUntil = 0;
+  enemy.userData.spawnDelay = 0;
+  enemy.userData.spawnApproach = false;
+  enemy.userData.cloakUsed = false;
+  enemy.userData.cloakUntil = 0;
+  enemy.userData.splitDone = false;
+  enemy.userData.isSplitChild = false;
+  enemy.userData.isTurret = false;
+  enemy.userData.parentEnemy = null;
+  enemy.userData.reward = undefined;
+  enemy.userData.creditReward = undefined;
+  enemy.userData.xpReward = undefined;
+  if (enemy.userData.engineGlow) {
+    enemy.userData.engineGlow.color.copy(new THREE.Color(cls.color));
+    enemy.userData.engineGlow.intensity = 0;
+  }
+  buildEnemyHealthPips(enemy);
+}
+
+export function tryDeployGunboatTurret(enemy, enemyPool = enemies, state = combatState, flightState) {
+  const cls = getEnemyClass(enemy?.userData?.classId || 'scout');
+  if (!enemy?.userData?.active || cls.id !== 'gunboat' || enemy.userData.isTurret) return null;
+  if (enemy.userData.burstRemaining !== cls.burstCount || enemy.userData.burstRemaining <= 0) return null;
+  state.activeTurrets ??= [];
+  state.activeTurrets = state.activeTurrets.filter(item => item?.userData?.active && item.userData.isTurret);
+  if (state.activeTurrets.length >= 2 || Math.random() >= 0.25) return null;
+  const turret = enemyPool.find(item => item !== enemy && !item.userData.active);
+  if (!turret) return null;
+  const turretPos = enemy.position.clone();
+  turretPos.x += (Math.random() * 2 - 1) * 3;
+  turretPos.y += (Math.random() * 2 - 1) * 3;
+  activateEnemyLikePoolObject(turret, cls, turretPos);
+  turret.userData.isTurret = true;
+  turret.userData.parentEnemy = enemy;
+  turret.userData.health = 1;
+  turret.userData.maxHealth = 1;
+  turret.userData.shieldHp = 0;
+  turret.userData.maxShieldHp = 0;
+  turret.userData.velocity.set(0, 0, 0);
+  turret.userData.rotationRate = 0;
+  turret.userData.cooldown = flightState ? 0 : cls.fireRate;
+  state.activeTurrets.push(turret);
+  buildEnemyHealthPips(turret);
+  return turret;
+}
+
+export function tryPhantomSplit(enemy, enemyPool = enemies, cls = getEnemyClass(enemy?.userData?.classId || 'phantom'), state = combatState) {
+  if (!enemy?.userData || cls.id !== 'phantom' || enemy.userData.isSplitChild || enemy.userData.splitDone) return false;
+  enemy.userData.splitDone = true;
+  const slots = enemyPool.filter(item => item !== enemy && !item.userData.active).slice(0, 2);
+  if (slots.length < 2) return false;
+  slots.forEach((child, index) => {
+    const childPos = enemy.position.clone();
+    childPos.x += index === 0 ? -1.5 : 1.5;
+    activateEnemyLikePoolObject(child, cls, childPos);
+    child.userData.health = 1;
+    child.userData.maxHealth = 1;
+    child.userData.shieldHp = 0;
+    child.userData.maxShieldHp = 0;
+    child.userData.isSplitChild = true;
+    child.userData.splitDone = true;
+    child.userData.reward = Math.floor((cls.reward ?? cls.creditReward ?? 0) / 2);
+    child.userData.creditReward = Math.floor((cls.creditReward ?? cls.reward ?? 0) / 2);
+    child.userData.xpReward = Math.floor((cls.xpReward ?? 0) / 2);
+    buildEnemyHealthPips(child);
+  });
+  deactivateCombatObject(enemy);
+  state.activeTurrets = (state.activeTurrets || []).filter(item => item !== enemy);
+  return true;
 }
 
 function getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown) {
@@ -328,6 +563,155 @@ function findNearestEnemyToPosition(position, maxDistance) {
   return nearest;
 }
 
+function getSecurityReputation(reputationState) {
+  return reputationState?.scores?.security ?? 0;
+}
+
+function setSecurityReputation(reputationState, value) {
+  if (!reputationState?.scores) return;
+  reputationState.scores.security = Math.max(-100, Math.min(100, value));
+}
+
+function getAvailableEnemy(pool) {
+  return pool.find(enemy => !enemy?.userData?.active);
+}
+
+export function getFriendlyEscortOrbitPosition(playerPos, timeSeconds, radius = 12) {
+  return new THREE.Vector3(
+    playerPos.x + Math.cos(timeSeconds) * radius,
+    playerPos.y + Math.sin(timeSeconds * 0.5) * 3,
+    playerPos.z + Math.sin(timeSeconds) * radius
+  );
+}
+
+function applyFriendlyVisuals(enemy) {
+  enemy.traverse?.(child => {
+    if (!child.material) return;
+    child.material.color?.setHex?.(0x44ff88);
+    child.material.wireframe = true;
+    child.material.transparent = true;
+    child.material.opacity = Math.min(child.material.opacity ?? 0.85, 0.85);
+  });
+  if (enemy.userData.engineGlow) {
+    enemy.userData.engineGlow.color?.setHex?.(0x44ff88);
+    enemy.userData.engineGlow.intensity = 0.8;
+  }
+}
+
+function clearFactionReference(enemy, state = combatState) {
+  if (state.activeBountyHunter === enemy) state.activeBountyHunter = null;
+  if (state.activeFriendlyEscort === enemy) state.activeFriendlyEscort = null;
+}
+
+function findFriendlyTarget(friendly) {
+  let target = null;
+  let targetHealth = Infinity;
+  let targetDistSq = Infinity;
+  enemies.forEach(enemy => {
+    if (enemy === friendly || !enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0 || enemy.userData.isFriendly) return;
+    const health = enemy.userData.health ?? 1;
+    const distSq = friendly.position.distanceToSquared(enemy.position);
+    if (health < targetHealth || (health === targetHealth && distSq < targetDistSq)) {
+      target = enemy;
+      targetHealth = health;
+      targetDistSq = distSq;
+    }
+  });
+  return target;
+}
+
+function updateFriendlyEscort(enemy, flightState, now, dt) {
+  const elapsed = Math.max(0, now - (enemy.userData.spawnedAt || now));
+  const duration = enemy.userData.durationMs || 25000;
+  if (elapsed >= duration + 1000) {
+    clearFactionReference(enemy);
+    deactivateCombatObject(enemy);
+    return;
+  }
+  if (elapsed >= duration) {
+    const fade = 1 - Math.min(1, (elapsed - duration) / 1000);
+    enemy.traverse?.(child => {
+      if (child.material) child.material.opacity = Math.max(0, fade * 0.85);
+    });
+  }
+
+  const desired = getFriendlyEscortOrbitPosition(flightState.pos, now / 1000, 12);
+  enemy.position.copy(desired);
+  enemy.lookAt?.(flightState.pos);
+  if (!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
+  if (!enemy.userData._prevPos) enemy.userData._prevPos = enemy.position.clone();
+  enemy.userData.velocity.copy(enemy.position).sub(enemy.userData._prevPos).divideScalar(dt > 0 ? dt : 0.016);
+  enemy.userData._prevPos.copy(enemy.position);
+
+  if (now < (enemy.userData.nextFriendlyShotAt || 0)) return;
+  const target = findFriendlyTarget(enemy);
+  if (!target) return;
+  const dir = target.position.clone().sub(enemy.position).normalize();
+  if (fireBullet(playerBullets, enemy.position, dir, 110, 1.4, { damage: 12, color: 0x44ff88 })) {
+    sfxEngine.playPositional('enemy_laser', enemy, { volume: 0.35 });
+  }
+  enemy.userData.nextFriendlyShotAt = now + 2500;
+}
+
+export function checkBountyHunterSpawn(reputationState, state = combatState, enemyPool = enemies, flightStateRef) {
+  const { addKillFeedEntry, showGameMessage } = requireDeps();
+  const security = getSecurityReputation(reputationState);
+  if (security >= -30 || state.bossActive || state.activeBountyHunter || Math.random() > 0.08) return false;
+  const enemy = getAvailableEnemy(enemyPool);
+  if (!enemy) return false;
+  spawnEnemy(enemy, flightStateRef?.score ?? 0, 0, 'elite');
+  enemy.userData.isBountyHunter = true;
+  enemy.userData.reward = 220;
+  enemy.userData.health = 4;
+  enemy.userData.maxHealth = 4;
+  enemy.userData.shieldHp = 0;
+  enemy.userData.maxShieldHp = 0;
+  enemy.userData.label = 'BOUNTY HUNTER';
+  buildEnemyHealthPips(enemy);
+  state.activeBountyHunter = enemy;
+  addKillFeedEntry?.('WARNING // SECURITY BOUNTY HUNTER INBOUND', '#ffcc00');
+  showGameMessage?.({
+    type: 'FACTION CONSEQUENCE',
+    source: 'SECURITY DIRECTORATE',
+    text: 'SECURITY REPUTATION CRITICAL. BOUNTY HUNTER DROPPING INTO YOUR VECTOR.',
+    choices: [],
+    ttsPriority: 'high'
+  });
+  return true;
+}
+
+export function checkFriendlyEscortSpawn(reputationState, state = combatState, enemyPool = enemies, flightStateRef) {
+  const { addKillFeedEntry, showGameMessage } = requireDeps();
+  const security = getSecurityReputation(reputationState);
+  if (security <= 40 || state.activeFriendlyEscort || Math.random() > 0.12) return false;
+  const enemy = getAvailableEnemy(enemyPool);
+  if (!enemy) return false;
+  spawnEnemy(enemy, flightStateRef?.score ?? 0, 0, 'scout');
+  enemy.userData.isFriendly = true;
+  enemy.userData.reward = 0;
+  enemy.userData.health = 3;
+  enemy.userData.maxHealth = 3;
+  enemy.userData.shieldHp = 0;
+  enemy.userData.maxShieldHp = 0;
+  enemy.userData.teamColor = 0x44ff88;
+  enemy.userData.spawnedAt = performance.now();
+  enemy.userData.durationMs = 25000;
+  enemy.userData.nextFriendlyShotAt = enemy.userData.spawnedAt + 500;
+  enemy.userData.label = 'FRIENDLY ESCORT';
+  applyFriendlyVisuals(enemy);
+  buildEnemyHealthPips(enemy);
+  state.activeFriendlyEscort = enemy;
+  addKillFeedEntry?.('SECURITY ESCORT ONLINE // ALLIED SCOUT COVERING YOU', '#44ff88');
+  showGameMessage?.({
+    type: 'FACTION SUPPORT',
+    source: 'SECURITY DIRECTORATE',
+    text: 'POSITIVE SECURITY STANDING CONFIRMED. FRIENDLY ESCORT HAS JOINED YOUR FORMATION.',
+    choices: [],
+    ttsPriority: 'normal'
+  });
+  return true;
+}
+
 /** Assigns a formation role from the number of already-active enemies. */
 export function assignFormationRole(activeCount, random = Math.random) {
   if (activeCount === 0) return FORMATION_ROLES.AGGRESSOR;
@@ -336,13 +720,14 @@ export function assignFormationRole(activeCount, random = Math.random) {
 }
 
 export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
-  const { flightState, getEnemyFireCooldown, getVoicePersona, missionState, showGameMessage, ttsEngine } = requireDeps();
+  const { addKillFeedEntry, flightState, getEnemyFireCooldown, getVoicePersona, missionState, showGameMessage, ttsEngine } = requireDeps();
   if (!enemy) return;
   const resolvedClassId = missionState.step === 'killTutorialBogeys'
     ? 'scout'
     : (classId || getRandomClassForTier(getDifficultyTier(flightState.score)));
   const cls = getEnemyClass(resolvedClassId);
   if (cls.id === 'dreadnought') {
+    addKillFeedEntry?.('DREADNOUGHT SPAWNED', 'var(--cyber-pink)');
     showGameMessage?.({
       type: 'THREAT LEVEL CRITICAL',
       source: 'USSYVERSE CONTROL',
@@ -385,6 +770,10 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.phantomPhase = Math.random() * Math.PI * 2;
   enemy.userData.health = cls.health;
   enemy.userData.maxHealth = cls.health;
+  enemy.userData.isBoss = false;
+  enemy.userData.isBountyHunter = false;
+  enemy.userData.isFriendly = false;
+  enemy.userData.reward = cls.creditReward;
   enemy.userData.classId = cls.id;
   enemy.userData.burstRemaining = 0;
   enemy.userData.burstNextAt = 0;
@@ -394,6 +783,14 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.accuracy = Math.min(0.98, cls.accuracy * (0.85 + difficultyMultiplier * 0.15));
   enemy.userData.phantomPulseFrame = 0;
   enemy.userData.phantomOpacityTarget = cls.geometry === 'phantom' ? 0.55 : null;
+  enemy.userData.cloakUsed = false;
+  enemy.userData.cloakUntil = 0;
+  enemy.userData.splitDone = false;
+  enemy.userData.isSplitChild = false;
+  enemy.userData.isTurret = false;
+  enemy.userData.parentEnemy = null;
+  enemy.userData.creditReward = undefined;
+  enemy.userData.xpReward = undefined;
   enemy.userData.shieldHp = cls.health > 2 ? cls.health - 1 : 0;
   enemy.userData.maxShieldHp = enemy.userData.shieldHp;
   enemy.userData.spawnDelay = delay;
@@ -405,8 +802,11 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
 }
 
 export function updateCombatObjects(dt) {
-  const { flightRight, flightState, flightTempVec, flightTempVec2, flightUp, getEnemyFireCooldown } = requireDeps();
-  const activeAtFrameStart = enemies.some(enemy => enemy.userData.active);
+  const { flightRight, flightState, flightTempVec, flightTempVec2, flightUp, getEnemyFireCooldown, reputationState, showGameMessage } = requireDeps();
+  checkBossSpawnThreshold(combatState, enemies, flightState);
+  checkBountyHunterSpawn(reputationState, combatState, enemies, flightState);
+  checkFriendlyEscortSpawn(reputationState, combatState, enemies, flightState);
+  const activeAtFrameStart = enemies.some(enemy => enemy.userData.active && !enemy.userData.isFriendly);
   playerBullets.forEach(bullet => updateBullet(bullet, dt));
   enemyBullets.forEach(bullet => updateBullet(bullet, dt));
   playerMissiles.forEach(missile => updateMissile(missile, dt));
@@ -424,9 +824,40 @@ export function updateCombatObjects(dt) {
     }
     const now = performance.now();
     const cls = getEnemyClass(enemy.userData.classId);
+    if (enemy.userData.isFriendly) {
+      updateEnemyEngineGlow(enemy, cls, now / 1000);
+      updateEnemyHealthPips(enemy, now);
+      updateFriendlyEscort(enemy, flightState, now, dt);
+      return;
+    }
+    const bossPhase = updateBossAttackPhase(enemy, cls, combatState, now);
+    if (enemy.userData.bossPhaseChanged) {
+      enemy.userData.bossPhaseChanged = false;
+      const phaseText = bossPhase === 2
+        ? 'DREADNOUGHT ARMOR BREACHED. WEAPONS CYCLING FASTER.'
+        : 'DREADNOUGHT CORE EXPOSED. ELITE ESCORT PROTOCOL ACTIVE.';
+      showGameMessage?.({ type: `BOSS PHASE ${bossPhase}`, source: 'TACTICAL', text: phaseText, choices: [] });
+    }
+    if (bossPhase === 3 && now - (enemy.userData.lastBossEscortAt || 0) >= 12000) {
+      const eliteActive = enemies.some(item => item !== enemy && item.userData.active && item.userData.classId === 'elite');
+      const escort = enemies.find(item => item !== enemy && !item.userData.active);
+      if (!eliteActive && escort) {
+        enemy.userData.lastBossEscortAt = now;
+        spawnEnemy(escort, Math.PI * 0.5, 0.4, 'elite');
+      }
+    }
     applySpawnApproachBurst(enemy, flightState, cls, dt);
     updateEnemyEngineGlow(enemy, cls, now / 1000);
-    if (cls.geometry === 'phantom') applyPhantomOpacityFlicker(enemy, now / 1000);
+    if (enemy.userData.cloakUntil > now) {
+      if (enemy.userData.bodyMaterial) enemy.userData.bodyMaterial.opacity = 0.04;
+      enemy.userData.modelRoot?.children?.forEach(child => {
+        if (child.material && !child.userData?.isPip) child.material.opacity = 0.04;
+      });
+    } else if (enemy.userData.cloakUntil) {
+      enemy.userData.cloakUntil = 0;
+      restoreEnemyOpacity(enemy);
+    }
+    if (cls.geometry === 'phantom' && !enemy.userData.cloakUntil) applyPhantomOpacityFlicker(enemy, now / 1000);
     if (enemy.userData.bodyMaterial && enemy.userData.flashUntil && now >= enemy.userData.flashUntil) {
       enemy.userData.bodyMaterial.color.setHex(cls.color);
       enemy.userData.flashUntil = 0;
@@ -439,7 +870,9 @@ export function updateCombatObjects(dt) {
     const aggressionRadius = flightState.shield < 40 ? orbitRadius * 0.6 : orbitRadius;
     const approachSpeed = dist > aggressionRadius ? cls.approachSpeed.far : cls.approachSpeed.near;
     const role = enemy.userData.role || FORMATION_ROLES.AGGRESSOR;
-    if (role === FORMATION_ROLES.FLANKER) {
+    if (enemy.userData.isTurret) {
+      enemy.userData.velocity?.set?.(0, 0, 0);
+    } else if (role === FORMATION_ROLES.FLANKER) {
       flightTempVec2.copy(flightState.pos)
         .addScaledVector(flightRight, (enemy.userData.flankDir || 1) * orbitRadius)
         .sub(enemy.position);
@@ -451,8 +884,8 @@ export function updateCombatObjects(dt) {
     } else {
       enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
     }
-    applyEliteStrafe(enemy, cls, role, flightRight, now / 1000, dt);
-    if (cls.evasion > 0) {
+    if (!enemy.userData.isTurret) applyEliteStrafe(enemy, cls, role, flightRight, now / 1000, dt);
+    if (!enemy.userData.isTurret && cls.evasion > 0) {
       enemy.userData.evasionTimer = Math.max(0, (enemy.userData.evasionTimer || 0) - dt * 1000);
       if (enemy.userData.evasionTimer <= 0 && Math.random() < cls.evasion) {
         enemy.position
@@ -462,13 +895,17 @@ export function updateCombatObjects(dt) {
       }
     }
     if (!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
-    if (!enemy.userData._prevPos) enemy.userData._prevPos = enemy.position.clone();
-    enemy.userData.velocity
-      .copy(enemy.position)
-      .sub(enemy.userData._prevPos)
-      .divideScalar(dt > 0 ? dt : 0.016);
-    enemy.userData._prevPos.copy(enemy.position);
-    enemy.lookAt(flightState.pos);
+    if (enemy.userData.isTurret) {
+      enemy.userData.velocity.set(0, 0, 0);
+    } else {
+      if (!enemy.userData._prevPos) enemy.userData._prevPos = enemy.position.clone();
+      enemy.userData.velocity
+        .copy(enemy.position)
+        .sub(enemy.userData._prevPos)
+        .divideScalar(dt > 0 ? dt : 0.016);
+      enemy.userData._prevPos.copy(enemy.position);
+    }
+    if (cls.geometry !== 'phantom') enemy.lookAt(flightState.pos);
     if (enemy.userData.rotationRate > 0) {
       enemy.rotateOnAxis(enemy.userData.rotationAxis, enemy.userData.rotationRate * dt);
     }
@@ -476,12 +913,13 @@ export function updateCombatObjects(dt) {
     enemy.userData.cooldown -= dt * 1000;
 
     if (enemy.userData.cooldown <= 0 && dist < aggressionRadius) {
-      enemy.userData.burstRemaining = cls.burstCount;
+      enemy.userData.burstRemaining = enemy.userData.isBoss ? enemy.userData.bossBurstCount : cls.burstCount;
       enemy.userData.burstNextAt = now;
       enemy.userData.cooldown = Infinity;
     }
 
     if (enemy.userData.burstRemaining > 0 && now >= enemy.userData.burstNextAt) {
+      tryDeployGunboatTurret(enemy, enemies, combatState, flightState);
       flightTempVec2.copy(flightState.pos).sub(enemy.position).normalize();
       const jitter = Math.max(0, 1 - (enemy.userData.accuracy ?? cls.accuracy));
       flightTempVec2
@@ -494,7 +932,7 @@ export function updateCombatObjects(dt) {
       enemy.userData.burstRemaining -= 1;
       enemy.userData.burstNextAt = now + cls.burstDelay;
       if (enemy.userData.burstRemaining <= 0) {
-        const fireCooldown = getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown);
+        const fireCooldown = enemy.userData.isBoss ? enemy.userData.bossFireCooldownMs : getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown);
         enemy.userData.cooldown = fireCooldown + Math.random() * fireCooldown * 0.45;
       }
     }
@@ -558,16 +996,19 @@ export function updateCombatObjects(dt) {
     flightState.pos.set(0, 2.2, 16);
     enemies.forEach((enemy, idx) => spawnEnemy(enemy, idx * 1.7, idx * 0.9));
   }
-  const activeAtFrameEnd = enemies.some(enemy => enemy.userData.active);
+  const activeAtFrameEnd = enemies.some(enemy => enemy.userData.active && !enemy.userData.isFriendly);
   if ((combatWasActive || activeAtFrameStart) && !activeAtFrameEnd && !combatState.debriefPending) {
     queueCombatDebrief(combatState);
+    requireDeps().addKillFeedEntry?.('WAVE CLEARED', 'var(--cyber-green)');
+    requireDeps().onWaveComplete?.();
   }
   combatWasActive = activeAtFrameEnd;
 }
 
 export function applyPlayerDamage(amount) {
-  const { combatAudio, flightHud, flightState, getVoicePersona, skillTree, windowRef } = requireDeps();
+  const { addKillFeedEntry, combatAudio, flightHud, flightState, getVoicePersona, skillTree, windowRef } = requireDeps();
   const shieldBefore = flightState.shield;
+  const armorBefore = flightState.armor;
   const { emitCombatPlayerHit } = requireDeps();
   emitCombatPlayerHit({ amount });
   triggerImpactFlash(flightState.pos);
@@ -594,6 +1035,11 @@ export function applyPlayerDamage(amount) {
   }
   if (flightState.shield < 25 && !flightState.shieldCriticalSpoken) {
     flightState.shieldCriticalSpoken = true;
+    addKillFeedEntry?.('SHIELDS CRITICAL', 'var(--cyber-yellow)');
     windowRef.setTimeout(() => combatAudio.bark('SHIELDS CRITICAL', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' }), shieldDrop > 15 ? 450 : 0);
+  }
+  if (armorBefore >= 40 && flightState.armor < 40 && !flightState.hullCriticalLogged) {
+    flightState.hullCriticalLogged = true;
+    addKillFeedEntry?.('HULL BELOW 40%', 'var(--cyber-pink)');
   }
 }

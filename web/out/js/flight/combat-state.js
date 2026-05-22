@@ -58,12 +58,15 @@ export const combatState = {
   peakKillStreak: 0,
   waveNumber: 0,
   waveComposition: '',
+  killFeed: [],
+  killFeedDirty: false,
   bossActive: false,
   bossEnemyRef: null,
   bossThresholdIdx: 0,
   activeBountyHunter: null,
   activeFriendlyEscort: null,
   bountyPending: 0,
+  activeTurrets: [],
   overchargeUsed: false,
   lastAdrenalineBarkAt: 0,
   lastAdrenalineFrame: 0,
@@ -71,9 +74,16 @@ export const combatState = {
 };
 
 export function reset(state = combatState) {
+  resetCombatSessionStats(state);
+  state.waveNumber = 0;
+  state.waveComposition = '';
+  state.killFeed = [];
+  state.killFeedDirty = false;
   state.bossActive = false;
   state.bossEnemyRef = null;
   state.bossThresholdIdx = 0;
+  state.activeTurrets ??= [];
+  state.activeTurrets.length = 0;
   return state;
 }
 
@@ -157,6 +167,8 @@ export function resetCombatSessionStats(state = combatState) {
   state.peakKillStreak = 0;
   state.activeBountyHunter = null;
   state.activeFriendlyEscort = null;
+  state.activeTurrets ??= [];
+  state.activeTurrets.length = 0;
   return state;
 }
 

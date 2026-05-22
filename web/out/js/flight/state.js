@@ -60,6 +60,7 @@ import {
 } from './combat-state.js';
 import {
   configureHud,
+  addKillFeedEntry as addHudKillFeedEntry,
   drawRadarContact as drawRadarContactModule,
   mapRadarPoint as mapRadarPointModule,
   showCreditGain,
@@ -520,10 +521,8 @@ function buildPersistentCombatState() {
   };
 }
 
-function addKillFeedEntry(text, color = '#ffffff') {
-  flightState.status = text;
-  flightState.statusColor = color;
-  flightState.statusUntil = performance.now() + 1800;
+function addKillFeedEntry(text, colorOrOptions = '#ffffff') {
+  addHudKillFeedEntry(text, colorOrOptions);
   updateFlightHud(true);
 }
 
@@ -750,6 +749,7 @@ export function init() {
   configureInventoryPanel({ flightState });
   configureHud({ playerShip });
   configureEnemies({
+    addKillFeedEntry,
     combatAudio,
     emitCombatPlayerHit,
     flightHud,
@@ -1370,10 +1370,7 @@ function enterFlightMode() {
   flightState.strafe = 8;
   flightState.damping = 0.985;
   resetFlightAssistState();
-  resetCombatSessionStats(combatState);
   resetCombatState(combatState);
-  combatState.waveNumber = 0;
-  combatState.waveComposition = '';
   combatState.heat = 0;
   combatState.overheated = false;
   combatState.adrenaline = 0;
@@ -1406,6 +1403,7 @@ function enterFlightMode() {
   flightState.autopilot = false;
   flightState.landed = false;
   flightState.shieldCriticalSpoken = false;
+  flightState.hullCriticalLogged = false;
   flightState.finalApproachSpoken = false;
   flightState.statusUntil = 0;
   flightState.status = isCoarsePointer ? 'KEYBOARD FLIGHT READY' : 'REQUESTING MOUSELOOK LOCK';
@@ -1551,6 +1549,9 @@ function announceEnemyWave(waveEnemies = []) {
     .join(', ');
   combatState.waveNumber = (combatState.waveNumber || 0) + 1;
   combatState.waveComposition = waveComposition;
+  if (spawned.some(enemy => enemy?.userData?.classId === 'dreadnought')) {
+    addKillFeedEntry('DREADNOUGHT SPAWNED', 'var(--cyber-pink)');
+  }
   showGameMessage({
     type: `WAVE ${combatState.waveNumber}`,
     source: 'TACTICAL',
@@ -2229,7 +2230,7 @@ function handleTradeCompleted(trade) {
 
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
-  if (handleBossDeath(combatState, enemy, flightState, { showGameMessage })) {
+  if (handleBossDeath(combatState, enemy, flightState, { addCombatCredits, addKillFeedEntry, showGameMessage })) {
     flightState.status = 'DREADNOUGHT DESTROYED +1200CR';
     flightState.statusUntil = performance.now() + 3000;
     updateFlightHud(true);
@@ -2237,10 +2238,13 @@ function handleEnemyDestroyed(enemy) {
   }
   const pointsBefore = combatState.skillPoints;
   const multiplier = recordKillStreak(combatState, performance.now());
-  const creditReward = Math.round(cls.creditReward * multiplier);
-  const xpReward = Math.round(cls.xpReward * multiplier);
+  const baseCreditReward = Number.isFinite(enemy?.userData?.creditReward) ? enemy.userData.creditReward : cls.creditReward;
+  const baseXpReward = Number.isFinite(enemy?.userData?.xpReward) ? enemy.userData.xpReward : cls.xpReward;
+  const creditReward = Math.round(baseCreditReward * multiplier);
+  const xpReward = Math.round(baseXpReward * multiplier);
   const isBountyKill = gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId;
   recordCombatKillStats({ creditsEarned: isBountyKill ? 0 : creditReward, xpEarned: xpReward }, combatState);
+  addKillFeedEntry(`${cls.label.toUpperCase()} DESTROYED +${creditReward}CR`, `#${cls.color.toString(16).padStart(6, '0')}`);
   triggerEnemyDeathFeedback(enemy, cls);
   sfxEngine.playPositional('explosion', enemy, { volume: 0.9 });
   emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position, xpReward });
@@ -2252,6 +2256,7 @@ function handleEnemyDestroyed(enemy) {
       addCombatCredits(reward);
       combatState.sessionCredits += reward;
       flightState.status = `BOUNTY CLAIMED: +${reward}cr`;
+      addKillFeedEntry(`WAVE CLEARED +${reward}CR`, 'var(--cyber-green)');
       flightState.statusUntil = performance.now() + 3000;
       gameOrchestrator.bountyPendingReward = 0;
       setCurrentObjective({
@@ -2266,7 +2271,7 @@ function handleEnemyDestroyed(enemy) {
     }
     return;
   }
-  flightState.score += Math.max(1, Math.round(cls.xpReward / 10));
+  flightState.score += Math.max(1, Math.round(baseXpReward / 10));
   addCombatCredits(creditReward);
   if (combatState.skillPoints > pointsBefore) {
     flightState.status = `SKILL POINT EARNED - SP:${combatState.skillPoints}`;
