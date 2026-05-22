@@ -1652,14 +1652,10 @@ function triggerEnemyDeathFeedback(enemy, cls) {
   const isDreadnought = cls.id === 'dreadnought';
   const overlay = globalThis.document?.getElementById?.('cockpit-overlay');
   if (overlay) {
-    const color = `#${cls.color.toString(16).padStart(6, '0')}`;
-    const durationMs = isDreadnought ? 400 : 180;
-    overlay.style.setProperty('--death-flash-color', color);
-    overlay.style.setProperty('--death-flash-duration', `${durationMs}ms`);
-    overlay.classList.remove('enemy-death-flash');
-    void overlay.offsetWidth;
-    overlay.classList.add('enemy-death-flash');
-    globalThis.setTimeout?.(() => overlay.classList.remove('enemy-death-flash'), durationMs);
+    overlay.animate([
+      { opacity: 0.7, background: 'rgba(255,60,0,0.35)' },
+      { opacity: 0, background: 'rgba(255,60,0,0)' }
+    ], { duration: 400, easing: 'ease-out' });
   }
   if (enemy?.userData?.engineGlow) {
     enemy.userData.engineGlow.intensity = isDreadnought ? 12.0 : 6.0;
