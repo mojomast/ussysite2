@@ -525,6 +525,14 @@
             </div>
           </div>
         </div>
+        <div id="boss-health-hud" class="boss-health-hud" aria-live="polite" aria-hidden="true">
+          <div class="boss-health-topline">
+            <span id="boss-health-label">HERMES-DREADNOUGHT // PHASE 1</span>
+            <strong id="boss-health-value">18/18 HULL // 6/6 SHD</strong>
+          </div>
+          <div class="boss-meter boss-shield"><span id="boss-shield-bar"></span></div>
+          <div class="boss-meter boss-hull"><span id="boss-health-bar"></span></div>
+        </div>
         <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // T THROTTLE // Z/X THR +/- // G MATCH // C EVADE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // I INVENTORY</div>
       </div>
     </div>
@@ -610,6 +618,53 @@
     <div class="inv-footer">
       <span id="inv-cargo-used">CARGO: 0/20</span>
       <span id="inv-upgrades-count">SKILLS: 0/16</span>
+    </div>
+  </div>
+
+  <div id="loadout-panel" class="loadout-panel" hidden role="dialog" aria-modal="true" aria-label="Dock Loadout Terminal">
+    <div class="loadout-header">
+      <div>
+        <span class="loadout-kicker">DOCK TERMINAL</span>
+        <h2>VISUAL LOADOUT</h2>
+      </div>
+      <div class="loadout-meta">
+        <span id="loadout-credits">1000CR</span>
+        <button id="loadout-close" class="loadout-close-btn" type="button">[BACK]</button>
+      </div>
+    </div>
+    <div class="loadout-body">
+      <section class="loadout-slot-card">
+        <span class="loadout-kicker">PRIMARY SLOT</span>
+        <strong id="loadout-primary-name">STANDARD PULSE</strong>
+        <div class="loadout-stat-grid">
+          <span id="loadout-primary-damage">DMG --</span>
+          <span id="loadout-primary-fire-rate">FIRE --</span>
+          <span id="loadout-primary-range">RANGE --</span>
+        </div>
+        <div id="loadout-primary-options" class="loadout-options" aria-label="Primary weapon options"></div>
+      </section>
+      <section class="loadout-slot-card">
+        <span class="loadout-kicker">SECONDARY SLOT</span>
+        <strong id="loadout-secondary-name">SEEKING PAYLOAD</strong>
+        <div class="loadout-stat-grid">
+          <span id="loadout-secondary-damage">DMG --</span>
+          <span id="loadout-secondary-fire-rate">FIRE --</span>
+          <span id="loadout-secondary-range">RANGE --</span>
+        </div>
+        <div id="loadout-secondary-options" class="loadout-options" aria-label="Secondary weapon options"></div>
+      </section>
+      <section class="loadout-upgrade-card">
+        <span class="loadout-kicker">HULL SERVICE</span>
+        <strong id="loadout-hull-value">100/100</strong>
+        <p>Patch armor plating by +20 hull, capped at maxHull.</p>
+        <button id="loadout-buy-armor" class="loadout-upgrade-btn" type="button">BUY ARMOR // 80CR</button>
+      </section>
+      <section class="loadout-upgrade-card">
+        <span class="loadout-kicker">SHIELD SERVICE</span>
+        <strong id="loadout-shield-value">0</strong>
+        <p>Add +1 maxShieldHp pip for enemy-style shield buffering.</p>
+        <button id="loadout-buy-shield" class="loadout-upgrade-btn" type="button">BUY SHIELD // 150CR</button>
+      </section>
     </div>
   </div>
 

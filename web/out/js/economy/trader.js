@@ -7,6 +7,7 @@ import {
   normalizeStationCategory
 } from '../flight/combat-overhaul.js';
 import { combatState, buyWeapon, equipWeapon, reapplySkills, unlockSkillNode } from '../flight/combat-state.js';
+import { renderLoadoutScreen } from '../flight/loadout.js';
 import { gainReputation, getReputation, getReputationPriceMultiplier, normalizeCategory } from './reputation.js';
 import { refreshInventoryIfOpen } from '../ui/inventory-panel.js';
 import { STATION_LORE, STATION_MISSIONS, getStationGreeting, getStationLore } from './lore.js';
@@ -212,8 +213,20 @@ export function openTradeMenu(projectId) {
       { key: '2', code: 'Digit2', label: 'REFUEL', icon: 'fuel', hint: `FUEL ${Math.round(traderState.fuel)}/${traderState.maxFuel}`, tone: 'cyan', action: () => refuelDialog(projectId) },
       { key: '3', code: 'Digit3', label: 'CARGO HOLD', icon: 'boxes', hint: `${getCargoUsed()}/${traderState.maxCargo} UNITS USED`, tone: 'cyan', action: () => showCargoHold(projectId) },
       { key: '4', code: 'Digit4', label: 'SHIPYARD', icon: 'rocket', hint: `${combatState.ownedWeapons.size} WEAPONS OWNED`, tone: 'cyan', action: () => showShipyard(projectId) },
-      { key: '5', code: 'Digit5', label: 'MISSIONS', icon: 'radar', hint: `${missionCount} MISSIONS READY`, tone: 'yellow', action: () => showFactionMissionRef(projectId) }
+      { key: '5', code: 'Digit5', label: 'LOADOUT', icon: 'crosshair', hint: 'VISUAL WEAPON SLOTS', tone: 'cyan', action: () => openLoadoutPanel(projectId) },
+      { key: '6', code: 'Digit6', label: 'MISSIONS', icon: 'radar', hint: `${missionCount} MISSIONS READY`, tone: 'yellow', action: () => showFactionMissionRef(projectId) }
     ]
+  });
+}
+
+function openLoadoutPanel(projectId) {
+  renderLoadoutScreen(traderState, WEAPON_DEFS, combatState, {
+    onChange: () => {
+      reapplySkills();
+      updateFlightHudRef(true);
+      refreshInventoryIfOpen();
+    },
+    onClose: () => openTradeMenu(projectId)
   });
 }
 
