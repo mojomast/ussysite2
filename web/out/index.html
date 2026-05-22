@@ -451,6 +451,39 @@
     <button id="system-map-close" type="button" aria-label="Close system map">x</button>
   </div>
 
+  <div id="mission-board-overlay" class="mission-board-overlay" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-label="Mission Board">
+    <div class="mission-board-panel hud-panel hud-interactive">
+      <header class="mission-board-header">
+        <div>
+          <span class="mission-board-kicker">MISSION BOARD</span>
+          <h2 id="mission-board-station">--</h2>
+        </div>
+        <div class="mission-board-meta">
+          <span>CREDITS <strong id="mission-board-credits">0CR</strong></span>
+          <button id="mission-board-close" class="mission-board-close" type="button">[CLOSE]</button>
+        </div>
+      </header>
+      <div class="mission-board-body">
+        <section class="mission-board-feed" aria-label="Contract Feed">
+          <div class="mission-board-section-title">CONTRACT FEED</div>
+          <div id="mission-board-list" class="mission-board-list"></div>
+        </section>
+        <section class="mission-board-detail-shell" aria-label="Mission Details">
+          <div class="mission-board-section-title">DETAIL PANEL</div>
+          <div id="mission-board-detail" class="mission-board-detail"></div>
+          <div class="mission-board-actions">
+            <button id="mission-board-accept" class="objective-start-btn" type="button">ACCEPT CONTRACT</button>
+            <button id="mission-board-decline" class="objective-start-btn" type="button">DECLINE</button>
+          </div>
+        </section>
+        <aside class="mission-active-shell" aria-label="Active Contracts">
+          <div class="mission-board-section-title">ACTIVE CONTRACTS (MAX 3)</div>
+          <div id="mission-active-sidebar" class="mission-active-sidebar"></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
   <div class="cockpit-overlay" id="cockpit-overlay">
     <div id="hud-master-warning" class="hud-master-warning" aria-live="assertive"></div>
     <div class="cockpit-vignette"></div>

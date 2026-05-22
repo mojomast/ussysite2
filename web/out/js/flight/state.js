@@ -149,6 +149,7 @@ import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './sta
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
+import { bindMissionBoardControls, closeMissionBoard, configureMissionBoardUI, openMissionBoard as openMissionBoardOverlay, renderMissionBoard } from './missionUI.js';
 import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, updateSurface } from './surface.js';
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
@@ -186,6 +187,7 @@ let navGraph = null;
 let systemMapKeyWasDown = false;
 let navigationPanelControlsRegistered = false;
 let surfacePanelControlsRegistered = false;
+let missionBoardControlsRegistered = false;
 let telemetryLastUpdate = 0;
 let gameRoot, playerShip, flightNavLine;
 let flightAssistKeyCaptureRegistered = false;
@@ -674,6 +676,7 @@ export function init() {
     gameMessageType,
     ttsEngine
   });
+  configureMissionBoardUI({ documentRef: document });
   configureCombatScene({
     THREE,
     scene,
@@ -886,6 +889,7 @@ export function init() {
     landOnNearestProject,
     mouse,
     openAudioSettingsMenu,
+    openMissionBoard,
     openSkillTree,
     openStationMenu,
     playFireSfx: type => sfxEngine.playFlat(type, { volume: type === 'missile' ? 0.9 : 0.8 }),
@@ -912,6 +916,7 @@ export function init() {
   registerFlightAssistKeyCapture();
   registerNavigationPanelControls();
   registerSurfacePanelControls();
+  registerMissionBoardControls();
   syncOrbitFromCamera();
   
   // Populate UI Lists
@@ -1406,6 +1411,7 @@ function enterFlightMode() {
   flightState.fuel = flightState.maxFuel;
   flightState.fuelDepleted = false;
   flightState.currentDockedProject = null;
+  closeMissionBoard({ flightState, documentRef: document });
   flightState.thrust = 14;
   flightState.strafe = 8;
   flightState.damping = 0.985;
@@ -1595,6 +1601,7 @@ function updateMissionBoardProgress(time) {
   const changed = checkMissionProgress(traderState, arrivalState, combatState, navGraph, time);
   lastMissionAutopilotState = autopilot.state;
   if (changed.length) completeReadyBoardMissions();
+  if (changed.length && flightState.missionBoardOpen) renderMissionBoard(getMissionBoardContext(flightState.missionBoardStationId));
 }
 
 function triggerEnemyDeathFeedback(enemy, cls) {
@@ -1669,6 +1676,7 @@ function handleGameMessageChoice(event) {
 }
 
 function handleFlightUndock() {
+  closeMissionBoard({ flightState, documentRef: document });
   sfxEngine.stopStationAmbient();
   sfxEngine.startEngineHum();
 }
@@ -1817,6 +1825,72 @@ function registerSurfacePanelControls() {
   });
 }
 
+function getMissionBoardStationDef(stationId = traderState.dockedStation) {
+  if (!stationId) return null;
+  return STATIONS.find(station => station.id === stationId) || null;
+}
+
+function getMissionBoardContext(stationId = traderState.dockedStation) {
+  return {
+    stationDef: getMissionBoardStationDef(stationId),
+    navGraph,
+    flightState,
+    traderState,
+    documentRef: document,
+    onAccept: handleMissionBoardAccept,
+    onDecline: handleMissionBoardDecline
+  };
+}
+
+function registerMissionBoardControls() {
+  if (missionBoardControlsRegistered) return;
+  missionBoardControlsRegistered = true;
+  bindMissionBoardControls(() => getMissionBoardContext(flightState.missionBoardStationId || traderState.dockedStation), document);
+}
+
+function openMissionBoard(stationId = traderState.dockedStation) {
+  if (flightState.missionBoardOpen) {
+    closeMissionBoard({ flightState, documentRef: document });
+    updateFlightHud(true);
+    return true;
+  }
+  const context = getMissionBoardContext(stationId);
+  const result = openMissionBoardOverlay(context);
+  if (!result.ok) {
+    addKillFeedEntry('NO MISSION BOARD AVAILABLE', { type: 'warning' });
+    flightState.status = 'NO MISSION BOARD AT CURRENT DOCK';
+    flightState.statusUntil = performance.now() + 2200;
+  }
+  updateFlightHud(true);
+  return result.ok;
+}
+
+function handleMissionBoardAccept(result) {
+  if (result?.ok) {
+    addKillFeedEntry(`MISSION ACCEPTED: ${result.mission.title.toUpperCase()}`, 'var(--cyber-green)');
+    flightState.status = `MISSION ACCEPTED: ${result.mission.title}`;
+    saveCurrentRunState({ manual: true });
+  } else if (result?.reason === 'ACTIVE_LIMIT') {
+    addKillFeedEntry('ACTIVE MISSION LIMIT REACHED', { type: 'warning' });
+    flightState.status = 'ACTIVE MISSION LIMIT: 3';
+  } else {
+    addKillFeedEntry('MISSION UNAVAILABLE', { type: 'warning' });
+    flightState.status = 'MISSION UNAVAILABLE';
+  }
+  flightState.statusUntil = performance.now() + 2200;
+  updateFlightHud(true);
+}
+
+function handleMissionBoardDecline(result) {
+  if (result?.ok) {
+    addKillFeedEntry('MISSION DECLINED', { type: 'warning' });
+    flightState.status = 'MISSION DECLINED';
+    flightState.statusUntil = performance.now() + 1600;
+    saveCurrentRunState({ manual: true });
+  }
+  updateFlightHud(true);
+}
+
 function updateSystemMapInput() {
   const keyDown = flightState.keys.has('KeyM');
   if (keyDown && !systemMapKeyWasDown) toggleSystemMap();
@@ -1871,6 +1945,7 @@ function registerFlightAssistKeyCapture() {
 function undockFromTradeMenu() {
   flightState.landed = false;
   flightState.currentDockedProject = null;
+  closeMissionBoard({ flightState, documentRef: document });
   resetFlightAssistState();
   handleFlightUndock();
   flightState.status = 'UNDOCKED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
@@ -2706,7 +2781,7 @@ function openStationMenu(projectId) {
       { key: '1', code: 'Digit1', label: 'RESTOCK', action: () => restockAtProject(USSY_PROJECTS.find(project => project.id === projectId) || { id: projectId, name: stationName(projectId) }) },
       { key: '2', code: 'Digit2', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
       { key: '3', code: 'Digit3', label: 'CARGO MARKET', action: () => openTradeMenu(projectId) },
-      { key: '4', code: 'Digit4', label: 'MISSION BOARD', hint: `${loreMissions.length} LORE CONTRACTS`, action: () => showFactionMission(projectId) },
+      { key: '4', code: 'Digit4', label: 'MISSION BOARD', hint: getMissionBoardStationDef(projectId)?.hasMissions ? 'CONTRACT FEED' : `${loreMissions.length} LORE CONTRACTS`, action: () => (getMissionBoardStationDef(projectId)?.hasMissions ? openMissionBoard(projectId) : showFactionMission(projectId)) },
       { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessage() }
     ],
     ttsPriority: 'normal'

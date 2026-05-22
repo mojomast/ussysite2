@@ -77,6 +77,9 @@ export const flightState = {
   shieldCriticalSpoken: false,
   finalApproachSpoken: false,
   currentDockedProject: null,
+  missionBoardOpen: false,
+  missionBoardStationId: null,
+  selectedMissionId: null,
   lastHudUpdate: 0,
   mouseSensitivity: 0.0022,
   thrust: 14,
@@ -201,6 +204,7 @@ function onGlobalKeyDown(event) {
     isFlightActive,
     landOnNearestProject,
     openAudioSettingsMenu,
+    openMissionBoard,
     openSkillTree,
     openStationMenu,
     radioChain,
@@ -305,7 +309,10 @@ function onGlobalKeyDown(event) {
   }
   if (event.code === 'KeyB') {
     event.preventDefault();
-    if (!event.repeat && flightState.landed && traderState.dockedStation && !gameMessageState.active) showFactionMission(traderState.dockedStation);
+    if (!event.repeat) {
+      if (typeof openMissionBoard === 'function') openMissionBoard(traderState.dockedStation);
+      else if (flightState.landed && traderState.dockedStation && !gameMessageState.active) showFactionMission(traderState.dockedStation);
+    }
     return;
   }
   if (event.code === 'KeyT') {
