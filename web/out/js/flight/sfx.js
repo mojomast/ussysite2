@@ -21,7 +21,7 @@ const POSITIONAL_SETTINGS = {
   rolloffFactor: 1.2,
   maxDistance: 120
 };
-const MASTER_GAIN_SCALE = 0.28;
+const MASTER_GAIN_SCALE = 0.5;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
@@ -71,6 +71,7 @@ export const sfxEngine = {
   _warnedNoPositional: false,
   _engineHumRequested: false,
   _stationAmbientRequested: false,
+  _lastPlay: null,
 
   init() {
     if (this._initialized) return true;
@@ -218,15 +219,17 @@ export const sfxEngine = {
     const source = this.ctx.createBufferSource();
     const gain = this.ctx.createGain();
     const now = this.ctx.currentTime;
+    const duck = ttsEngine.activePriority >= 0 ? 0.55 : 1;
     source.buffer = buffer;
     source.playbackRate.setValueAtTime(pitch, now);
-    gain.gain.setValueAtTime(clampVolume(options.volume ?? 0.55), now);
+    gain.gain.setValueAtTime(clampVolume(options.volume ?? 0.55) * clampVolume(gameSettings.sfxVolume) * 0.9 * duck, now);
     source.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.ctx.destination);
 
     slot.busy = true;
     slot.source = source;
     slot.gain = gain;
+    this._lastPlay = { type, at: Date.now(), contextState: this.ctx.state, volume: gain.gain.value };
     source.onended = () => {
       try { source.disconnect(); } catch {}
       try { gain.disconnect(); } catch {}
@@ -445,3 +448,4 @@ export const sfxEngine = {
 };
 
 configureSfxVolumeApplier(value => sfxEngine.setMasterVolume(value));
+window.__USSY_SFX__ = sfxEngine;
