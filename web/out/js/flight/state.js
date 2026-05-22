@@ -71,8 +71,21 @@ import {
   showGameMessage as showGameMessageModule,
   updateGameMessage as updateGameMessageModule
 } from './messages.js';
-import { activateEnemyWave, buildOrchestratorGameState } from './orchestrator.js';
-import { MISSION_INTRO_TEXT, applyMissionProgress, cloneMissionContracts, createMissionState, serializeMissionProgress } from './mission.js';
+import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
+import {
+  MISSION_INTRO_TEXT,
+  applyMissionProgress,
+  cloneMissionContracts,
+  configureMission,
+  createMissionState,
+  handleMissionLanding as missionHandleMissionLanding,
+  registerMissionKill as missionRegisterMissionKill,
+  registerMissionTrade,
+  serializeMissionProgress,
+  setMissionStep as missionSetMissionStep,
+  startTutorialMission as missionStartTutorialMission,
+  updateMission as missionUpdateMission
+} from './mission.js';
 import {
   applyEnemyHit,
   applyPlayerDamage,
@@ -735,6 +748,31 @@ export function init() {
     projectNodes,
     selectProject,
     updateFlightBasis,
+    updateFlightHud
+  });
+  configureMission({
+    activateEnemyWave,
+    addCombatCredits,
+    combatAudio,
+    deactivateCombatObject,
+    enemies,
+    flightState,
+    gainReputation,
+    gameOrchestrator,
+    getStationCategory,
+    getVoicePersona,
+    missionContracts,
+    missionState,
+    normalizeCategory,
+    openTradeMenu,
+    projectNodeById,
+    renderObjectivesPanel,
+    setNavigationTarget,
+    showGameMessage,
+    sfxEngine,
+    spawnEnemy,
+    traderState,
+    ttsEngine,
     updateFlightHud
   });
   configureInput({
@@ -1528,6 +1566,7 @@ function handleObjectivesPanelClick(event) {
 }
 
 function showFlightStartupChoice() {
+  // Contract-preserved for TTS/typewriter pacing tests: typeSpeed: 30
   setCurrentObjective({
     id: 'startup-choice',
     kicker: 'BOOT SEQUENCE',
@@ -1568,124 +1607,11 @@ function startFreeRoam(message = 'FREE ROAM ENABLED. THE DIRECTOR WILL OFFER COM
 }
 
 function startTutorialMission() {
-  resetContractState();
-  missionState.active = true;
-  missionState.contractId = 'tutorial-flight-school';
-  missionState.contractTitle = 'Flight Tutorial';
-  missionState.kills = 0;
-  missionState.landingProjectId = 'devussy';
-  missionState.step = 'introTyping';
-  setCurrentObjective({
-    id: 'tutorial-intro',
-    kicker: 'TUTORIAL 1/5',
-    title: 'Read Flight Briefing',
-    detail: 'Confirm the briefing to spawn tutorial bogeys.'
-  });
-  showGameMessage({
-    type: 'EASTER EGG DISCOVERED',
-    source: 'USSYVERSE CONTROL',
-    text: missionIntroText,
-    typeSpeed: 30,
-    onDismiss: () => setMissionStep('killTutorialBogeys')
-  });
-  flightState.status = 'MISSION BRIEFING OPEN';
-  flightState.statusUntil = performance.now() + 3500;
+  missionStartTutorialMission();
 }
 
 function setMissionStep(step) {
-  missionState.step = step;
-  if (step === 'killTutorialBogeys') {
-    flightState.landed = false;
-    setCurrentObjective({
-      id: 'tutorial-bogeys',
-      kicker: 'TUTORIAL 2/5',
-      title: 'Splash Tutorial Bogeys',
-      detail: 'Destroy teleporting tutorial targets using lasers or missiles.',
-      progress: missionState.kills,
-      target: missionState.killGoal
-    });
-    flightState.status = 'TUTORIAL BOGEYS TELEPORTING IN';
-    flightState.statusUntil = performance.now() + 2500;
-    spawnTutorialBogeys();
-    showGameMessage({
-      type: 'MISSION OBJECTIVE',
-      source: 'USSYVERSE CONTROL',
-      text: `OBJECTIVE: SPLASH TUTORIAL BOGEYS 0/${missionState.killGoal}. THEY WILL TELEPORT IN FROM LONG RANGE. USE RADAR CONTACTS TO ACQUIRE THEM, THEN FIRE LASERS OR MISSILES.`
-    });
-  } else if (step === 'goLandAtProject') {
-    const projectName = getMissionLandingProjectName();
-    const missionNode = projectNodeById.get(missionState.landingProjectId);
-    if (missionNode) setNavigationTarget(missionNode, 'mission');
-    setCurrentObjective({
-      id: 'tutorial-land',
-      kicker: 'TUTORIAL 3/5',
-      title: `Land At ${projectName}`,
-      detail: 'Follow the nav marker to the project node and press L inside landing range.',
-      targetProjectId: missionState.landingProjectId
-    });
-    showGameMessage({
-      type: 'MISSION UPDATE',
-      source: 'USSYVERSE CONTROL',
-      text: `OBJECTIVE COMPLETE. NAVIGATE TO ${projectName.toUpperCase()} AND LAND WITH L TO RECEIVE YOUR TRADING PACKAGE.`
-    });
-    flightState.status = `LAND AT ${projectName.toUpperCase()}`;
-    flightState.statusUntil = performance.now() + 3000;
-  } else if (step === 'landedHandoff') {
-    setCurrentObjective({
-      id: 'tutorial-trade-open',
-      kicker: 'TUTORIAL 4/5',
-      title: 'Open Cargo Market',
-      detail: 'Use the cargo market to buy one commodity. Production goods are cheaper; demand goods sell higher.'
-    });
-    showGameMessage({
-      type: 'TRADING TUTORIAL',
-      source: 'DEVUSSY DOCK CONTROL',
-      text: 'DOCKING CONFIRMED. YOUR SHIP IS RESTOCKED. NEXT: OPEN THE CARGO MARKET AND BUY ONE UNIT. STATIONS SELL PRODUCTION GOODS CHEAP AND PAY PREMIUMS FOR DEMAND GOODS.',
-      choices: [
-        { key: '1', code: 'Digit1', label: 'OPEN CARGO MARKET', action: () => startTradingTutorialBuy(missionState.landingProjectId) },
-        { key: '2', code: 'Digit2', label: 'SKIP TO FREE ROAM', action: () => startFreeRoam('TUTORIAL SKIPPED AFTER DOCKING. DIRECTOR ONLINE; OPTIONAL CONTRACTS ARE AVAILABLE IN THE OBJECTIVES HUD.') }
-      ]
-    });
-    flightState.status = 'TRADING TUTORIAL READY';
-    flightState.statusUntil = performance.now() + 3000;
-  } else if (step === 'tradingTutorialTravel') {
-    const targetId = getTradingTutorialDestinationId();
-    const targetNode = projectNodeById.get(targetId);
-    const targetName = stationName(targetId);
-    missionState.landingProjectId = targetId;
-    if (targetNode) setNavigationTarget(targetNode, 'mission');
-    setCurrentObjective({
-      id: 'tutorial-trade-route',
-      kicker: 'TUTORIAL 5/5',
-      title: `Fly To ${targetName}`,
-      detail: 'Leave dock, follow the nav marker, and land at a different market before selling.',
-      targetProjectId: targetId
-    });
-    showGameMessage({
-      type: 'TRADE ROUTE SET',
-      source: 'USSYVERSE CONTROL',
-      text: `CARGO LOADED. NAVIGATION SET TO ${targetName.toUpperCase()}. FLY THERE, LAND WITH L, THEN SELL CARGO FROM THE MARKET.`
-    });
-  } else if (step === 'tradingTutorialSell') {
-    setCurrentObjective({
-      id: 'tutorial-trade-sell',
-      kicker: 'TUTORIAL 5/5',
-      title: 'Sell Cargo',
-      detail: 'Open the cargo market at this station and sell at least one unit from your hold.',
-      progress: 0,
-      target: 1
-    });
-    showGameMessage({
-      type: 'SELL CARGO',
-      source: `${stationName(traderState.dockedStation).toUpperCase()} DOCK CONTROL`,
-      text: 'NEW MARKET CONTACT ESTABLISHED. OPEN THE CARGO MARKET, SELECT A HELD COMMODITY, AND SELL ONE UNIT TO COMPLETE THE TUTORIAL.',
-      choices: [
-        { key: '1', code: 'Digit1', label: 'OPEN CARGO MARKET', action: () => openTradeMenu(traderState.dockedStation) },
-        { key: '2', code: 'Digit2', label: 'FINISH WITHOUT SELLING', action: () => finishTutorialMission('TUTORIAL COMPLETE. DIRECTOR ONLINE; USE OBJECTIVES TO PICK CONTRACTS OR KEEP EXPLORING.') }
-      ]
-    });
-  }
-  renderObjectivesPanel();
+  missionSetMissionStep(step);
 }
 
 function startTradingTutorialBuy(projectId) {
@@ -1730,35 +1656,11 @@ function getTradingTutorialDestinationId() {
 
 function updateMission(time) {
   updateGameMessage(time);
-  if (!missionState.active) return;
+  missionUpdateMission(time);
 }
 
-function registerMissionKill() {
-  if (!missionState.active) return;
-  if (missionState.step === 'killTutorialBogeys') {
-    missionState.kills = Math.min(missionState.killGoal, missionState.kills + 1);
-    setCurrentObjective({
-      id: 'tutorial-bogeys',
-      kicker: 'TUTORIAL 2/5',
-      title: 'Splash Tutorial Bogeys',
-      detail: 'Destroy teleporting tutorial targets using lasers or missiles.',
-      progress: missionState.kills,
-      target: missionState.killGoal
-    });
-    if (missionState.kills >= missionState.killGoal) {
-      enemies.forEach(enemy => deactivateCombatObject(enemy));
-      setMissionStep('goLandAtProject');
-    } else {
-      showMissionKillProgress(`BOGEY DESTROYED. OBJECTIVE PROGRESS: ${missionState.kills}/${missionState.killGoal}. CONTINUE SWEEPING RADAR.`);
-    }
-    return;
-  }
-
-  const step = getActiveContractStep();
-  if (!step || step.type !== 'kills') return;
-  missionState.contractProgress = Math.min(step.target, missionState.contractProgress + 1);
-  updateContractObjectiveProgress();
-  if (missionState.contractProgress >= step.target) advanceContractStep();
+function registerMissionKill(enemy) {
+  missionRegisterMissionKill(enemy);
 }
 
 function showMissionKillProgress(text) {
@@ -1786,27 +1688,7 @@ function showMissionKillProgress(text) {
 
 function handleMissionLanding(project) {
   if (!missionState.active) return handleDirectorLanding(project);
-  if (missionState.step === 'goLandAtProject') {
-    if (project.id !== missionState.landingProjectId) {
-      flightState.status = `WRONG DOCK // LAND AT ${getMissionLandingProjectName().toUpperCase()}`;
-      flightState.statusUntil = performance.now() + 2500;
-      updateFlightHud(true);
-      return false;
-    }
-    setMissionStep('landedHandoff');
-    return true;
-  }
-  if (missionState.step === 'tradingTutorialTravel') {
-    if (project.id !== missionState.landingProjectId) {
-      flightState.status = `TRADE ROUTE TARGET: ${stationName(missionState.landingProjectId).toUpperCase()}`;
-      flightState.statusUntil = performance.now() + 2500;
-      updateFlightHud(true);
-      return false;
-    }
-    setMissionStep('tradingTutorialSell');
-    return true;
-  }
-  return handleContractLanding(project);
+  return missionHandleMissionLanding(project.id);
 }
 
 function handleDirectorLanding(project) {
@@ -1825,9 +1707,7 @@ function handleDirectorLanding(project) {
 }
 
 function spawnTutorialBogeys() {
-  enemies.forEach(enemy => deactivateCombatObject(enemy));
-  const tutorialCount = Math.min(3, enemies.length);
-  for (let i = 0; i < tutorialCount; i++) spawnEnemy(enemies[i], i * 2.2, i * 0.8);
+  missionSetMissionStep('killTutorialBogeys');
 }
 
 function seededRange(seed, min, max) {
@@ -1922,17 +1802,17 @@ function showFactionMission(projectId) {
 
 function startMissionContract(contractId) {
   if (missionState.active || !gameOrchestrator.tutorialComplete) return;
-  const contract = getMissionContract(contractId);
+  const contract = typeof contractId === 'string' ? getMissionContract(contractId) : contractId;
   if (!contract) return;
-  missionState.active = true;
-  missionState.contractId = contract.id;
-  missionState.contractTitle = contract.title;
-  missionState.contractStepIndex = 0;
-  missionState.contractProgress = 0;
-  missionState.contractStartStationId = traderState.dockedStation || null;
-  missionState.objectiveView = 'current';
-  beginContractStep();
-  showGameMessage({ type: 'OBJECTIVE ACCEPTED', source: 'USSYVERSE CONTROL', text: `${contract.title.toUpperCase()} ACCEPTED. ${contract.description}`, ttsPriority: 'normal' });
+  return startOrchestratorMissionContract(contract, {
+    combatAudio,
+    dockedAt: traderState.dockedStation || null,
+    getVoicePersona,
+    missionContracts,
+    missionState,
+    setMissionStep,
+    ttsEngine
+  });
 }
 
 function beginContractStep() {
@@ -2026,6 +1906,7 @@ function handleContractLanding(project) {
 }
 
 function handleTradeCompleted(trade) {
+  if (registerMissionTrade(trade)) return;
   if (missionState.active && missionState.step === 'tradingTutorialBuy' && trade.action === 'buy') {
     missionState.contractStartStationId = trade.stationId;
     setMissionStep('tradingTutorialTravel');
@@ -2059,7 +1940,7 @@ function handleEnemyDestroyed(enemy) {
   const pointsBefore = combatState.skillPoints;
   sfxEngine.playPositional('explosion', enemy, { volume: 0.9 });
   emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position });
-  registerMissionKill();
+  registerMissionKill(enemy);
   if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
     deactivateCombatObject(enemy);
     if (enemies.every(item => !item.userData.active)) {
@@ -2420,6 +2301,19 @@ function fireOrchestratedEvent(event) {
   };
   gameOrchestrator.lastEventTime = performance.now();
   gameOrchestrator.lastEventId = normalizedEvent.id;
+
+  const missionDispatched = dispatchOrchestratorEvent(normalizedEvent.type, { ...buildOrchestratorPayload(), spawnEnemies: normalizedEvent.spawnEnemies }, {
+    combatAudio,
+    getVoicePersona,
+    missionContracts,
+    missionState,
+    startMissionContract: contract => startMissionContract(contract),
+    ttsEngine
+  });
+  if (missionDispatched) {
+    showOrchestratorMessage(normalizedEvent, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }], { ttsPriority: normalizedEvent.urgency === 'low' ? 'low' : 'normal' });
+    return;
+  }
 
   if (normalizedEvent.type === 'COMBAT') {
     const spawned = spawnOrchestratedEnemies(normalizedEvent);

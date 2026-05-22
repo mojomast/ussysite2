@@ -121,6 +121,12 @@ The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The
 
 Dogfight mode now opens with a deployment choice: run the guided tutorial or enter free roam with the director enabled. The tutorial covers combat, landing, and a cargo-market buy/sell route. The flight HUD includes an objectives panel toggled with `O`, showing the current objective and available multi-step contracts.
 
+## Mission System
+
+`js/flight/mission.js` executes the built-in multi-step contracts. Patrol Sweep spawns and tracks combat kills before docking for bounty payment. Constellation Survey assigns station landing objectives and enforces the second stop at a different project. Market Proving Run watches successful buy/sell trade callbacks and requires changing markets before sale.
+
+The orchestrator now dispatches event types into contracts instead of only showing waypoint text: combat and bounty events start kill contracts, trade or contraband pressure starts market runs, and distress/anomaly/survey events start landing routes. Active missions are guarded so a new director event cannot overwrite current progress.
+
 ## Audio Settings
 
 In flight, press `M` to open audio settings for radio volume, combat chatter volume, SFX volume, TTS mute, and quiet defaults. Radio transmissions default quieter than before, and all in-game voices are routed through the radio filter chain so clean and distorted voice paths do not mix.
