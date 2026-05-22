@@ -185,6 +185,19 @@ export function beginDeparture(flightState) {
   return surface;
 }
 
+export function cancelSurfaceApproach(flightState) {
+  const surface = ensureSurface(flightState);
+  surface.state = SURFACE_STATES.NONE;
+  surface.planetId = null;
+  surface.approachDist = 0;
+  surface.orbitAltitude = 0;
+  surface.landingProgress = 0;
+  surface.surfaceY = 0;
+  surface.exitQueued = false;
+  flightState.landed = false;
+  return surface;
+}
+
 export function updateSurface(flightState, planets = [], dt = 0) {
   const surface = ensureSurface(flightState);
   const planet = planets.find(item => planetId(item) === surface.planetId) ?? null;

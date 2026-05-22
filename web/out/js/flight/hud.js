@@ -3,6 +3,7 @@ import { traderState } from '../economy/trader.js';
 import { WEAPON_DEFS, getWeaponDef } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
 import { ensureAutopilotState, isAutopilotActive } from './autopilot.js';
+import { SURFACE_STATES, getSurfaceServices } from './surface.js';
 
 let deps = {};
 let radarLastUpdate = 0;
@@ -283,6 +284,70 @@ export function updateNavHUD(flightState, combatStateArg, force = false, documen
   el('nav-engage-btn')?.classList.toggle('hidden', active);
   el('nav-abort-btn')?.classList.toggle('hidden', !active);
   return true;
+}
+
+function getPlanetCoord(source, axis, index) {
+  if (!source) return 0;
+  if (Array.isArray(source)) return source[index] ?? 0;
+  if (Array.isArray(source.pos)) return source.pos[index] ?? 0;
+  if (Array.isArray(source.position)) return source.position[index] ?? 0;
+  if (source.position && typeof source.position === 'object') return source.position[axis] ?? 0;
+  return source[axis] ?? source.userData?.[axis] ?? 0;
+}
+
+function getPlanetId(planet) {
+  return planet?.id ?? planet?.userData?.planetId ?? null;
+}
+
+function getPlanetRadius(planet) {
+  return planet?.radius ?? planet?.userData?.radius ?? 0;
+}
+
+function findSurfacePlanet(surface, planets = []) {
+  if (!surface?.planetId) return null;
+  return planets.find(planet => getPlanetId(planet) === surface.planetId) ?? null;
+}
+
+function formatSurfaceAltitude(flightState, planet) {
+  if (!flightState?.pos || !planet) return '--';
+  const dx = getPlanetCoord(flightState.pos, 'x', 0) - getPlanetCoord(planet.pos ?? planet.position ?? planet, 'x', 0);
+  const dy = getPlanetCoord(flightState.pos, 'y', 1) - getPlanetCoord(planet.pos ?? planet.position ?? planet, 'y', 1);
+  const dz = getPlanetCoord(flightState.pos, 'z', 2) - getPlanetCoord(planet.pos ?? planet.position ?? planet, 'z', 2);
+  return `${Math.max(0, Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz) - getPlanetRadius(planet)))}u`;
+}
+
+function setPanelActive(panel, active) {
+  if (!panel) return;
+  panel.classList.toggle('active', active);
+  panel.setAttribute('aria-hidden', active ? 'false' : 'true');
+}
+
+export function updateSurfaceHUD(flightState, planets = [], documentRef = deps.documentRef || document) {
+  const surface = flightState?.surface;
+  const state = surface?.state ?? SURFACE_STATES.NONE;
+  const planet = findSurfacePlanet(surface, planets) ?? (surface?.planetId ? { id: surface.planetId, name: surface.planetId, radius: 0 } : null);
+  const name = planet?.name ?? planet?.userData?.name ?? planet?.id ?? surface?.planetId ?? '--';
+  const altitude = formatSurfaceAltitude(flightState, planet);
+  const services = getSurfaceServices(planet);
+  const serviceText = services.length ? services.filter(service => service.available !== false).map(service => service.label).join(' // ') : 'NO SERVICES';
+  const el = id => documentRef?.getElementById?.(id);
+  const text = (id, value) => {
+    const node = el(id);
+    if (node && node.textContent !== value) node.textContent = value;
+  };
+
+  setPanelActive(el('approach-hint'), state === SURFACE_STATES.APPROACH);
+  setPanelActive(el('orbital-panel'), state === SURFACE_STATES.ORBITAL || state === SURFACE_STATES.LANDING);
+  setPanelActive(el('surface-panel'), state === SURFACE_STATES.SURFACE || state === SURFACE_STATES.DEPARTURE);
+
+  text('approach-planet', name.toUpperCase());
+  text('approach-altitude', altitude);
+  text('orbital-planet', name.toUpperCase());
+  text('orbital-altitude', altitude);
+  text('orbital-services', serviceText);
+  text('surface-planet', name.toUpperCase());
+  text('surface-services', serviceText);
+  return { state, planet, services };
 }
 
 export function updateFlightHud(force = false) {

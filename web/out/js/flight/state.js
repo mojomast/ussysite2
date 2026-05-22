@@ -68,7 +68,8 @@ import {
   updateFlightCamera as updateFlightCameraModule,
   updateFlightHud as updateFlightHudModule,
   updateNavHUD as updateNavHUDModule,
-  updateTtsStatusIndicator as updateTtsStatusIndicatorModule
+  updateTtsStatusIndicator as updateTtsStatusIndicatorModule,
+  updateSurfaceHUD as updateSurfaceHUDModule
 } from './hud.js';
 import {
   configureMessages,
@@ -147,7 +148,7 @@ import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js'
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
-import { SURFACE_STATES, beginLanding, updateSurface } from './surface.js';
+import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, updateSurface } from './surface.js';
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
@@ -183,6 +184,7 @@ let systemStations = [];
 let navGraph = null;
 let systemMapKeyWasDown = false;
 let navigationPanelControlsRegistered = false;
+let surfacePanelControlsRegistered = false;
 let telemetryLastUpdate = 0;
 let gameRoot, playerShip, flightNavLine;
 let flightAssistKeyCaptureRegistered = false;
@@ -868,6 +870,7 @@ export function init() {
     exitFlightMode,
     gameMessageState,
     handleGameMessageChoice,
+    handleSurfaceEscape,
     heroContainer,
     isConsoleActive: () => isConsoleActive,
     isFlightActive: () => isFlightActive,
@@ -899,6 +902,7 @@ export function init() {
   });
   registerFlightAssistKeyCapture();
   registerNavigationPanelControls();
+  registerSurfacePanelControls();
   syncOrbitFromCamera();
   
   // Populate UI Lists
@@ -1648,6 +1652,42 @@ function setSystemWorldVisible(visible) {
   systemStations.forEach(body => { body.visible = visible; });
 }
 
+function getSurfacePlanetDefinition(planetObject) {
+  const id = planetObject?.userData?.planetId ?? planetObject?.id;
+  return PLANETS.find(planet => planet.id === id) ?? planetObject;
+}
+
+function getSurfacePlanetsForHUD() {
+  return systemPlanets.map(planet => ({ ...getSurfacePlanetDefinition(planet), position: planet.position, userData: planet.userData }));
+}
+
+function updateSurfaceVisuals() {
+  const surface = flightState.surface;
+  const activePlanet = getCurrentSurfacePlanet();
+  let approachT = 0;
+  const surfaceState = surface?.state;
+  if (surface?.state === SURFACE_STATES.APPROACH && activePlanet) {
+    const radius = activePlanet.userData?.radius ?? activePlanet.radius ?? 0;
+    const dist = flightState.pos.distanceTo(activePlanet.position);
+    const approachDist = surface.approachDist || radius * 1.6;
+    const orbitDist = surface.orbitAltitude || radius * 1.2;
+    approachT = THREE.MathUtils.clamp((approachDist - dist) / Math.max(1, approachDist - orbitDist), 0, 1);
+  }
+  const holdSurfaceVisuals = surfaceState === SURFACE_STATES.ORBITAL || surfaceState === SURFACE_STATES.LANDING || surfaceState === SURFACE_STATES.SURFACE;
+  for (const planet of systemPlanets) {
+    const atmosphere = planet.children?.find(child => child.userData?.isPlanetAtmosphere);
+    if (!atmosphere?.material) continue;
+    const isApproach = activePlanet === planet && surfaceState === SURFACE_STATES.APPROACH;
+    const isHeld = activePlanet === planet && holdSurfaceVisuals;
+    atmosphere.material.opacity = isApproach ? THREE.MathUtils.lerp(0.18, 0.45, approachT) : (isHeld ? 0.45 : 0.18);
+  }
+  const targetFov = surfaceState === SURFACE_STATES.APPROACH ? THREE.MathUtils.lerp(75, 55, approachT) : (holdSurfaceVisuals ? 55 : 75);
+  if (camera && Math.abs(camera.fov - targetFov) > 0.01) {
+    camera.fov = targetFov;
+    camera.updateProjectionMatrix?.();
+  }
+}
+
 function createSystemWorldObjects() {
   systemStarfield = createStarfield(scene, THREE);
   systemPlanets = createAllPlanets(scene, THREE);
@@ -1726,6 +1766,18 @@ function registerNavigationPanelControls() {
     updateFlightHud(true);
   });
   mapCloseBtn?.addEventListener('click', () => setSystemMapVisible(false));
+}
+
+function registerSurfacePanelControls() {
+  if (surfacePanelControlsRegistered) return;
+  surfacePanelControlsRegistered = true;
+  document.getElementById('surface-land-btn')?.addEventListener('click', landOnNearestProject);
+  document.getElementById('surface-depart-btn')?.addEventListener('click', () => {
+    beginDeparture(flightState);
+    flightState.status = 'SURFACE DEPARTURE INITIATED';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+  });
 }
 
 function updateSystemMapInput() {
@@ -2474,6 +2526,13 @@ function getMissionLandingProjectName() {
 }
 
 function landOnNearestProject() {
+  if (flightState.surface?.state === SURFACE_STATES.SURFACE) {
+    beginDeparture(flightState);
+    flightState.status = 'SURFACE DEPARTURE INITIATED';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+    return;
+  }
   if (flightState.surface?.state === SURFACE_STATES.ORBITAL) {
     const planet = getCurrentSurfacePlanet();
     if (planet) {
@@ -2507,6 +2566,25 @@ function landOnNearestProject() {
     document.exitPointerLock();
   }
   if (!gameMessageState.active) openStationMenu(project.id);
+}
+
+function handleSurfaceEscape() {
+  const state = flightState.surface?.state;
+  if (state === SURFACE_STATES.APPROACH) {
+    cancelSurfaceApproach(flightState);
+    flightState.status = 'SURFACE APPROACH CANCELLED';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+    return true;
+  }
+  if (state === SURFACE_STATES.ORBITAL) {
+    beginDeparture(flightState);
+    flightState.status = 'PULLING AWAY FROM ORBIT';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+    return true;
+  }
+  return false;
 }
 
 function restockAtProject(project) {
@@ -3167,8 +3245,10 @@ export function tick(time = 0) {
     updateStationRotations(systemStations, frameDt);
     updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
     updateSurface(flightState, systemPlanets, frameDt);
+    updateSurfaceVisuals();
     updateStarfieldWarp(systemStarfield, flightForward, ensureAutopilotState(flightState).hyperspeedMult ?? 1);
     updateNavHUDModule(flightState, combatState);
+    updateSurfaceHUDModule(flightState, getSurfacePlanetsForHUD());
     updateSystemDocking();
     updateFlightHud(false);
     if (combatState.debriefPending) {

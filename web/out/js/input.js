@@ -197,6 +197,7 @@ function onGlobalKeyDown(event) {
     exitFlightMode,
     gameMessageState,
     handleGameMessageChoice,
+    handleSurfaceEscape,
     isFlightActive,
     landOnNearestProject,
     openAudioSettingsMenu,
@@ -260,6 +261,10 @@ function onGlobalKeyDown(event) {
   if (isBackOrCloseKey(event) && gameMessageState.active) {
     event.preventDefault();
     dismissGameMessage();
+    return;
+  }
+  if (event.code === 'Escape' && typeof handleSurfaceEscape === 'function' && handleSurfaceEscape()) {
+    event.preventDefault();
     return;
   }
   if (event.code === 'Space') {

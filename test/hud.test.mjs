@@ -11,6 +11,7 @@ const {
   shouldDrawEnemyRadarContact,
   updateBossHealthBar,
   updateKillFeed,
+  updateSurfaceHUD,
   worldToRadar
 } = await import('../js/flight/hud.js');
 
@@ -174,4 +175,60 @@ test('updateKillFeed prunes entries older than four seconds', () => {
   assert.equal(combatState.killFeed.length, 0);
   assert.equal(elements['kill-feed'].children.length, 0);
   assert.equal(combatState.killFeedDirty, false);
+});
+
+test('updateSurfaceHUD shows approach hint with planet name and altitude', () => {
+  const elements = {
+    'approach-hint': createElement(),
+    'orbital-panel': createElement(),
+    'surface-panel': createElement(),
+    'approach-planet': createElement(),
+    'approach-altitude': createElement(),
+    'orbital-planet': createElement(),
+    'orbital-altitude': createElement(),
+    'orbital-services': createElement(),
+    'surface-planet': createElement(),
+    'surface-services': createElement()
+  };
+  const state = {
+    pos: { x: 0, y: 0, z: 1200 },
+    surface: { state: 'APPROACH', planetId: 'nexus-prime' }
+  };
+  const planet = { id: 'nexus-prime', name: 'Nexus Prime', pos: [0, 0, 0], radius: 800, type: 'homeworld' };
+
+  const result = updateSurfaceHUD(state, [planet], createDocument(elements));
+
+  assert.equal(result.state, 'APPROACH');
+  assert.equal(elements['approach-hint'].classList.contains('active'), true);
+  assert.equal(elements['orbital-panel'].classList.contains('active'), false);
+  assert.equal(elements['approach-planet'].textContent, 'NEXUS PRIME');
+  assert.equal(elements['approach-altitude'].textContent, '400u');
+  assert.equal(elements['orbital-services'].textContent, 'Repair // Refuel // Missions // Trade // Save');
+});
+
+test('updateSurfaceHUD shows surface panel and service list', () => {
+  const elements = {
+    'approach-hint': createElement(),
+    'orbital-panel': createElement(),
+    'surface-panel': createElement(),
+    'approach-planet': createElement(),
+    'approach-altitude': createElement(),
+    'orbital-planet': createElement(),
+    'orbital-altitude': createElement(),
+    'orbital-services': createElement(),
+    'surface-planet': createElement(),
+    'surface-services': createElement()
+  };
+  const state = {
+    pos: { x: 8000, y: 0, z: 3500 },
+    surface: { state: 'SURFACE', planetId: 'cinder' }
+  };
+  const planet = { id: 'cinder', name: 'Cinder', pos: [8000, 0, 3000], radius: 500, type: 'hostile' };
+
+  updateSurfaceHUD(state, [planet], createDocument(elements));
+
+  assert.equal(elements['surface-panel'].classList.contains('active'), true);
+  assert.equal(elements['approach-hint'].classList.contains('active'), false);
+  assert.equal(elements['surface-planet'].textContent, 'CINDER');
+  assert.equal(elements['surface-services'].textContent, 'Combat Encounter');
 });
