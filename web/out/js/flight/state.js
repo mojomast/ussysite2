@@ -51,6 +51,7 @@ import {
   deserializeCombatState,
   equipWeapon,
   recordCombatKillStats,
+  reset as resetCombatState,
   resetCombatSessionStats,
   reapplySkills,
   serializeCombatState,
@@ -77,6 +78,7 @@ import {
   updateGameMessage as updateGameMessageModule
 } from './messages.js';
 import { showDebrief } from './debrief.js';
+import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
 import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
   MISSION_INTRO_TEXT,
@@ -105,6 +107,7 @@ import {
   findNearestEnemy,
   firePrimaryWeapon,
   fireSecondaryWeapon,
+  handleBossDeath,
   playerBullets,
   playerMissiles,
   resetWeaponVfxPools,
@@ -239,6 +242,8 @@ let dustSpeeds = null;
 let lastTriangleWarnAt = 0;
 let radarLastUpdate = 0;
 let lastPriceDriftTick = 0;
+let lastAutoSave = 0;
+let pendingRunState = null;
 let activeUniverseScale = 1;
 
 const loadoutState = {
@@ -506,6 +511,39 @@ function saveCombatStateToHash() {
   history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}:ms:${missionEncoded}`);
 }
 
+function buildPersistentCombatState() {
+  return {
+    ...combatState,
+    score: flightState.score,
+    armor: flightState.armor,
+    shield: flightState.shield
+  };
+}
+
+function addKillFeedEntry(text, color = '#ffffff') {
+  flightState.status = text;
+  flightState.statusColor = color;
+  flightState.statusUntil = performance.now() + 1800;
+  updateFlightHud(true);
+}
+
+function saveCurrentRunState({ manual = false } = {}) {
+  const saved = saveRunState(buildPersistentCombatState(), traderState, reputationState, skillTree);
+  if (saved && manual) addKillFeedEntry('STATE SAVED', '#44ff88');
+  return saved;
+}
+
+function applySavedRunState(data) {
+  if (!applyRunState(data, combatState, traderState, reputationState, skillTree)) return false;
+  flightState.score = data.combat.score;
+  flightState.armor = data.combat.hull;
+  flightState.shield = data.combat.shieldHp;
+  skillTree.applyAll();
+  syncCombatCreditsFromTrader();
+  updateFlightHud(true);
+  return true;
+}
+
 function restoreMissionProgress(encoded) {
   try {
     const data = JSON.parse(atob(encoded));
@@ -538,6 +576,7 @@ function applyPersistedMissionProgress() {
 
 // Init application
 export function init() {
+  pendingRunState = loadRunState();
   configureFlightAudio({ flightState, updateFlightHud, getVoicePersona });
   configureTrader({
     showGameMessage,
@@ -714,6 +753,7 @@ export function init() {
     combatAudio,
     emitCombatPlayerHit,
     flightHud,
+    flightForward,
     flightRight,
     flightState,
     flightTempVec,
@@ -723,6 +763,7 @@ export function init() {
     getVoicePersona,
     handleEnemyDestroyed,
     missionState,
+    onWaveComplete: () => saveCurrentRunState(),
     showGameMessage,
     skillTree,
     ttsEngine,
@@ -1330,6 +1371,7 @@ function enterFlightMode() {
   flightState.damping = 0.985;
   resetFlightAssistState();
   resetCombatSessionStats(combatState);
+  resetCombatState(combatState);
   combatState.waveNumber = 0;
   combatState.waveComposition = '';
   combatState.heat = 0;
@@ -1384,7 +1426,18 @@ function enterFlightMode() {
   playerMissiles.forEach(missile => deactivateCombatObject(missile));
 
   ttsEngine.speak('USSYVERSE DOGFIGHT MODE ACTIVATED. WELCOME, OPERATOR.', { rate: 1.0, pitch: 0.72, priority: 'high' });
-  showFlightStartupChoice();
+  if (pendingRunState) {
+    if (applySavedRunState(pendingRunState)) {
+      showGameMessage({ type: 'PREVIOUS RUN DETECTED', source: 'SESSION STORAGE', text: 'PREVIOUS RUN DETECTED. SESSION STATE RESTORED.', choices: [{ key: 'space', code: 'Space', label: 'CONTINUE', action: () => dismissGameMessage() }], ttsPriority: 'normal' });
+    } else {
+      clearRunState();
+      showFlightStartupChoice();
+    }
+    pendingRunState = null;
+  } else {
+    clearRunState();
+    showFlightStartupChoice();
+  }
   updateFlightHud(true);
   updateCockpitRadar(0, true);
   if (!isCoarsePointer && renderer.domElement.requestPointerLock) {
@@ -1570,6 +1623,7 @@ function undockFromTradeMenu() {
   flightState.status = 'UNDOCKED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
   flightState.statusUntil = performance.now() + 3000;
   updateFlightHud(true);
+  saveCurrentRunState({ manual: true });
 }
 
 function resetContractState() {
@@ -2175,6 +2229,12 @@ function handleTradeCompleted(trade) {
 
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
+  if (handleBossDeath(combatState, enemy, flightState, { showGameMessage })) {
+    flightState.status = 'DREADNOUGHT DESTROYED +1200CR';
+    flightState.statusUntil = performance.now() + 3000;
+    updateFlightHud(true);
+    return;
+  }
   const pointsBefore = combatState.skillPoints;
   const multiplier = recordKillStreak(combatState, performance.now());
   const creditReward = Math.round(cls.creditReward * multiplier);
@@ -2247,6 +2307,7 @@ function landOnNearestProject() {
   flightState.currentDockedProject = project;
   traderState.docked = true;
   traderState.dockedStation = project.id;
+  saveCurrentRunState({ manual: true });
   sfxEngine.stopEngineHum();
   sfxEngine.startStationAmbient();
   flightState.vel.set(0, 0, 0);
@@ -2465,6 +2526,7 @@ function unlockSkillNode(nodeId) {
   if (skillTree.unlock(nodeId)) {
     ttsEngine.speak(`${node.name} UNLOCKED.`, { ...getVoicePersona('USSYVERSE CONTROL'), priority: 'normal' });
     updateFlightHud(true);
+    saveCurrentRunState({ manual: true });
   }
   showSkillBranch(node.branch);
 }
@@ -2918,6 +2980,10 @@ export function tick(time = 0) {
     if (time - lastPriceDriftTick > 30000) {
       tickPriceDrift();
       lastPriceDriftTick = time;
+    }
+    if (enemies.some(enemy => enemy.userData.active) && time - lastAutoSave > 60000) {
+      saveCurrentRunState();
+      lastAutoSave = time;
     }
     if (time - gameOrchestrator._lastCheck > 1000) {
       gameOrchestrator._lastCheck = time;

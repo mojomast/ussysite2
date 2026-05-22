@@ -1,5 +1,5 @@
 import { FORMATION_ROLES, getDifficultyMultiplier, getDifficultyTier, getEnemyClass, getRandomClassForTier, applyDamageModel } from './combat-overhaul.js';
-import { combatState, queueCombatDebrief, recordCombatHit } from './combat-state.js';
+import { BOSS_SCORE_THRESHOLDS, combatState, queueCombatDebrief, recordCombatHit } from './combat-state.js';
 import { sfxEngine } from './sfx.js';
 import {
   deactivateCombatObject,
@@ -19,6 +19,7 @@ export const enemies = [];
 
 export const ENEMY_BASE_RADIUS = 0.62;
 export const DREADNOUGHT_SCALE = 2.4;
+export const BOSS_DREADNOUGHT_SCALE = 3.2;
 
 let deps = null;
 let combatWasActive = false;
@@ -162,6 +163,25 @@ export function applyEnemyScaleForClass(enemy, cls) {
   return scale;
 }
 
+export function applyBossOverrides(enemy) {
+  if (!enemy) return null;
+  enemy.scale?.setScalar?.(BOSS_DREADNOUGHT_SCALE);
+  enemy.userData.isBoss = true;
+  enemy.userData.health = 18;
+  enemy.userData.maxHealth = 18;
+  enemy.userData.shieldHp = 6;
+  enemy.userData.maxShieldHp = 6;
+  enemy.userData.reward = 800;
+  enemy.userData.radius = ENEMY_BASE_RADIUS * BOSS_DREADNOUGHT_SCALE;
+  enemy.userData.bossPhase = 1;
+  enemy.userData.bossLastPhase = 1;
+  enemy.userData.bossBurstCount = 4;
+  enemy.userData.bossFireCooldownMs = 900;
+  enemy.userData.lastBossEscortAt = 0;
+  buildEnemyHealthPips(enemy);
+  return enemy;
+}
+
 /** Turns off an enemy engine glow without removing the pooled light. */
 export function setEnemyEngineGlowInactive(enemy) {
   const glow = enemy?.userData?.engineGlow;
@@ -239,6 +259,101 @@ export function updateEnemyHealthPips(enemy, now = performance.now()) {
     else if (idx < shieldHp + health) pip.material.color.setHex(0xff3355);
     else pip.material.color.setHex(0x334055);
   });
+}
+
+export function checkBossSpawnThreshold(state = combatState, enemyPool = enemies, flightState = {}) {
+  if (!state || state.bossActive) return false;
+  const thresholdIdx = state.bossThresholdIdx || 0;
+  const threshold = BOSS_SCORE_THRESHOLDS[thresholdIdx];
+  if (!Number.isFinite(threshold) || (flightState.score || 0) < threshold) return false;
+  state.bossThresholdIdx = thresholdIdx + 1;
+  return triggerBossEncounter(state, enemyPool, flightState);
+}
+
+export function triggerBossEncounter(state = combatState, enemyPool = enemies, flightState = {}) {
+  const { addKillFeedEntry, flightForward, showGameMessage, windowRef = globalThis } = requireDeps();
+  if (!state || state.bossActive) return false;
+  state.bossActive = true;
+  state.bossEnemyRef = null;
+  showGameMessage?.({
+    type: 'BOSS SIGNAL DETECTED',
+    source: 'USSYVERSE CONTROL',
+    text: 'ANOMALOUS CAPITAL-SHIP SIGNATURE ON INTERCEPT VECTOR.',
+    choices: []
+  });
+  windowRef.setTimeout?.(() => showGameMessage?.({
+    type: 'THREAT LEVEL CRITICAL',
+    source: 'TACTICAL',
+    text: 'HERMES-DREADNOUGHT INBOUND. BRACE FOR BOSS ENCOUNTER.',
+    choices: []
+  }), 1000);
+  addKillFeedEntry?.('DREADNOUGHT INBOUND');
+  windowRef.setTimeout?.(() => {
+    const boss = enemyPool.find(enemy => !enemy.userData?.active);
+    if (!boss) {
+      state.bossActive = false;
+      return;
+    }
+    spawnEnemy(boss, 0, 0, 'dreadnought');
+    const forward = flightForward?.clone?.() || new THREE.Vector3(0, 0, -1);
+    if (forward.lengthSq() <= 0.000001) forward.set(0, 0, -1);
+    forward.normalize();
+    boss.position.copy(flightState.pos).addScaledVector(forward, 80);
+    applyBossOverrides(boss);
+    state.bossEnemyRef = boss;
+    showGameMessage?.({
+      type: 'BOSS ENCOUNTER',
+      source: 'TACTICAL',
+      text: 'HERMES-DREADNOUGHT HAS ENTERED WEAPONS RANGE.',
+      choices: []
+    });
+    sfxEngine.playFlat('explosion_large', { volume: 0.3 });
+  }, 2800);
+  return true;
+}
+
+export function updateBossAttackPhase(boss, cls, state = combatState, now = performance.now()) {
+  if (!boss?.userData?.isBoss) return 0;
+  const maxHealth = Math.max(1, boss.userData.maxHealth || cls?.health || 1);
+  const ratio = Math.max(0, boss.userData.health || 0) / maxHealth;
+  const previousPhase = boss.userData.bossPhase || 1;
+  let phase = 1;
+  let burstCount = 4;
+  let cooldownMs = 900;
+  if (ratio <= 0.33) {
+    phase = 3;
+    burstCount = 8;
+    cooldownMs = 500;
+  } else if (ratio <= 0.66) {
+    phase = 2;
+    burstCount = 6;
+    cooldownMs = 700;
+  }
+  boss.userData.bossPhase = phase;
+  boss.userData.bossBurstCount = burstCount;
+  boss.userData.bossFireCooldownMs = cooldownMs;
+  boss.userData.bossPhaseChanged = phase !== previousPhase;
+  boss.userData.bossPhaseChangedAt = boss.userData.bossPhaseChanged ? now : (boss.userData.bossPhaseChangedAt || 0);
+  state.bossEnemyRef = boss;
+  return phase;
+}
+
+export function handleBossDeath(state = combatState, boss, flightState = {}, options = {}) {
+  if (!boss?.userData?.isBoss) return false;
+  const { addKillFeedEntry, showGameMessage } = options;
+  state.bossActive = false;
+  state.bossEnemyRef = null;
+  flightState.score = (flightState.score || 0) + 1200;
+  showGameMessage?.({
+    type: 'BOSS DESTROYED',
+    source: 'TACTICAL',
+    text: 'HERMES-DREADNOUGHT DESTROYED. CAPITAL-SHIP THREAT CLEARED.',
+    choices: []
+  });
+  addKillFeedEntry?.('DREADNOUGHT DESTROYED +1200CR');
+  sfxEngine.playFlat('explosion_large', { volume: 1 });
+  deactivateCombatObject(boss);
+  return true;
 }
 
 export function buildEnemyFromClass(enemy, classId) {
@@ -385,6 +500,8 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.phantomPhase = Math.random() * Math.PI * 2;
   enemy.userData.health = cls.health;
   enemy.userData.maxHealth = cls.health;
+  enemy.userData.isBoss = false;
+  enemy.userData.reward = cls.creditReward;
   enemy.userData.classId = cls.id;
   enemy.userData.burstRemaining = 0;
   enemy.userData.burstNextAt = 0;
@@ -405,7 +522,8 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
 }
 
 export function updateCombatObjects(dt) {
-  const { flightRight, flightState, flightTempVec, flightTempVec2, flightUp, getEnemyFireCooldown } = requireDeps();
+  const { flightRight, flightState, flightTempVec, flightTempVec2, flightUp, getEnemyFireCooldown, showGameMessage } = requireDeps();
+  checkBossSpawnThreshold(combatState, enemies, flightState);
   const activeAtFrameStart = enemies.some(enemy => enemy.userData.active);
   playerBullets.forEach(bullet => updateBullet(bullet, dt));
   enemyBullets.forEach(bullet => updateBullet(bullet, dt));
@@ -424,6 +542,22 @@ export function updateCombatObjects(dt) {
     }
     const now = performance.now();
     const cls = getEnemyClass(enemy.userData.classId);
+    const bossPhase = updateBossAttackPhase(enemy, cls, combatState, now);
+    if (enemy.userData.bossPhaseChanged) {
+      enemy.userData.bossPhaseChanged = false;
+      const phaseText = bossPhase === 2
+        ? 'DREADNOUGHT ARMOR BREACHED. WEAPONS CYCLING FASTER.'
+        : 'DREADNOUGHT CORE EXPOSED. ELITE ESCORT PROTOCOL ACTIVE.';
+      showGameMessage?.({ type: `BOSS PHASE ${bossPhase}`, source: 'TACTICAL', text: phaseText, choices: [] });
+    }
+    if (bossPhase === 3 && now - (enemy.userData.lastBossEscortAt || 0) >= 12000) {
+      const eliteActive = enemies.some(item => item !== enemy && item.userData.active && item.userData.classId === 'elite');
+      const escort = enemies.find(item => item !== enemy && !item.userData.active);
+      if (!eliteActive && escort) {
+        enemy.userData.lastBossEscortAt = now;
+        spawnEnemy(escort, Math.PI * 0.5, 0.4, 'elite');
+      }
+    }
     applySpawnApproachBurst(enemy, flightState, cls, dt);
     updateEnemyEngineGlow(enemy, cls, now / 1000);
     if (cls.geometry === 'phantom') applyPhantomOpacityFlicker(enemy, now / 1000);
@@ -468,7 +602,7 @@ export function updateCombatObjects(dt) {
       .sub(enemy.userData._prevPos)
       .divideScalar(dt > 0 ? dt : 0.016);
     enemy.userData._prevPos.copy(enemy.position);
-    enemy.lookAt(flightState.pos);
+    if (cls.geometry !== 'phantom') enemy.lookAt(flightState.pos);
     if (enemy.userData.rotationRate > 0) {
       enemy.rotateOnAxis(enemy.userData.rotationAxis, enemy.userData.rotationRate * dt);
     }
@@ -476,7 +610,7 @@ export function updateCombatObjects(dt) {
     enemy.userData.cooldown -= dt * 1000;
 
     if (enemy.userData.cooldown <= 0 && dist < aggressionRadius) {
-      enemy.userData.burstRemaining = cls.burstCount;
+      enemy.userData.burstRemaining = enemy.userData.isBoss ? enemy.userData.bossBurstCount : cls.burstCount;
       enemy.userData.burstNextAt = now;
       enemy.userData.cooldown = Infinity;
     }
@@ -494,7 +628,7 @@ export function updateCombatObjects(dt) {
       enemy.userData.burstRemaining -= 1;
       enemy.userData.burstNextAt = now + cls.burstDelay;
       if (enemy.userData.burstRemaining <= 0) {
-        const fireCooldown = getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown);
+        const fireCooldown = enemy.userData.isBoss ? enemy.userData.bossFireCooldownMs : getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown);
         enemy.userData.cooldown = fireCooldown + Math.random() * fireCooldown * 0.45;
       }
     }

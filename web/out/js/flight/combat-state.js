@@ -18,6 +18,8 @@ const defaultFlightState = {
 
 let activeFlightState = defaultFlightState;
 
+export const BOSS_SCORE_THRESHOLDS = [1500, 4000, 8000];
+
 export const combatState = {
   xp: 0,
   xpToNextPoint: 100,
@@ -56,12 +58,24 @@ export const combatState = {
   peakKillStreak: 0,
   waveNumber: 0,
   waveComposition: '',
+  bossActive: false,
+  bossEnemyRef: null,
+  bossThresholdIdx: 0,
+  activeBountyHunter: null,
+  activeFriendlyEscort: null,
   bountyPending: 0,
   overchargeUsed: false,
   lastAdrenalineBarkAt: 0,
   lastAdrenalineFrame: 0,
   resources: null
 };
+
+export function reset(state = combatState) {
+  state.bossActive = false;
+  state.bossEnemyRef = null;
+  state.bossThresholdIdx = 0;
+  return state;
+}
 
 export const COMBAT_PHASES = {
   IDLE: 'IDLE',
@@ -93,6 +107,7 @@ export function respawnFlightState(state, base = {}) {
   resetCombatSessionStats(combatState);
   combatState.waveNumber = 0;
   combatState.waveComposition = '';
+  reset(combatState);
   return state;
 }
 
@@ -140,6 +155,8 @@ export function resetCombatSessionStats(state = combatState) {
   state.shotsFired = 0;
   state.shotsHit = 0;
   state.peakKillStreak = 0;
+  state.activeBountyHunter = null;
+  state.activeFriendlyEscort = null;
   return state;
 }
 

@@ -5,11 +5,24 @@ import { combatState } from './combat-state.js';
 
 let deps = {};
 let radarLastUpdate = 0;
+const killFeedEntries = [];
 const RADAR_TRAJECTORY_SECONDS = 1.2;
 const RADAR_TRAJECTORY_MAX_PX = 14;
 
 export function configureHud(options = {}) {
   deps = { ...deps, ...options };
+}
+
+export function addKillFeedEntry(text, { type = 'info', now = performance.now() } = {}) {
+  const entry = { text, type, at: now };
+  killFeedEntries.unshift(entry);
+  killFeedEntries.length = Math.min(killFeedEntries.length, 6);
+  const { flightState } = deps;
+  if (flightState && text) {
+    flightState.status = text;
+    flightState.statusUntil = now + (type === 'warning' ? 3000 : 1800);
+  }
+  return entry;
 }
 
 export function mapRadarPoint(targetPos, radius) {

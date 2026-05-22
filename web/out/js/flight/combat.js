@@ -5,12 +5,16 @@ export {
   buildEnemyGeometry,
   buildEnemyHealthPips,
   buildEnemyMaterial,
+  checkBossSpawnThreshold,
   configureEnemies,
   createEnemyPool,
   enemies,
   getEnemyDamageUnits,
+  handleBossDeath,
   spawnEnemy,
+  triggerBossEncounter,
   updateCombatObjects,
+  updateBossAttackPhase,
   updateEnemyHealthPips
 } from './enemies.js';
 
