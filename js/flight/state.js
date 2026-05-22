@@ -1465,6 +1465,26 @@ function addCombatCredits(value) {
   if (value > 0 && isFlightActive) showCreditGain(value);
 }
 
+function triggerEnemyDeathFeedback(enemy, cls) {
+  const isDreadnought = cls.id === 'dreadnought';
+  const overlay = globalThis.document?.getElementById?.('cockpit-overlay');
+  if (overlay) {
+    const color = `#${cls.color.toString(16).padStart(6, '0')}`;
+    const durationMs = isDreadnought ? 400 : 180;
+    overlay.style.setProperty('--death-flash-color', color);
+    overlay.style.setProperty('--death-flash-duration', `${durationMs}ms`);
+    overlay.classList.remove('enemy-death-flash');
+    void overlay.offsetWidth;
+    overlay.classList.add('enemy-death-flash');
+    globalThis.setTimeout?.(() => overlay.classList.remove('enemy-death-flash'), durationMs);
+  }
+  if (enemy?.userData?.engineGlow) {
+    enemy.userData.engineGlow.intensity = isDreadnought ? 12.0 : 6.0;
+    enemy.userData.engineGlowDeathSpike = true;
+  }
+  if (isDreadnought) sfxEngine.playFlat('explosion_large', { volume: 0.9 });
+}
+
 function announceEnemyWave(waveEnemies = []) {
   const spawned = waveEnemies.filter(enemy => enemy?.userData?.active);
   if (!spawned.length) return;
@@ -2161,6 +2181,7 @@ function handleEnemyDestroyed(enemy) {
   const xpReward = Math.round(cls.xpReward * multiplier);
   const isBountyKill = gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId;
   recordCombatKillStats({ creditsEarned: isBountyKill ? 0 : creditReward, xpEarned: xpReward }, combatState);
+  triggerEnemyDeathFeedback(enemy, cls);
   sfxEngine.playPositional('explosion', enemy, { volume: 0.9 });
   emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position, xpReward });
   registerMissionKill(enemy);

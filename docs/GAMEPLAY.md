@@ -25,6 +25,23 @@ Kill streaks chain within a four-second window. Rewards scale to `1.5x` at two k
 
 Wave announcements use the resolved enemy classes in each spawn batch, for example `3x SWARM SPECIALIST, 1x NEXUSSY OPERATOR`. Dreadnought spawns trigger a critical message, TTS warning, and red cockpit edge flash.
 
+Delayed enemy spawns now enter with a short approach burst once their delay expires, so waves lunge into the arena instead of drifting in from their spawn point. Elite aggressors and flankers add a side-to-side strafe relative to the player's current right vector, while support elites keep the longer-range support behavior.
+
+## Enemy Visual Design
+
+Enemy visuals are class-driven in `js/flight/enemies.js`. Every pooled enemy owns a small engine `PointLight` that is created with the pool, recolored on spawn, pulsed while active, boosted during burst fire, and turned off when inactive or recycled.
+
+| Enemy | Visual Identity |
+| --- | --- |
+| Scout | Fast drone-like tumble around a tilted axis with the class engine glow color. |
+| Interceptor | Moderate pure-roll rotation that reads like a fast approach craft. |
+| Gunboat | Slow yaw-only rotation with deliberate heavy-ship motion. |
+| Elite | Sharp diagonal spins plus non-support strafe oscillation for a harder target profile. |
+| Dreadnought | No tumble, `2.4x` pooled group scale, brighter engine glow, critical spawn alert, longer death flash, and large explosion SFX. |
+| Phantom | Fast disorienting spin with randomized opacity flicker across body and wing materials. |
+
+Enemy death flashes the cockpit overlay using the destroyed class color. Standard enemies use a short 180ms flash and engine glow spike; dreadnought kills use a 400ms flash and stronger glow/audio burst.
+
 ## Assists
 
 Match speed displays `SPEED MATCH ACTIVE` under the reticle while the assist is engaged. Evasion uses `C`, applies a lateral burst, starts a cooldown, flashes the cockpit overlay, and rolls the camera briefly.

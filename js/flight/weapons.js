@@ -30,8 +30,22 @@ export function deactivateCombatObject(object) {
   object.visible = false;
   object.userData.active = false;
   object.userData.life = 0;
+  if (object.userData.classId) {
+    object.scale?.setScalar?.(1.0);
+    object.userData.radius = object.userData.baseRadius || 0.62;
+  }
   if (object.userData.trail) object.userData.trail.visible = false;
   if (object.userData.exhaust) object.userData.exhaust.visible = false;
+  if (object.userData.engineGlow) {
+    if (object.userData.engineGlowDeathSpike) {
+      const glow = object.userData.engineGlow;
+      object.userData.engineGlowDeathSpike = false;
+      if (globalThis.setTimeout) globalThis.setTimeout(() => { glow.intensity = 0; }, 0);
+      else glow.intensity = 0;
+    } else {
+      object.userData.engineGlow.intensity = 0;
+    }
+  }
 }
 
 export function createWeaponProjectilePools({ THREE: ThreeRef = THREE, gameRoot, maxPlayerBullets, maxEnemyBullets, maxPlayerMissiles, playerLaserStreakLength, playerLaserTrailPoints, playerLaserMaxDistanceSq }) {

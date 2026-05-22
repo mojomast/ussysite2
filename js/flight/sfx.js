@@ -3,10 +3,11 @@ import { getCamera, getScene } from '../engine/scene.js';
 
 const THREE = globalThis.THREE;
 
-const BUFFER_TYPES = ['laser', 'missile', 'explosion', 'shield_hit', 'enemy_laser', 'ui_confirm', 'ui_deny'];
+const BUFFER_TYPES = ['laser', 'missile', 'explosion', 'explosion_large', 'shield_hit', 'enemy_laser', 'ui_confirm', 'ui_deny'];
 const NON_POSITIONAL_POOL_SIZES = {
   laser: 8,
   missile: 4,
+  explosion_large: 2,
   shield_hit: 4,
   ui_confirm: 2,
   ui_deny: 2
@@ -354,23 +355,24 @@ export const sfxEngine = {
         return [Math.tanh(ignition + whoosh + rumble), phase];
       });
     }
-    if (type === 'explosion') {
-      const duration = 0.65;
+    if (type === 'explosion' || type === 'explosion_large') {
+      const large = type === 'explosion_large';
+      const duration = large ? 0.95 : 0.65;
       let last = 0;
       let rumble = 0;
       let thumpPhase = 0;
       return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
         const white = Math.random() * 2 - 1;
-        const shockwave = t < 0.03 ? white * Math.exp(-t / 0.008) * 0.9 : 0;
+        const shockwave = t < 0.04 ? white * Math.exp(-t / 0.01) * (large ? 1.15 : 0.9) : 0;
         last = last * 0.84 + white * 0.16;
         rumble = rumble * 0.96 + white * 0.04;
-        const bodyAmp = t < 0.03 ? 0 : Math.exp(-(t - 0.03) / 0.32);
-        const debris = (last * 0.6 + rumble * 0.4) * bodyAmp * 1.15;
-        const thumpProgress = Math.min(1, t / 0.2);
-        const thumpFreq = 74 + (28 - 74) * thumpProgress;
+        const bodyAmp = t < 0.03 ? 0 : Math.exp(-(t - 0.03) / (large ? 0.48 : 0.32));
+        const debris = (last * 0.6 + rumble * 0.4) * bodyAmp * (large ? 1.45 : 1.15);
+        const thumpProgress = Math.min(1, t / (large ? 0.3 : 0.2));
+        const thumpFreq = (large ? 58 : 74) + ((large ? 18 : 28) - (large ? 58 : 74)) * thumpProgress;
         thumpPhase += (Math.PI * 2 * thumpFreq) / sampleRate;
-        const subKick = t < 0.2 ? Math.sin(thumpPhase) * Math.pow(1 - thumpProgress, 2.5) * 0.55 : 0;
-        const metallicRing = Math.sin(Math.PI * 2 * 820 * t) * Math.exp(-t / 0.035) * 0.12;
+        const subKick = t < (large ? 0.3 : 0.2) ? Math.sin(thumpPhase) * Math.pow(1 - thumpProgress, 2.5) * (large ? 0.78 : 0.55) : 0;
+        const metallicRing = Math.sin(Math.PI * 2 * (large ? 520 : 820) * t) * Math.exp(-t / 0.045) * (large ? 0.18 : 0.12);
         return [Math.tanh(shockwave + debris + subKick + metallicRing), phase];
       });
     }

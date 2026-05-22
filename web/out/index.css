@@ -2699,6 +2699,23 @@ body.flight-active:not(.flight-third-person) .cockpit-overlay {
 
 @keyframes evasion-fade { from { opacity: 0.18; } to { opacity: 0; } }
 
+.cockpit-overlay.enemy-death-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center,
+    color-mix(in srgb, var(--death-flash-color, #ff3355) 28%, transparent) 0%,
+    transparent 70%);
+  animation: death-flash-fade var(--death-flash-duration, 0.18s) ease-out forwards;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes death-flash-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .cockpit-overlay.dreadnought-alert {
   box-shadow: inset 0 0 60px 20px rgba(255, 0, 0, 0.35);
   transition: box-shadow 1.2s ease-out;

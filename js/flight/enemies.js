@@ -17,6 +17,9 @@ const THREE = globalThis.THREE;
 
 export const enemies = [];
 
+export const ENEMY_BASE_RADIUS = 0.62;
+export const DREADNOUGHT_SCALE = 2.4;
+
 let deps = null;
 let combatWasActive = false;
 
@@ -33,7 +36,11 @@ export function createEnemyPool({ THREE: ThreeRef = THREE, gameRoot, maxEnemies 
   for (let i = 0; i < maxEnemies; i++) {
     const enemy = new ThreeRef.Group();
     enemy.visible = false;
-    enemy.userData = { active: false, health: 1, maxHealth: 1, cooldown: 500 + Math.random() * 1200, radius: 0.62, classId: 'scout' };
+    enemy.userData = { active: false, health: 1, maxHealth: 1, cooldown: 500 + Math.random() * 1200, radius: ENEMY_BASE_RADIUS, classId: 'scout', baseRadius: ENEMY_BASE_RADIUS };
+    const glow = new ThreeRef.PointLight(0xff3355, 0, 8, 2);
+    glow.position.set(0, 0, 0.6);
+    enemy.userData.engineGlow = glow;
+    enemy.add(glow);
     gameRoot.add(enemy);
     enemies.push(enemy);
   }
@@ -119,6 +126,88 @@ export function buildEnemyGeometry(classId) {
   return group;
 }
 
+/** Assigns class-specific idle tumble speed in radians per second. */
+export function assignRotationRate(cls) {
+  const rates = {
+    scout: 0.9,
+    interceptor: 0.45,
+    gunboat: 0.08,
+    elite: 0.65,
+    dreadnought: 0.0,
+    phantom: 1.4
+  };
+  const baseRate = rates[cls.id] ?? 0.3;
+  return baseRate === 0 ? 0 : baseRate + (Math.random() - 0.5) * 0.12;
+}
+
+/** Assigns class-specific idle tumble axis. */
+export function assignRotationAxis(cls) {
+  const axes = {
+    scout: new THREE.Vector3(0.3, 1, 0.2).normalize(),
+    interceptor: new THREE.Vector3(0, 0, 1),
+    gunboat: new THREE.Vector3(0, 1, 0),
+    elite: new THREE.Vector3(0.5, 0.5, 0.5).normalize(),
+    dreadnought: new THREE.Vector3(0, 1, 0),
+    phantom: new THREE.Vector3(1, 0.6, 0.4).normalize()
+  };
+  return axes[cls.id] ?? new THREE.Vector3(0, 1, 0);
+}
+
+/** Applies pooled enemy visual scale and collision radius for the resolved class. */
+export function applyEnemyScaleForClass(enemy, cls) {
+  const scale = cls.id === 'dreadnought' ? DREADNOUGHT_SCALE : 1.0;
+  enemy.scale?.setScalar?.(scale);
+  enemy.userData.baseRadius = ENEMY_BASE_RADIUS;
+  enemy.userData.radius = ENEMY_BASE_RADIUS * scale;
+  return scale;
+}
+
+/** Turns off an enemy engine glow without removing the pooled light. */
+export function setEnemyEngineGlowInactive(enemy) {
+  const glow = enemy?.userData?.engineGlow;
+  if (!glow) return;
+  glow.intensity = 0;
+}
+
+/** Pulses the pooled engine glow for one active enemy. */
+export function updateEnemyEngineGlow(enemy, cls, time) {
+  const glow = enemy?.userData?.engineGlow;
+  if (!glow || !enemy.userData.active || !enemy.visible) {
+    setEnemyEngineGlowInactive(enemy);
+    return 0;
+  }
+  const baseIntensity = cls.id === 'dreadnought' ? 2.8 : 0.9;
+  const pulse = Math.sin(time * 4.5 + (enemy.userData.phantomPhase ?? 0)) * 0.18;
+  glow.intensity = baseIntensity + pulse;
+  if (enemy.userData.burstRemaining > 0) glow.intensity *= 1.6;
+  return glow.intensity;
+}
+
+/** Applies the one-frame delayed-spawn lunge toward the player. */
+export function applySpawnApproachBurst(enemy, flightState, cls, dt = 0.016) {
+  if (!enemy?.userData?.spawnApproach) return 0;
+  enemy.userData.spawnApproach = false;
+  if (!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
+  const toPlayer = flightState.pos.clone().sub(enemy.position);
+  if (toPlayer.lengthSq() <= 0.000001) return 0;
+  toPlayer.normalize();
+  const burstSpeed = cls.approachSpeed.far * 2.2;
+  enemy.userData.velocity.addScaledVector(toPlayer, burstSpeed);
+  enemy.position.addScaledVector(toPlayer, burstSpeed * Math.min(Math.max(dt, 0.016), 0.08));
+  return burstSpeed;
+}
+
+/** Adds the elite sidestep oscillation for aggressive/flanking roles. */
+export function applyEliteStrafe(enemy, cls, role, flightRight, time, dt) {
+  if (cls.id !== 'elite' || role === FORMATION_ROLES.SUPPORT) return 0;
+  const strafeFreq = 2.2;
+  const strafeAmp = 4.5;
+  const strafeOffset = Math.sin(time * strafeFreq + (enemy.userData.phantomPhase ?? 0));
+  const delta = strafeOffset * strafeAmp * dt;
+  enemy.position.addScaledVector(flightRight, delta);
+  return delta;
+}
+
 export function buildEnemyHealthPips(enemy) {
   const existing = enemy.userData.healthPips;
   if (existing) enemy.remove(existing);
@@ -154,10 +243,13 @@ export function updateEnemyHealthPips(enemy, now = performance.now()) {
 
 export function buildEnemyFromClass(enemy, classId) {
   const cls = getEnemyClass(classId);
+  const glow = enemy.userData.engineGlow;
   while (enemy.children.length) enemy.remove(enemy.children[0]);
   const geometry = buildEnemyGeometry(cls.id);
   enemy.add(geometry);
+  if (glow) enemy.add(glow);
   enemy.userData.classId = cls.id;
+  enemy.userData.modelRoot = geometry;
   enemy.userData.bodyMaterial = geometry.userData.bodyMaterial;
 }
 
@@ -192,14 +284,20 @@ export function applyEnemyHit(enemy, rawDamage = 12) {
   }
 }
 
-function animatePhantom(enemy) {
-  if (!enemy.userData.bodyMaterial) return;
-  enemy.userData.phantomPulseFrame = (enemy.userData.phantomPulseFrame || 0) + 1;
-  if (enemy.userData.phantomPulseFrame % 80 === 0) {
-    enemy.userData.phantomOpacityTarget = (enemy.userData.phantomOpacityTarget || 0.55) > 0.6 ? 0.55 : 0.82;
-  }
-  const target = enemy.userData.phantomOpacityTarget || 0.55;
-  enemy.userData.bodyMaterial.opacity += (target - enemy.userData.bodyMaterial.opacity) * 0.08;
+/** Applies the phantom body/wing opacity flicker for the current frame. */
+export function applyPhantomOpacityFlicker(enemy, time) {
+  if (!enemy.userData.bodyMaterial) return 0;
+  const phase = enemy.userData.phantomPhase ?? 0;
+  const flicker = Math.sin(time * 3.2 + phase) * 0.15
+    + Math.sin(time * 7.1 + phase * 1.7) * 0.06;
+  const bodyOpacity = Math.max(0.12, 0.52 + flicker);
+  enemy.userData.bodyMaterial.opacity = bodyOpacity;
+  enemy.children[0]?.children?.forEach((child, i) => {
+    if (!child.material || child.userData?.enemyBody || child.userData?.isPip) return;
+    child.material.opacity = Math.max(0.08, 0.38 + flicker * 0.7
+      + Math.sin(time * 5.5 + phase + i * 0.9) * 0.05);
+  });
+  return bodyOpacity;
 }
 
 function getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown) {
@@ -260,6 +358,12 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   }
   const difficultyMultiplier = getDifficultyMultiplier(flightState.score);
   buildEnemyFromClass(enemy, cls.id);
+  applyEnemyScaleForClass(enemy, cls);
+  if (enemy.userData.engineGlow) {
+    const glowColor = new THREE.Color(cls.color);
+    enemy.userData.engineGlow.color.copy(glowColor);
+    enemy.userData.engineGlow.intensity = 0;
+  }
   const angle = Math.random() * Math.PI * 2 + offset;
   const height = (Math.random() - 0.5) * 54;
   const radius = 92 + Math.random() * 58;
@@ -276,6 +380,9 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
     : (enemy.userData.flankDir || 1);
   enemy.userData.velocity = new THREE.Vector3();
   enemy.userData._prevPos = null;
+  enemy.userData.rotationRate = assignRotationRate(cls);
+  enemy.userData.rotationAxis = assignRotationAxis(cls);
+  enemy.userData.phantomPhase = Math.random() * Math.PI * 2;
   enemy.userData.health = cls.health;
   enemy.userData.maxHealth = cls.health;
   enemy.userData.classId = cls.id;
@@ -290,6 +397,7 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.shieldHp = cls.health > 2 ? cls.health - 1 : 0;
   enemy.userData.maxShieldHp = enemy.userData.shieldHp;
   enemy.userData.spawnDelay = delay;
+  enemy.userData.spawnApproach = delay > 0;
   const fireCooldown = getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown);
   enemy.userData.cooldown = fireCooldown + delay * 1000 + Math.random() * fireCooldown;
   enemy.visible = delay <= 0;
@@ -309,11 +417,16 @@ export function updateCombatObjects(dt) {
     if (enemy.userData.spawnDelay > 0) {
       enemy.userData.spawnDelay -= dt;
       if (enemy.userData.spawnDelay <= 0) enemy.visible = true;
-      return;
+      else {
+        setEnemyEngineGlowInactive(enemy);
+        return;
+      }
     }
     const now = performance.now();
     const cls = getEnemyClass(enemy.userData.classId);
-    if (cls.geometry === 'phantom') animatePhantom(enemy);
+    applySpawnApproachBurst(enemy, flightState, cls, dt);
+    updateEnemyEngineGlow(enemy, cls, now / 1000);
+    if (cls.geometry === 'phantom') applyPhantomOpacityFlicker(enemy, now / 1000);
     if (enemy.userData.bodyMaterial && enemy.userData.flashUntil && now >= enemy.userData.flashUntil) {
       enemy.userData.bodyMaterial.color.setHex(cls.color);
       enemy.userData.flashUntil = 0;
@@ -338,6 +451,7 @@ export function updateCombatObjects(dt) {
     } else {
       enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
     }
+    applyEliteStrafe(enemy, cls, role, flightRight, now / 1000, dt);
     if (cls.evasion > 0) {
       enemy.userData.evasionTimer = Math.max(0, (enemy.userData.evasionTimer || 0) - dt * 1000);
       if (enemy.userData.evasionTimer <= 0 && Math.random() < cls.evasion) {
@@ -355,6 +469,9 @@ export function updateCombatObjects(dt) {
       .divideScalar(dt > 0 ? dt : 0.016);
     enemy.userData._prevPos.copy(enemy.position);
     enemy.lookAt(flightState.pos);
+    if (enemy.userData.rotationRate > 0) {
+      enemy.rotateOnAxis(enemy.userData.rotationAxis, enemy.userData.rotationRate * dt);
+    }
     if (now < (enemy.userData.stunUntil || 0)) return;
     enemy.userData.cooldown -= dt * 1000;
 
