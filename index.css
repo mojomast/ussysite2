@@ -1489,6 +1489,93 @@ body.flight-active .flight-nav-marker.active {
   color: rgba(184, 245, 255, 0.96);
 }
 
+.hidden { display: none !important; }
+
+.nav-panel {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  z-index: 60;
+  width: 200px;
+  padding: 14px;
+  border: 1px solid oklch(1 0 0 / 0.12);
+  border-radius: 6px;
+  background: oklch(0 0 0 / 0.75);
+  pointer-events: auto;
+  color: var(--cyber-cyan, #88ffff);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+body.flight-active .nav-panel:not(.hidden) { display: block; }
+
+.nav-panel.autopilot-active { border-top-color: rgba(0, 255, 102, 0.7); }
+
+.nav-title {
+  color: var(--cyber-cyan);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  margin-bottom: 10px;
+}
+
+.nav-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px;
+  border: 1px solid oklch(1 0 0 / 0.15);
+  border-radius: 4px;
+  background: oklch(0 0 0 / 0.5);
+  color: var(--cyber-cyan, #88ffff);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.nav-btn:hover,
+.nav-btn:focus-visible { background: rgba(0, 240, 255, 0.18); }
+.nav-btn-danger { border-color: #ff335540; color: #ff3355; }
+
+.system-map {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(0.04 0.01 220 / 0.95);
+  pointer-events: auto;
+}
+
+#system-map-canvas {
+  width: min(600px, calc(100vw - 40px));
+  height: min(600px, calc(100vw - 40px));
+  border: 1px solid oklch(1 0 0 / 0.1);
+  border-radius: 4px;
+}
+
+#system-map-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  border: none;
+  background: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.hyperspeed-active {
+  filter: blur(0px);
+  transition: filter 0.4s ease;
+}
+
+.hyperspeed-active.warp-engaged {
+  filter: blur(2px) brightness(1.3);
+}
+
 .mini-meter {
   height: 8px;
   margin: 4px 0 5px;

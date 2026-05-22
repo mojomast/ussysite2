@@ -2,6 +2,7 @@ import { maxPlayerAmmo, maxPlayerMissilesStored } from '../constants.js';
 import { traderState } from '../economy/trader.js';
 import { WEAPON_DEFS, getWeaponDef } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
+import { ensureAutopilotState, isAutopilotActive } from './autopilot.js';
 
 let deps = {};
 let radarLastUpdate = 0;
@@ -11,6 +12,7 @@ const KILL_FEED_MAX_ENTRIES = 4;
 const KILL_FEED_MAX_AGE_MS = 4000;
 const KILL_FEED_RENDER_INTERVAL_MS = 80;
 let bossHudLastUpdate = 0;
+let navHudLastUpdate = 0;
 const killFeedEntries = [];
 const RADAR_TRAJECTORY_SECONDS = 1.2;
 const RADAR_TRAJECTORY_MAX_PX = 14;
@@ -253,6 +255,36 @@ export function updateBossHealthBar(state = combatState, time = performance.now(
   return true;
 }
 
+export function updateNavHUD(flightState, combatStateArg, force = false, documentRef = deps.documentRef || document) {
+  const now = performance.now();
+  if (!force && now - navHudLastUpdate < 120) return false;
+  navHudLastUpdate = now;
+  if (!flightState) return false;
+  const autopilot = ensureAutopilotState(flightState);
+  const el = id => documentRef?.getElementById?.(id);
+  const text = (id, value) => { const node = el(id); if (node && node.textContent !== value) node.textContent = value; };
+  const active = isAutopilotActive(flightState);
+  const targetName = autopilot.targetId || (flightState.navNode ? (deps.getProjectNodeName?.(flightState.navNode) || 'TARGET') : '-- NO TARGET --');
+  const distance = Number.isFinite(flightState.navDistance) ? `${Math.round(flightState.navDistance)}u` : '--';
+  const hops = Array.isArray(autopilot.route) && autopilot.route.length ? `${Math.max(0, autopilot.route.length - 1)} HOPS` : '--';
+  const status = autopilot.blockedReason || (active ? `AUTOPILOT ${autopilot.state}` : 'AUTOPILOT OFFLINE');
+  text('nav-target-name', targetName);
+  text('nav-distance', distance);
+  text('nav-eta', `ETA ${flightState.navEta || '--'}`);
+  text('nav-route-hops', hops);
+  text('nav-autopilot-status', status);
+  text('nav-panel-state', autopilot.state);
+  text('nav-panel-target', targetName);
+  text('nav-panel-route', Array.isArray(autopilot.route) && autopilot.route.length ? autopilot.route.join(' > ') : '--');
+  text('nav-panel-speed', `${(autopilot.hyperspeedMult ?? 1).toFixed(1)}x`);
+  text('nav-panel-blocked', autopilot.blockedReason || (combatStateArg?.bossActive ? 'BOSS ACTIVE' : '--'));
+  const panel = el('nav-panel');
+  if (panel) panel.classList.toggle('autopilot-active', active);
+  el('nav-engage-btn')?.classList.toggle('hidden', active);
+  el('nav-abort-btn')?.classList.toggle('hidden', !active);
+  return true;
+}
+
 export function updateFlightHud(force = false) {
   const {
     camera,
@@ -299,7 +331,9 @@ export function updateFlightHud(force = false) {
   text('flight-crosshair-target', flightState.crosshairNode ? `${getProjectNodeName(flightState.crosshairNode)} // PRESS V` : 'NO PROJECT');
   text('flight-nav-target', flightState.navNode ? `${getProjectNodeName(flightState.navNode)} ${Math.round(flightState.navDistance)}u` : 'NONE');
   text('flight-nav-eta', flightState.navEta);
-  text('flight-autopilot', flightState.autopilot ? 'P: ON' : 'P: OFF');
+  const autopilotActive = isAutopilotActive(flightState);
+  text('flight-autopilot', autopilotActive ? 'P: ON' : 'P: OFF');
+  updateNavHUD(flightState, combatState, force, documentRef);
   text('flight-speed', `${speed.toFixed(1)}u/s`);
   width('flight-speed-bar', `${Math.min(100, (speed / 38) * 100).toFixed(1)}%`);
   const matchSpeedEl = el('hud-match-speed-active');
@@ -445,7 +479,7 @@ export function updateFlightHud(force = false) {
     });
   }
 
-  text('flight-nav-telemetry-c', `${flightState.autopilot ? 'AP: ON' : 'AP: OFF'} // ETA:${flightState.navEta}`);
+  text('flight-nav-telemetry-c', `${autopilotActive ? 'AP: ON' : 'AP: OFF'} // ETA:${flightState.navEta}`);
   const cockpitOverlayEl = el('cockpit-overlay');
   if (cockpitOverlayEl) {
     const inCombat = enemies.some(e => e.userData.active) || combatState.adrenaline > 0;

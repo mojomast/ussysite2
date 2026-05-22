@@ -1,6 +1,7 @@
 import { combatState, decayKillStreakTimer } from './combat-state.js';
 import { sfxEngine } from './sfx.js';
 import { traderState, updateFuelDrain } from '../economy/trader.js';
+import { isAutopilotActive } from './autopilot.js';
 
 const THREE = globalThis.THREE;
 
@@ -249,7 +250,7 @@ export function updateFlight(time = 0) {
   const isThrusting = flightState.keys.has('KeyW') || flightState.keys.has('KeyS')
     || flightState.keys.has('ArrowUp') || flightState.keys.has('ArrowDown')
     || (flightState.throttleEnabled && flightState.throttleLevel > 0)
-    || flightState.autopilot;
+    || isAutopilotActive(flightState);
   const fuelDrainScale = 1 + flightState.vel.length() * 0.012;
   if (updateFuelDrain(dt * fuelDrainScale, isThrusting) && !flightState.fuelDepleted) {
     flightState.fuelDepleted = true;

@@ -1,3 +1,5 @@
+import { AUTOPILOT_STATES, disengage, ensureAutopilotState, isAutopilotActive } from './autopilot.js';
+
 export let flightNavLine = null;
 const THREE = globalThis.THREE;
 export const navTempVec = typeof THREE !== 'undefined' ? new THREE.Vector3() : null;
@@ -55,7 +57,8 @@ export function updateFlightNavigation() {
   if (!flightState.navNode || !flightState.navNode.visible) {
     flightState.navDistance = Infinity;
     flightState.navEta = '--';
-    flightState.autopilot = false;
+    const autopilot = ensureAutopilotState(flightState);
+    if (isAutopilotActive(flightState) && !autopilot.targetId) disengage(flightState, 'NAV TARGET LOST');
     updateFlightNavLine();
     return;
   }
@@ -102,16 +105,19 @@ export function toggleAutopilot() {
     updateFlightHud(true);
     return;
   }
-  flightState.autopilot = !flightState.autopilot;
-  flightState.status = flightState.autopilot ? `AUTOPILOT ENROUTE: ${getProjectNodeName(flightState.navNode).toUpperCase()}` : 'AUTOPILOT DISENGAGED';
+  const autopilot = ensureAutopilotState(flightState);
+  const active = isAutopilotActive(flightState);
+  autopilot.state = active ? AUTOPILOT_STATES.IDLE : AUTOPILOT_STATES.ENGAGED;
+  autopilot.blockedReason = active ? 'MANUAL' : null;
+  flightState.status = !active ? `AUTOPILOT ENROUTE: ${getProjectNodeName(flightState.navNode).toUpperCase()}` : 'AUTOPILOT DISENGAGED';
   flightState.statusUntil = performance.now() + 2400;
   updateFlightHud(true);
 }
 
 export function disableAutopilot(reason) {
   const { flightState } = requireDeps();
-  if (!flightState.autopilot) return;
-  flightState.autopilot = false;
+  if (!isAutopilotActive(flightState)) return;
+  disengage(flightState, reason || 'MANUAL');
   if (reason) {
     flightState.status = reason;
     flightState.statusUntil = performance.now() + 1800;
@@ -120,7 +126,8 @@ export function disableAutopilot(reason) {
 
 export function updateAutopilot(dt) {
   const { activeUniverseScale, flightForward, flightState, flightUp, landingRange, updateFlightBasis } = requireDeps();
-  if (!flightState.autopilot || !flightState.navNode) return;
+  const autopilot = ensureAutopilotState(flightState);
+  if (!isAutopilotActive(flightState) || !flightState.navNode || autopilot.targetId) return;
   navTempVec.copy(flightState.navNode.position).sub(flightState.pos);
   const distance = navTempVec.length();
   const universeScale = typeof activeUniverseScale === 'function' ? activeUniverseScale() : activeUniverseScale;
@@ -218,7 +225,7 @@ export function updateFlightNavMarker({ camera, flightNavMarker, isFlightActive,
   y = THREE.MathUtils.clamp(y, margin, windowRef.innerHeight - margin);
   flightNavMarker.style.left = `${x}px`;
   flightNavMarker.style.top = `${y}px`;
-  flightNavMarker.textContent = `NAV ${getProjectNodeName(flightState.navNode)}\n${Math.round(flightState.navDistance)}u // ETA ${flightState.navEta}\nAUTO ${flightState.autopilot ? 'ON' : 'OFF'}`;
+  flightNavMarker.textContent = `NAV ${getProjectNodeName(flightState.navNode)}\n${Math.round(flightState.navDistance)}u // ETA ${flightState.navEta}\nAUTO ${isAutopilotActive(flightState) ? 'ON' : 'OFF'}`;
   flightNavMarker.classList.toggle('active', true);
   flightNavMarker.classList.toggle('offscreen', offscreen);
 }

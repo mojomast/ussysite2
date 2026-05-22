@@ -10,6 +10,7 @@ import {
 } from './ui/orbit.js';
 import { registerHeroListeners } from './ui/hero.js';
 import { toggleInventoryPanel } from './ui/inventory-panel.js';
+import { createAutopilotState } from './flight/autopilot.js';
 
 const THREE = globalThis.THREE;
 
@@ -60,7 +61,7 @@ export const flightState = {
   navNode: null,
   navDistance: Infinity,
   navEta: '--',
-  autopilot: false,
+  autopilot: createAutopilotState(),
   status: 'TYPE USSY TO LAUNCH',
   statusUntil: 0,
   landed: false,

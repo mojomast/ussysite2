@@ -140,6 +140,7 @@ import {
 import { flightUniverseScale, isCoarsePointer, maxPlayerAmmo, maxPlayerMissilesStored, prefersReducedMotion } from '../constants.js';
 import { combatAudio, configureFlightAudio, gameSettings, radioChain, setChatterVolume, setRadioVolume, setSfxVolume, setTTSBackendEnabled, ttsEngine, volumePercent } from './audio.js';
 import { sfxEngine } from './sfx.js';
+import { disengage, ensureAutopilotState } from './autopilot.js';
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
@@ -1402,7 +1403,8 @@ function enterFlightMode() {
   flightState.navNode = null;
   flightState.navDistance = Infinity;
   flightState.navEta = '--';
-  flightState.autopilot = false;
+  ensureAutopilotState(flightState);
+  disengage(flightState, 'RESET');
   flightState.landed = false;
   flightState.shieldCriticalSpoken = false;
   flightState.hullCriticalLogged = false;
@@ -1461,7 +1463,8 @@ function exitFlightMode(releasePointer = true) {
   flightState.navNode = null;
   flightState.navDistance = Infinity;
   flightState.navEta = '--';
-  flightState.autopilot = false;
+  ensureAutopilotState(flightState);
+  disengage(flightState, 'EXIT');
   flightState.currentDockedProject = null;
   flightState.vel.set(0, 0, 0);
   resetFlightAssistState();
