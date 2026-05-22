@@ -86,6 +86,7 @@ import {
 import { showDebrief } from './debrief.js';
 import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, toggleHelpMenu } from './help.js';
 import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
+import { loadSettings, saveSettings } from './settings.js';
 import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
   MISSION_INTRO_TEXT,
@@ -508,6 +509,8 @@ const inspectTelemetry = document.getElementById('inspect-telemetry');
 let inspectHowLabel, inspectHowBody;
 
 function restoreCombatStateFromHash() {
+  const cfgMatch = location.hash.match(/:cfg:([A-Za-z0-9+/=]+)/);
+  if (cfgMatch) loadSettings(cfgMatch[1]);
   const hashMatch = location.hash.match(/#save:([A-Za-z0-9+/=]+)/);
   if (hashMatch) {
     deserializeCombatState(hashMatch[1]);
@@ -535,7 +538,7 @@ function saveCombatStateToHash() {
   const encoded = serializeCombatState();
   const reputationEncoded = btoa(JSON.stringify(reputationState.scores));
   const missionEncoded = btoa(JSON.stringify(serializeMissionProgress({ missionState, missionContracts, gameOrchestrator })));
-  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}:ms:${missionEncoded}`);
+  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}:ms:${missionEncoded}:cfg:${saveSettings()}`);
 }
 
 function buildPersistentCombatState() {
