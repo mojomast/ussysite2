@@ -20,8 +20,9 @@ function createSessionStorageMock() {
 }
 
 function validState(overrides = {}) {
+  const { combat: combatOverrides, trader: traderOverrides, rep: repOverrides, ...stateOverrides } = overrides;
   return {
-    v: 2,
+    v: 3,
     ts: 1234,
     combat: {
       score: 12,
@@ -33,21 +34,24 @@ function validState(overrides = {}) {
       maxHull: 100,
       bossThresholdIdx: 1,
       killCount: 3,
-      ...overrides.combat
+      ...combatOverrides
     },
     trader: {
       equippedPrimary: 'laser_mk2',
       equippedSecondary: 'missile_rack',
       inventory: ['laser_mk1', 'laser_mk2', 'missile_rack'],
-      ...overrides.trader
+      activeMissions: [],
+      completedMissionIds: [],
+      bountyLevel: 0,
+      ...traderOverrides
     },
     rep: {
       core: 5,
       tools: -2,
-      ...overrides.rep
+      ...repOverrides
     },
     skills: ['hull_1', 'shield_1'],
-    ...overrides
+    ...stateOverrides
   };
 }
 
@@ -57,7 +61,7 @@ beforeEach(() => {
 });
 
 describe('run state session persistence', () => {
-  it('saves schema v2 to sessionStorage only', () => {
+  it('saves schema v3 to sessionStorage only', () => {
     const combatState = {
       score: 9,
       waveNumber: 3,
@@ -65,6 +69,7 @@ describe('run state session persistence', () => {
       shield: 66,
       bossThresholdIdx: 2,
       sessionKills: 4,
+      activeIntercept: { id: 'intercept-1' },
       primaryWeapon: 'laser_mk2',
       secondaryWeapon: 'railgun',
       ownedWeapons: new Set(['laser_mk1', 'laser_mk2', 'railgun']),
@@ -74,10 +79,10 @@ describe('run state session persistence', () => {
     const reputationState = { scores: { core: 10 } };
     const skillTree = { unlocked: new Set(['hull_1']), getMaxShield: () => 150, getMaxArmor: () => 120 };
 
-    assert.equal(saveRunState(combatState, traderState, reputationState, skillTree), true);
+    assert.equal(saveRunState(combatState, traderState, reputationState, skillTree, { flightState: { civilianTraffic: { ships: [{ id: 'civ-1' }] } } }), true);
     const saved = JSON.parse(globalThis.sessionStorage.getItem(RUN_STATE_KEY));
 
-    assert.equal(saved.v, 2);
+    assert.equal(saved.v, 3);
     assert.equal(saved.ts, 9876);
     assert.equal(saved.combat.score, 9);
     assert.equal(saved.combat.wave, 3);
@@ -85,7 +90,32 @@ describe('run state session persistence', () => {
     assert.equal(saved.combat.hull, 77);
     assert.equal(saved.combat.shieldHp, 66);
     assert.deepEqual(saved.trader.inventory, ['laser_mk1', 'laser_mk2', 'railgun']);
+    assert.deepEqual(saved.trader.activeMissions, []);
+    assert.deepEqual(saved.trader.completedMissionIds, []);
+    assert.equal(saved.trader.bountyLevel, 0);
+    assert.equal(saved.combat.activeIntercept, undefined);
+    assert.equal(saved.flight, undefined);
     assert.deepEqual(saved.skills, ['hull_1']);
+  });
+
+  it('migrates schema v2 saves to schema v3 defaults', () => {
+    globalThis.sessionStorage.setItem(RUN_STATE_KEY, JSON.stringify({
+      ...validState(),
+      v: 2,
+      trader: {
+        equippedPrimary: 'laser_mk2',
+        equippedSecondary: 'missile_rack',
+        inventory: ['laser_mk1']
+      }
+    }));
+
+    const loaded = loadRunState();
+
+    assert.equal(loaded.v, 3);
+    assert.deepEqual(loaded.trader.activeMissions, []);
+    assert.deepEqual(loaded.trader.completedMissionIds, []);
+    assert.equal(loaded.trader.bountyLevel, 0);
+    assert.deepEqual(loaded.flight.surface, { state: 'NONE', planetId: null });
   });
 
   it('returns null for schema v1 saves after schema bump', () => {
@@ -157,6 +187,60 @@ describe('run state session persistence', () => {
     }), true);
     assert.equal(plotted.length, 1);
     assert.equal(plotted[0].targetId, 'hub-alpha');
+  });
+
+  it('round-trips active missions through save and apply', () => {
+    const mission = { id: 'mission-1', type: 'DELIVERY', status: 'ACTIVE', progress: { delivered: false } };
+    const traderState = { activeMissions: [mission], completedMissionIds: ['mission-0'] };
+    const restoredTraderState = {};
+
+    assert.equal(saveRunState(
+      { primaryWeapon: 'laser_mk1', secondaryWeapon: 'missile_rack' },
+      traderState,
+      {},
+      {}
+    ), true);
+    const saved = loadRunState();
+
+    assert.deepEqual(saved.trader.activeMissions, [mission]);
+    assert.deepEqual(saved.trader.completedMissionIds, ['mission-0']);
+    assert.equal(applyRunState(saved, { ownedWeapons: new Set(), unlocked: new Set() }, restoredTraderState, {}, { unlocked: new Set() }), true);
+    assert.deepEqual(restoredTraderState.activeMissions, [mission]);
+    assert.deepEqual(restoredTraderState.completedMissionIds, ['mission-0']);
+  });
+
+  it('round-trips bountyLevel through save and apply', () => {
+    const restoredTraderState = {};
+
+    assert.equal(saveRunState(
+      { primaryWeapon: 'laser_mk1', secondaryWeapon: 'missile_rack' },
+      { bountyLevel: 42 },
+      {},
+      {}
+    ), true);
+    const saved = loadRunState();
+
+    assert.equal(saved.trader.bountyLevel, 42);
+    assert.equal(applyRunState(saved, { ownedWeapons: new Set(), unlocked: new Set() }, restoredTraderState, {}, { unlocked: new Set() }), true);
+    assert.equal(restoredTraderState.bountyLevel, 42);
+  });
+
+  it('round-trips surface planetId through save and apply', () => {
+    const flightState = { surface: { state: 'SURFACE', planetId: 'planet-ferrous', ignoredTransient: true } };
+    const restoredFlightState = {};
+
+    assert.equal(saveRunState(
+      { primaryWeapon: 'laser_mk1', secondaryWeapon: 'missile_rack' },
+      {},
+      {},
+      {},
+      { flightState }
+    ), true);
+    const saved = loadRunState();
+
+    assert.deepEqual(saved.flight.surface, { state: 'SURFACE', planetId: 'planet-ferrous' });
+    assert.equal(applyRunState(saved, { ownedWeapons: new Set(), unlocked: new Set() }, {}, {}, { unlocked: new Set() }, { flightState: restoredFlightState }), true);
+    assert.deepEqual(restoredFlightState.surface, { state: 'SURFACE', planetId: 'planet-ferrous' });
   });
 
   it('loads and clears saved state with storage errors contained', () => {

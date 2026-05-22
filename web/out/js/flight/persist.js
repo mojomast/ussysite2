@@ -2,7 +2,7 @@ import { PLANETS, STATIONS } from './world.js';
 
 export const RUN_STATE_KEY = 'ussysite2.runState.v1';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const ACTIVE_AUTOPILOT_STATES = new Set(['PLOTTING', 'ENGAGED', 'DECELERATING']);
 
 function now() {
@@ -27,6 +27,12 @@ function nonNegativeInteger(value) {
 
 function stringArray(value) {
   return Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0);
+}
+
+function cloneMissions(value) {
+  if (!Array.isArray(value)) return [];
+  const missions = value.filter(item => isObject(item) && typeof item.id === 'string' && typeof item.type === 'string' && typeof item.status === 'string');
+  return typeof structuredClone === 'function' ? structuredClone(missions) : JSON.parse(JSON.stringify(missions));
 }
 
 function missionArray(value) {
@@ -93,6 +99,12 @@ function buildFlightRunState(flightState, options = {}) {
   if (position) flight.position = position;
   if (nearestBody?.body?.id) flight.lastVisitedBodyId = nearestBody.body.id;
   if (autopilotTargetId) flight.autopilotTargetId = autopilotTargetId;
+  if (isObject(flightState?.surface)) {
+    flight.surface = {
+      state: typeof flightState.surface.state === 'string' ? flightState.surface.state : 'NONE',
+      planetId: typeof flightState.surface.planetId === 'string' ? flightState.surface.planetId : null
+    };
+  }
   return Object.keys(flight).length ? flight : null;
 }
 
@@ -122,8 +134,9 @@ function buildRunState(combatState = {}, traderState = {}, reputationState = {},
       equippedPrimary: combatState.primaryWeapon ?? traderState.equippedPrimary ?? null,
       equippedSecondary: combatState.secondaryWeapon ?? traderState.equippedSecondary ?? null,
       inventory: [...(combatState.ownedWeapons || traderState.inventory || [])].filter(item => typeof item === 'string'),
-      activeMissions: Array.isArray(traderState.activeMissions) ? traderState.activeMissions : [],
-      completedMissionIds: Array.isArray(traderState.completedMissionIds) ? traderState.completedMissionIds.filter(item => typeof item === 'string') : []
+      activeMissions: cloneMissions(traderState.activeMissions),
+      completedMissionIds: Array.isArray(traderState.completedMissionIds) ? traderState.completedMissionIds.filter(item => typeof item === 'string') : [],
+      bountyLevel: Math.max(0, Math.round(traderState.bountyLevel ?? combatState.bountyLevel ?? 0))
     },
     rep: cloneReputation(reputationState),
     skills: [...(skillTree.unlocked || combatState.unlocked || [])].filter(item => typeof item === 'string')
@@ -152,10 +165,41 @@ export function loadRunState() {
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (isObject(data) && data.v === 1) return null;
-    return isObject(data) ? data : null;
+    return migrateRunState(data);
   } catch {
     return null;
   }
+}
+
+function defaultSurface() {
+  return { state: 'NONE', planetId: null };
+}
+
+function normalizeSurface(surface) {
+  if (!isObject(surface)) return defaultSurface();
+  return {
+    state: typeof surface.state === 'string' ? surface.state : 'NONE',
+    planetId: typeof surface.planetId === 'string' ? surface.planetId : null
+  };
+}
+
+function migrateRunState(data) {
+  if (!isObject(data) || data.v === 1) return null;
+  if (data.v !== 2 && data.v !== SCHEMA_VERSION) return null;
+  return {
+    ...data,
+    v: SCHEMA_VERSION,
+    trader: {
+      ...(isObject(data.trader) ? data.trader : {}),
+      activeMissions: cloneMissions(data.trader?.activeMissions),
+      completedMissionIds: Array.isArray(data.trader?.completedMissionIds) ? data.trader.completedMissionIds.filter(item => typeof item === 'string') : [],
+      bountyLevel: Math.max(0, Math.round(data.trader?.bountyLevel ?? data.combat?.bountyLevel ?? 0))
+    },
+    flight: {
+      ...(isObject(data.flight) ? data.flight : {}),
+      surface: normalizeSurface(data.flight?.surface)
+    }
+  };
 }
 
 export function clearRunState() {
@@ -183,14 +227,17 @@ function validateRunState(data) {
   if (!nonNegativeInteger(combat.bossThresholdIdx) || !nonNegativeInteger(combat.killCount)) return false;
   if (typeof trader.equippedPrimary !== 'string' || typeof trader.equippedSecondary !== 'string') return false;
   if (!stringArray(trader.inventory) || !stringArray(data.skills)) return false;
-  if (trader.activeMissions !== undefined && !missionArray(trader.activeMissions)) return false;
-  if (trader.completedMissionIds !== undefined && !stringArray(trader.completedMissionIds)) return false;
+  if (!missionArray(trader.activeMissions) || !stringArray(trader.completedMissionIds)) return false;
+  if (!nonNegativeInteger(trader.bountyLevel)) return false;
   if (!Object.values(data.rep).every(value => finiteNumber(value))) return false;
   if (data.flight !== undefined) {
     if (!isObject(data.flight)) return false;
     if (data.flight.position !== undefined && !isValidPositionArray(data.flight.position)) return false;
     if (data.flight.lastVisitedBodyId !== undefined && typeof data.flight.lastVisitedBodyId !== 'string') return false;
     if (data.flight.autopilotTargetId !== undefined && typeof data.flight.autopilotTargetId !== 'string') return false;
+    if (!isObject(data.flight.surface)) return false;
+    if (typeof data.flight.surface.state !== 'string') return false;
+    if (data.flight.surface.planetId !== null && typeof data.flight.surface.planetId !== 'string') return false;
   }
   return true;
 }
@@ -214,6 +261,12 @@ function applyFlightRunState(flight, options = {}) {
   const flightState = options.flightState ?? options.state ?? null;
   if (flightState?.pos && isValidPositionArray(flight.position)) applyPosition(flightState.pos, flight.position);
 
+  if (flightState && isObject(flight.surface)) {
+    flightState.surface ??= {};
+    flightState.surface.state = flight.surface.state;
+    flightState.surface.planetId = flight.surface.planetId;
+  }
+
   const lastVisitedTarget = options.lastVisitedState ?? flightState;
   if (lastVisitedTarget && typeof flight.lastVisitedBodyId === 'string') {
     lastVisitedTarget.lastVisitedBodyId = flight.lastVisitedBodyId;
@@ -231,6 +284,7 @@ function replaceSetContents(targetSet, values) {
 }
 
 export function applyRunState(data, combatState = {}, traderState = {}, reputationState = {}, skillTree = {}, options = {}) {
+  data = migrateRunState(data);
   if (!validateRunState(data)) return false;
   const { combat, trader, rep, skills } = data;
   combatState.score = combat.score;
@@ -252,10 +306,9 @@ export function applyRunState(data, combatState = {}, traderState = {}, reputati
   traderState.equippedPrimary = trader.equippedPrimary;
   traderState.equippedSecondary = trader.equippedSecondary;
   traderState.inventory = [...trader.inventory];
-  traderState.activeMissions = trader.activeMissions
-    ? (typeof structuredClone === 'function' ? structuredClone(trader.activeMissions) : JSON.parse(JSON.stringify(trader.activeMissions)))
-    : [];
-  traderState.completedMissionIds = trader.completedMissionIds ? [...trader.completedMissionIds] : [];
+  traderState.activeMissions = cloneMissions(trader.activeMissions);
+  traderState.completedMissionIds = [...trader.completedMissionIds];
+  traderState.bountyLevel = trader.bountyLevel;
   traderState.missionBoard ??= { declinedMissionIds: [] };
   replaceSetContents(combatState.ownedWeapons, trader.inventory);
   const scores = isObject(reputationState.scores) ? reputationState.scores : reputationState;

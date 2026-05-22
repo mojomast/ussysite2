@@ -42,6 +42,24 @@ js/flight/navgraph.js
 js/flight/autopilot.js
   -> route plotting, autopilot state machine, hyperspeed movement, star-stretch VFX, system map drawing
 
+js/flight/surface.js
+  -> planet approach/orbital/landing/surface/departure state machine and service lookup
+
+js/flight/missions.js
+  -> mission schema, deterministic station board generation, progress, completion, expiry
+
+js/flight/missionUI.js
+  -> mission board overlay rendering, acceptance flow, active mission sidebar, pause integration
+
+js/flight/civilians.js
+  -> civilian fleet spawning, route transit, docking/flee/destruction behavior, map contacts
+
+js/flight/hunters.js
+  -> bounty thresholds, hunter factions, intercept spawning, flee/destroy bounty updates
+
+js/flight/help.js
+  -> four-tab pilot manual content, tab controls, pause integration
+
 js/flight/enemies.js
   -> enemy pools, formation roles, movement, projectile collision, debrief trigger
 
@@ -60,7 +78,7 @@ js/engine/*, js/flight/*, js/ui/*
 user input -> updateFlight physics -> combat objects -> objective/mission state -> orchestrator poll -> game messages -> TTS
 ```
 
-Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, landing checks, objective progression, HUD updates, and radio messages. Flight assists are stateful: static throttle stores `throttleEnabled` and `throttleLevel`, match-speed stores `matchSpeedActive`, `matchSpeedTarget`, and `matchSpeedUntil`, and combat evasion uses `combatState.evasionCooldown` plus `flightState.cameraRollTarget` / `cameraRollCurrent` for the cockpit roll effect.
+Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, surface checks, station docking, mission progress, civilian traffic, bounty hunter intercepts, objective progression, HUD updates, and radio messages. Flight assists are stateful: static throttle stores `throttleEnabled` and `throttleLevel`, match-speed stores `matchSpeedActive`, `matchSpeedTarget`, and `matchSpeedUntil`, and combat evasion uses `combatState.evasionCooldown` plus `flightState.cameraRollTarget` / `cameraRollCurrent` for the cockpit roll effect.
 
 `flightState.autopilot` is now an object, normalized by `ensureAutopilotState(flightState)`. Its shape is:
 
@@ -77,7 +95,9 @@ Keyboard and mouse events mutate `flightState`. The animation loop applies physi
 | `blockedReason` | `string|null` | Last failure/interruption reason shown in HUD/status. |
 | `plotStartedAt` / `engagedAt` | `number` | Timing stamps for plotting delay and engagement. |
 
-Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStreakMultiplier`, `lastKillTime`, and `peakKillStreak`. The cockpit combat log uses `combatState.killFeed` as a four-entry runtime ring buffer and `killFeedDirty` to throttle DOM rerenders in `js/flight/hud.js`. Runtime sortie counters track `sessionKills`, `sessionCredits`, `sessionXp`, `shotsFired`, and `shotsHit`; when a wave clears, `debriefPending` and `debriefData` hand a snapshot to `js/flight/debrief.js`. Boss runtime fields live on `combatState.bossActive`, `bossEnemyRef`, and `bossThresholdIdx`, with `BOSS_SCORE_THRESHOLDS` defining the one-time score gates. `combatState.activeBountyHunter` and `activeFriendlyEscort` prevent duplicate security reputation consequence spawns, while `combatState.activeTurrets` tracks gunboat turret pool entries and is cleared by reset/deactivation.
+Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStreakMultiplier`, `lastKillTime`, and `peakKillStreak`. The cockpit combat log uses `combatState.killFeed` as a four-entry runtime ring buffer and `killFeedDirty` to throttle DOM rerenders in `js/flight/hud.js`. Runtime sortie counters track `sessionKills`, `sessionCredits`, `sessionXp`, `shotsFired`, and `shotsHit`; when a wave clears, `debriefPending` and `debriefData` hand a snapshot to `js/flight/debrief.js`. Boss runtime fields live on `combatState.bossActive`, `bossEnemyRef`, and `bossThresholdIdx`, with `BOSS_SCORE_THRESHOLDS` defining the one-time score gates. `combatState.activeBountyHunter` and `activeFriendlyEscort` prevent duplicate security reputation consequence spawns, while `combatState.activeIntercept` stores the current expansion bounty hunter group. `combatState.activeTurrets` tracks gunboat turret pool entries and is cleared by reset/deactivation.
+
+`flightState.surface` is owned by `surface.js` and uses `NONE`, `APPROACH`, `ORBITAL`, `LANDING`, `SURFACE`, and `DEPARTURE`. `flightState.civilianTraffic` stores the runtime civilian fleet. `flightState.pauseReasons` is the shared pause-source collection used by overlays such as help and the mission board; code should add/remove reasons rather than directly clobbering `flightState.paused`.
 
 ## Space Visuals
 
@@ -129,6 +149,24 @@ type NavGraph = Map<string, NavNode>;
 
 `findRoute(graph, fromId, toId)` runs A* with straight-line distance as the heuristic and returns an ordered array of node ids or `null`. `plotCourse()` chooses the nearest graph node to the player as the route origin, stores the route on `flightState.autopilot`, and starts the `PLOTTING` state.
 
+## Surface State
+
+`checkPlanetProximity()` enters `APPROACH` when the ship moves inside `planet.radius * 1.6`. `updateSurfaceState()` advances approach to `ORBITAL` inside `planet.radius * 1.2`, drives the three-second landing/departure lerps, and returns to `NONE` after departure. `getSurfaceServices()` derives planet services without DOM coupling, leaving HUD rendering and service buttons to `hud.js` and `state.js`.
+
+Only the minimal restore shape is persisted: `flight.surface.state` and `flight.surface.planetId`. Distances, progress, exit flags, visual FOV changes, and atmosphere treatment are recomputed at runtime.
+
+## Mission Board
+
+`js/flight/missions.js` is DOM-free. It defines mission status constants, `createMission(overrides)`, station board generation, acceptance caps, progress updates, reward completion, expiry, and serialization-friendly mission records. `js/flight/missionUI.js` owns DOM rendering for the board, selection detail panel, accept controls, active mission sidebar, and `mission-board` pause reason.
+
+Board generation is deterministic by station/seed and filters completed or declined ids from `traderState.completedMissionIds` and `traderState.missionBoard.declinedMissionIds`. Runtime progress is browser-authoritative: nav arrivals, scan proximity, escort/patrol events, and bounty kills update active mission records in `traderState.activeMissions`.
+
+## Civilian And Hunter Runtime
+
+`js/flight/civilians.js` creates non-combatant freighter, shuttle, and courier entries with `mesh`, `pos`, `vel`, `route`, `currentLeg`, `type`, `homeNodeId`, and `destNodeId`. Civilian fleets are capped, reduced during combat/hyperspeed, culled beyond far LOD, and rendered on the system map, but they are never persisted.
+
+`js/flight/hunters.js` maps bounty levels to `SCOUT`, `WING`, or `SQUADRON` tiers at `500`, `1500`, and `3000`. Active intercepts are spawned on eligible node arrivals, disengage autopilot, mark pooled enemies as hunters, update `traderState.bountyLevel` on flee/destroy outcomes, and draw hunter contacts on the system map. `combatState.activeIntercept` is runtime-only.
+
 ## Audio Data Flow
 
 ```text
@@ -149,23 +187,27 @@ Objective progression is browser-authoritative. Kills advance kill objectives, l
 
 The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions. Kill streaks, wave announcements, shot accuracy, and debrief data are runtime-only and are reset on new sorties or respawn.
 
-`js/flight/persist.js` owns session run-state persistence via `sessionStorage` key `ussysite2.runState.v1`. It exports `saveRunState(combatState, traderState, reputationState, skillTree, options)`, `loadRunState()`, `clearRunState()`, and `applyRunState(data, combatState, traderState, reputationState, skillTree, options)`. The storage key is unchanged, but the active payload schema is now `v: 2`; `loadRunState()` rejects old `v: 1` payloads instead of migrating them.
+`js/flight/persist.js` owns session run-state persistence via `sessionStorage` key `ussysite2.runState.v1`. It exports `saveRunState(combatState, traderState, reputationState, skillTree, options)`, `loadRunState()`, `clearRunState()`, and `applyRunState(data, combatState, traderState, reputationState, skillTree, options)`. The storage key is unchanged, but the active payload schema is now `v: 3`; `loadRunState()` rejects old `v: 1` payloads and migrates `v: 2` payloads to v3 defaults.
 
-Schema v2 keeps the v1 combat/trader/reputation/skills fields and adds optional flight persistence:
+Schema v3 keeps the v2 combat/reputation/skills fields and formalizes mission, bounty, and surface persistence:
 
-| Field | v1 | v2 |
+| Field | v2 | v3 |
 | --- | --- | --- |
-| `v` | `1` | `2` |
+| `v` | `2` | `3` |
 | `ts` | Saved timestamp | Saved timestamp |
-| `combat` | `score`, `wave`, `credits`, `hull`, `shieldHp`, `maxShieldHp`, `maxHull`, `bossThresholdIdx`, `killCount` | Same fields |
-| `trader` | `equippedPrimary`, `equippedSecondary`, `inventory` item ids | Same fields |
+| `combat` | Score, wave, credits, hull, shields, boss threshold, kill count | Same fields; no active intercept persistence |
+| `trader.inventory` | Equipped weapons and inventory item ids | Same fields |
+| `trader.activeMissions` | Optional/legacy | Always an array of mission records with minimal validation |
+| `trader.completedMissionIds` | Optional/legacy | Always an array of string ids |
+| `trader.bountyLevel` | Missing unless custom data existed | Non-negative integer restored to `traderState.bountyLevel` |
 | `rep` | Reputation scores | Same fields |
 | `skills` | Unlocked skill ids | Same fields |
-| `flight.position` | Not present | Optional `[x, y, z]` player position from `flightState.pos` |
-| `flight.lastVisitedBodyId` | Not present | Optional nearest planet/station id, resolved from `PLANETS` and `STATIONS` unless custom bodies are passed |
-| `flight.autopilotTargetId` | Not present | Optional target id persisted only when autopilot is active/engaged/plotting/decelerating |
+| `flight.position` | Optional `[x, y, z]` player position | Same field |
+| `flight.lastVisitedBodyId` | Optional nearest planet/station id | Same field |
+| `flight.autopilotTargetId` | Optional active target id | Same field |
+| `flight.surface` | Missing | `{ state, planetId }`, defaulting to `{ state: 'NONE', planetId: null }` |
 
-Apply validates the full payload before assignment and rejects corrupted data such as negative score, wave below one, hull outside `[1,maxHull]`, invalid position arrays, or non-string persisted body/autopilot ids. When `options.flightState` is supplied, v2 applies saved position, last visited body id, and can re-plot the saved autopilot target if `options.navGraph` and `options.plotCourse` are provided.
+Apply validates the full payload before assignment and rejects corrupted data such as negative score, wave below one, hull outside `[1,maxHull]`, invalid position arrays, invalid mission arrays, negative bounty, or non-string persisted body/autopilot ids. When `options.flightState` is supplied, v3 applies saved position, last visited body id, surface state, and can re-plot the saved autopilot target if `options.navGraph` and `options.plotCourse` are provided. Civilian fleets and active bounty hunter intercepts intentionally stay transient.
 
 ## AI Gameplay Loop
 
@@ -196,10 +238,10 @@ Choice resolution dismisses the current message, applies any choice-1 credit/fue
 | State | Purpose |
 | --- | --- |
 | `flightState` | Ship resources, position, velocity, input, nav, landing, view state, throttle/match-speed/evasion fields, and route autopilot object |
-| `combatState` | XP/skills/loadout, weapon heat, assist cooldowns, kill streak multiplier, wave metadata, boss threshold/ref fields, faction consequence refs, kill feed ring buffer/dirty flag, session stats, debrief queue |
+| `combatState` | XP/skills/loadout, weapon heat, assist cooldowns, kill streak multiplier, wave metadata, boss threshold/ref fields, faction consequence refs, active bounty intercept, kill feed ring buffer/dirty flag, session stats, debrief queue |
 | `missionState` | Current objective, tutorial/free-roam state, multi-step contract progress |
 | `gameMessageState` | Active message, typed text, choices, dismissal handler |
-| `traderState` | Credits, fuel, cargo, docked station, trade log |
+| `traderState` | Credits, fuel, cargo, docked station, trade log, active missions, completed mission ids, mission board state, bounty level |
 | `gameOrchestrator` | Sparse AI event polling, last event timing, pending event, bounty reward |
 
 ## Extending
@@ -222,6 +264,10 @@ Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/f
 | `M` | Toggle system map overlay |
 | `V` | Set navigation from crosshair |
 | `Y` | Toggle autopilot |
+| `L` | Begin landing from orbital surface approach |
+| `B` | Open mission board at eligible docked/landed stations |
+| `H` / `F1` | Toggle help manual |
+| `Escape` | Close overlays |
 
 ## Weapon Definitions
 

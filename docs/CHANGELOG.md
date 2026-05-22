@@ -13,6 +13,23 @@
 - Proximity-based docking for all stations
 - Persist schema v2 with player position and last visited body
 
+## [EXPANSION-2] - 2026-05-22
+### Added
+- Planet surface approach state machine with approach, orbital, landing, surface, and departure states
+- Mission board overlay on `B` with deterministic station contracts, active mission sidebar, rewards, expiry, and progress tracking
+- Ambient civilian traffic with freighter, shuttle, and courier route behavior plus system-map contacts
+- Bounty hunter intercept system with 3 bounty tiers and 3 factions
+- Pilot manual help overlay on `H` / `F1` with controls, how-to-play, universe, and tips tabs
+- Shared pause-reason handling for modal flight overlays
+- Persist schema v3 with active missions, completed mission ids, bounty level, and minimal surface restore
+
+### Changed
+- Autopilot key moved from `P` to `Y`; static throttle moved from `T` to `R`; modal back actions use `Escape` / `Backspace`
+- Schema v2 session saves migrate to v3 defaults while schema v1 remains unsupported
+
+### Fixed
+- Reserved controls for landing, mission board, help, target cycle, and overlay close to avoid keybinding conflicts
+
 ## [NEXT] - 2026-05-22
 ### Added
 - Kill feed / combat log ring buffer (Epic 1)

@@ -16,6 +16,10 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 | `M` | Toggle the system map overlay |
 | `V` | Set nav target from the crosshair |
 | `Y` | Toggle autopilot |
+| `L` | Begin landing when in orbital approach |
+| `B` | Open mission board while docked/landed at a station with missions |
+| `H` / `F1` | Toggle the pilot manual help overlay |
+| `Escape` | Close the active overlay, prioritizing help and mission board |
 | `Shift+C` | Toggle cockpit / third-person camera |
 
 ## Star System
@@ -55,6 +59,24 @@ Autopilot uses the route state machine `IDLE -> PLOTTING -> ENGAGED -> DECELERAT
 
 If plotting fails, the HUD reports `NO NAV ROUTE AVAILABLE` or the autopilot `blockedReason` such as `NO ROUTE FOUND`. Manual override, landing/docking, boss activity, nearby hostiles, hull-critical state, target loss, or hostile interdiction can interrupt travel and set messages such as `AUTOPILOT DISENGAGED: HOSTILE INTERDICTION`.
 
+## Surface Approach
+
+Planet proximity uses the surface state machine in `js/flight/surface.js`. Flying inside `planet.radius * 1.6` enters approach, inside `planet.radius * 1.2` enters orbital state, and `L` begins a short landing sequence. Landed planets show a surface services panel; hostile and anomaly worlds can surface unique actions, while departure reverses the landing progress and returns to normal flight.
+
+Approach and landing temporarily pause or constrain route travel, update the surface HUD with altitude/status, and add close-atmosphere camera/FOV treatment from the flight loop.
+
+## Missions
+
+Stations with mission services expose the mission board with `B` while docked or landed. Boards generate deterministic delivery, patrol, escort, scan, and bounty contracts from the station and navigation graph. The player can accept up to three active missions; accepted missions appear in the active sidebar and progress from local events such as route arrival, scan proximity, and bounty kills.
+
+Mission states use `AVAILABLE`, `ACTIVE`, `COMPLETE`, `FAILED`, and `EXPIRED`. Timed missions expire from elapsed mission time, completion grants credits/fuel/reputation, and declined or completed mission ids are filtered out of future board generation.
+
+## Ambient Traffic And Bounties
+
+Civilian traffic is simulated separately from combat enemies. Freighters, shuttles, and couriers travel between world nodes, dock briefly, flee nearby hostiles, and can be destroyed by heavy combat without becoming combatants. The system map draws civilian contacts by type.
+
+The bounty hunter system tracks `traderState.bountyLevel`. At bounty thresholds `500`, `1500`, and `3000`, hunter intercepts can trigger on node arrival, spawning scout, wing, or squadron groups from `VEGA_CORP`, `IRONCLAD_GUILD`, or `RED_AXIS`. Hunters interrupt autopilot, appear as red triangle system-map contacts, increase bounty if they flee, and reduce bounty when destroyed.
+
 ## Combat
 
 Enemies spawn with formation roles. `aggressor` units push directly toward the player, `flanker` units steer toward a 90-degree side orbit, and `support` units hold around 60 units and only close or retreat outside their preferred band.
@@ -62,6 +84,8 @@ Enemies spawn with formation roles. `aggressor` units push directly toward the p
 ## Reputation
 
 Security reputation now has combat consequences. At `security < -30`, the faction can dispatch one elite `BOUNTY HUNTER` at a time; destroying it pays a 220cr reward and raises security reputation back toward the hostile floor. Bounty hunters and other nearby hostiles can interrupt autopilot/hyperspeed as hostile interdictions. At `security > 40`, a friendly scout escort can join for 25 seconds, orbiting the player and firing at the weakest hostile before fading out.
+
+The expansion bounty system is separate from security reputation consequences: it is driven by `traderState.bountyLevel` and can create tiered hunter intercepts after navigation node arrivals.
 
 ## Radar
 
@@ -114,6 +138,12 @@ Match speed displays `SPEED MATCH ACTIVE` under the reticle while the assist is 
 
 Project nodes still use the existing station services flow. System stations use proximity-based docking: flying within `120` units of Relay Station 7, Hub Alpha, or Fort Kova automatically docks, stops velocity, opens station services, and releases mouselook.
 
+Mission-capable stations allow `B` to open the board from the docked/landed state. The mission board pauses flight through `flightState.pauseReasons` and closes with `Escape`.
+
+## Help Menu
+
+The in-flight pilot manual opens with `H` or `F1`. It contains `CONTROLS`, `HOW TO PLAY`, `UNIVERSE`, and `TIPS & TRICKS` tabs, pauses flight while open, and closes before other overlays when `Escape` is pressed.
+
 ## Post-Combat Debrief
 
 When a combat wave clears, the game queues a debrief overlay for five seconds or until any keypress. It reports kills, accuracy, credits earned, XP earned, and peak streak. Session stats reset when a new sortie, respawn, or wave starts.
@@ -121,3 +151,5 @@ When a combat wave clears, the game queues a debrief overlay for five seconds or
 ## Persistence
 
 Dogfight runs save to `sessionStorage` only. The game restores a valid previous run when flight mode starts, saves manually when docking, undocking, or buying a skill, and autosaves once per minute while enemies are active. Manual saves show `STATE SAVED`; autosaves stay silent.
+
+Run-state schema v3 persists active missions, completed mission ids, bounty level, player position, last visited body, active autopilot target, and the minimal surface restore fields `state` and `planetId`. Civilian traffic fleets and active bounty hunter intercepts remain runtime-only.

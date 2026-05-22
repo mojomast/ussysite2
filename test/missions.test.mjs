@@ -162,7 +162,7 @@ describe('mission board core', () => {
     assert.equal(traderState.activeMissions.length, 0);
   });
 
-  it('persists active missions and completed mission ids without schema v3', () => {
+  it('persists active missions and completed mission ids in schema v3', () => {
     globalThis.sessionStorage = storageMock();
     globalThis.performance = { now: () => 999 };
     const mission = generateMissionsForStation(STATIONS.find(item => item.id === 'relay-7'), graph(), 2)[0];
@@ -170,7 +170,7 @@ describe('mission board core', () => {
 
     assert.equal(saveRunState({ primaryWeapon: 'laser_mk1', secondaryWeapon: 'missile_rack' }, traderState, {}, {}), true);
     const raw = JSON.parse(globalThis.sessionStorage.getItem(RUN_STATE_KEY));
-    assert.equal(raw.v, 2);
+    assert.equal(raw.v, 3);
     assert.equal(raw.trader.activeMissions[0].id, mission.id);
 
     const restoredTrader = {};
