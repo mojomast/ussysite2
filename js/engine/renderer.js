@@ -13,6 +13,9 @@ export function initRendererScene(canvasContainer, { THREE: Three = THREE, isCoa
   renderer = new Three.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(getRenderPixelRatio(isCoarsePointer));
   renderer.setSize(width, height);
+  renderer.toneMapping = Three.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  if (Three.SRGBColorSpace) renderer.outputColorSpace = Three.SRGBColorSpace;
   if (Three.sRGBEncoding) renderer.outputEncoding = Three.sRGBEncoding;
   canvasContainer.appendChild(renderer.domElement);
   renderer.domElement.className = 'webgl-viewport';
