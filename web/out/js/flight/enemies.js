@@ -26,6 +26,11 @@ const LOCAL_AGGRESSION_RADIUS = Math.min(46, COMBAT_ZONE_RADIUS);
 let deps = null;
 let combatWasActive = false;
 
+function isHyperspeedCombatImmune(flightState) {
+  const autopilot = flightState?.autopilot;
+  return Boolean(autopilot && typeof autopilot === 'object' && (autopilot.hyperspeedMult ?? 1) > 5);
+}
+
 export function configureEnemies(options) {
   deps = options;
 }
@@ -939,7 +944,7 @@ export function updateCombatObjects(dt) {
       }
     }
 
-    if (dist < 1.15) {
+    if (!isHyperspeedCombatImmune(flightState) && dist < 1.15) {
       applyPlayerDamage(14);
       spawnEnemy(enemy, flightState.score, 1.4 + Math.random() * 2);
     }
@@ -962,6 +967,7 @@ export function updateCombatObjects(dt) {
 
   enemyBullets.forEach(bullet => {
     if (!bullet.userData.active) return;
+    if (isHyperspeedCombatImmune(flightState)) return;
     if (bullet.position.distanceToSquared(flightState.pos) < 0.55) {
       deactivateCombatObject(bullet);
       if (combatState.unlocked.has('hull_5') && Math.random() < 0.20) {

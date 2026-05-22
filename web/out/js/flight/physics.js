@@ -241,8 +241,10 @@ export function updateFlight(time = 0) {
     }
 
     applyVelocityCapAndDrag(flightState, 0, boost);
-    if (flightState.mouseButtons.has(0)) firePrimaryWeapon(time);
-    if (flightState.mouseButtons.has(2)) fireSecondaryWeapon(time);
+    const autopilot = flightState.autopilot && typeof flightState.autopilot === 'object' ? flightState.autopilot : null;
+    const manualCombatAllowed = !isAutopilotActive(flightState) && (autopilot?.hyperspeedMult ?? 1) <= 5;
+    if (manualCombatAllowed && flightState.mouseButtons.has(0)) firePrimaryWeapon(time);
+    if (manualCombatAllowed && flightState.mouseButtons.has(2)) fireSecondaryWeapon(time);
   }
 
   flightState.vel.multiplyScalar(Math.pow(flightState.damping, dt * 60));

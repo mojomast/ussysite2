@@ -281,7 +281,7 @@ function onGlobalKeyDown(event) {
     event.preventDefault();
     if (!event.repeat) {
       if (event.shiftKey) toggleFlightTts();
-      else openAudioSettingsMenu();
+      else flightState.keys.add(event.code);
     }
     return;
   }

@@ -67,6 +67,7 @@ import {
   updateCockpitRadar as updateCockpitRadarModule,
   updateFlightCamera as updateFlightCameraModule,
   updateFlightHud as updateFlightHudModule,
+  updateNavHUD as updateNavHUDModule,
   updateTtsStatusIndicator as updateTtsStatusIndicatorModule
 } from './hud.js';
 import {
@@ -140,7 +141,12 @@ import {
 import { flightUniverseScale, isCoarsePointer, maxPlayerAmmo, maxPlayerMissilesStored, prefersReducedMotion } from '../constants.js';
 import { combatAudio, configureFlightAudio, gameSettings, radioChain, setChatterVolume, setRadioVolume, setSfxVolume, setTTSBackendEnabled, ttsEngine, volumePercent } from './audio.js';
 import { sfxEngine } from './sfx.js';
-import { disengage, ensureAutopilotState } from './autopilot.js';
+import { PLANETS, STATIONS } from './world.js';
+import { createStarfield } from './starfield.js';
+import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js';
+import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
+import { buildNavGraph, getNavNode } from './navgraph.js';
+import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
@@ -170,6 +176,12 @@ let isFlightActive = false;
 let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
 let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
 let debrisField, dustField;
+let systemStarfield = null;
+let systemPlanets = [];
+let systemStations = [];
+let navGraph = null;
+let systemMapKeyWasDown = false;
+let navigationPanelControlsRegistered = false;
 let telemetryLastUpdate = 0;
 let gameRoot, playerShip, flightNavLine;
 let flightAssistKeyCaptureRegistered = false;
@@ -680,6 +692,7 @@ export function init() {
   createDeepSpaceEffects();
   createAmbientLighting();
   createFlightGameObjects();
+  createSystemWorldObjects();
   configureCursor({
     customCursor,
     isConsoleActive: () => isConsoleActive,
@@ -876,6 +889,7 @@ export function init() {
     windowRef: window
   });
   registerFlightAssistKeyCapture();
+  registerNavigationPanelControls();
   syncOrbitFromCamera();
   
   // Populate UI Lists
@@ -1356,6 +1370,7 @@ function enterFlightMode() {
   document.body.classList.remove('scene-dragging');
 
   if (gameRoot) gameRoot.visible = true;
+  setSystemWorldVisible(true);
   applyFlightUniverseScale(flightUniverseScale);
   flightState.keys.clear();
   flightState.mouseButtons.clear();
@@ -1475,6 +1490,8 @@ function exitFlightMode(releasePointer = true) {
   if (flightHud) flightHud.classList.remove('afterburner-active');
   document.body.classList.remove('flight-active', 'pointer-unlocked', 'flight-third-person');
   if (gameRoot) gameRoot.visible = false;
+  setSystemWorldVisible(false);
+  setSystemMapVisible(false);
   if (debrisField) debrisField.visible = false;
   if (dustField) dustField.visible = false;
   if (scene.fog) scene.fog.density = 0.02;
@@ -1605,6 +1622,122 @@ function resetFlightAssistState() {
   flightState.matchSpeedUntil = 0;
   flightState.cameraRollTarget = 0;
   flightState.cameraRollCurrent = 0;
+}
+
+function setSystemWorldVisible(visible) {
+  systemStarfield?.points && (systemStarfield.points.visible = visible);
+  systemPlanets.forEach(body => { body.visible = visible; });
+  systemStations.forEach(body => { body.visible = visible; });
+}
+
+function createSystemWorldObjects() {
+  systemStarfield = createStarfield(scene, THREE);
+  systemPlanets = createAllPlanets(scene, THREE);
+  systemStations = createAllStations(scene, THREE);
+  navGraph = buildNavGraph(PLANETS, STATIONS);
+  setSystemWorldVisible(false);
+}
+
+function getSystemMapElements() {
+  const overlay = document.getElementById('system-map-overlay');
+  const canvas = document.getElementById('system-map-canvas');
+  return { overlay, canvas };
+}
+
+function setSystemMapVisible(visible) {
+  const { overlay, canvas } = getSystemMapElements();
+  if (!overlay) return false;
+  overlay.classList.toggle('hidden', !visible);
+  overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  if (visible) renderSystemMap(canvas, navGraph, flightState, PLANETS, STATIONS);
+  return true;
+}
+
+function toggleSystemMap() {
+  const { overlay } = getSystemMapElements();
+  return setSystemMapVisible(overlay?.classList.contains('hidden') ?? true);
+}
+
+function findNearestGraphNodeId(types = null) {
+  let bestId = null;
+  let bestDist = Infinity;
+  for (const node of navGraph?.values?.() ?? []) {
+    if (types && !types.has(node.type)) continue;
+    const dist = node.pos?.distanceTo?.(flightState.pos) ?? Infinity;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestId = node.id;
+    }
+  }
+  return bestId;
+}
+
+function selectAutopilotTargetId() {
+  const currentProjectId = flightState.navNode?.userData?.project?.id;
+  if (currentProjectId && getNavNode(navGraph, currentProjectId)) return currentProjectId;
+  const nearestId = findNearestGraphNodeId(new Set(['station', 'planet']));
+  const firstStationId = [...(navGraph?.values?.() ?? [])].find(node => node.type === 'station')?.id ?? null;
+  return nearestId || firstStationId || [...(navGraph?.keys?.() ?? [])][0] || null;
+}
+
+function engageRouteAutopilot() {
+  if (!navGraph) return false;
+  const targetId = selectAutopilotTargetId();
+  const autopilot = ensureAutopilotState(flightState);
+  if (!targetId || !plotCourse(flightState, navGraph, targetId)) {
+    flightState.status = autopilot.blockedReason || 'NO NAV ROUTE AVAILABLE';
+    flightState.statusUntil = performance.now() + 2200;
+    updateFlightHud(true);
+    return false;
+  }
+  flightState.status = `ROUTE PLOTTED: ${targetId.toUpperCase()}`;
+  flightState.statusUntil = performance.now() + 2200;
+  updateFlightHud(true);
+  return true;
+}
+
+function registerNavigationPanelControls() {
+  if (navigationPanelControlsRegistered) return;
+  navigationPanelControlsRegistered = true;
+  const engageBtn = document.getElementById('nav-engage-btn');
+  const abortBtn = document.getElementById('nav-abort-btn');
+  const mapCloseBtn = document.getElementById('system-map-close');
+  engageBtn?.addEventListener('click', engageRouteAutopilot);
+  abortBtn?.addEventListener('click', () => {
+    disengage(flightState, 'MANUAL');
+    updateFlightHud(true);
+  });
+  mapCloseBtn?.addEventListener('click', () => setSystemMapVisible(false));
+}
+
+function updateSystemMapInput() {
+  const keyDown = flightState.keys.has('KeyM');
+  if (keyDown && !systemMapKeyWasDown) toggleSystemMap();
+  systemMapKeyWasDown = keyDown;
+}
+
+function dockAtSystemStation(stationObject) {
+  if (!stationObject?.userData?.stationId || flightState.landed) return false;
+  const stationId = stationObject.userData.stationId;
+  flightState.landed = true;
+  flightState.vel.set(0, 0, 0);
+  flightState.currentDockedProject = null;
+  traderState.docked = true;
+  traderState.dockedStation = stationId;
+  flightState.status = `DOCKED AT ${stationId.toUpperCase()}`;
+  flightState.statusUntil = performance.now() + 3000;
+  sfxEngine.stopEngineHum();
+  sfxEngine.startStationAmbient();
+  if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) document.exitPointerLock();
+  if (!gameMessageState.active) openStationMenu(stationId);
+  updateFlightHud(true);
+  return true;
+}
+
+function updateSystemDocking() {
+  if (flightState.landed) return;
+  const nearest = getNearestBody(flightState.pos, systemStations, DOCK_PROXIMITY);
+  if (nearest?.body) dockAtSystemStation(nearest.body);
 }
 
 function registerFlightAssistKeyCapture() {
@@ -2994,6 +3127,14 @@ export function tick(time = 0) {
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
     updateFlight(time);
+    updateSystemMapInput();
+    updatePlanetLOD(systemPlanets, camera);
+    updateStationRotations(systemStations, frameDt);
+    updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+    updateStarfieldWarp(systemStarfield, flightForward, ensureAutopilotState(flightState).hyperspeedMult ?? 1);
+    updateNavHUDModule(flightState, combatState);
+    updateSystemDocking();
+    updateFlightHud(false);
     if (combatState.debriefPending) {
       const data = consumeCombatDebrief(combatState);
       if (data) showDebrief(data);
