@@ -110,6 +110,7 @@ export function applySettings(deps = {}) {
   deps.setTTSBackendEnabled?.(settingsState.ttsBackendEnabled);
   deps.setBloomStrength?.(settingsState.bloomStrength);
   deps.setBloomThreshold?.(settingsState.bloomThreshold);
+  deps.setBloomRadius?.(settingsState.bloomRadius);
   deps.setPixelRatio?.(settingsState.pixelRatio);
   deps.setMouseSensitivity?.(settingsState.mouseSensitivity);
   document.documentElement.style.setProperty('--hud-scale', String(settingsState.hudScale));

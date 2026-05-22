@@ -86,7 +86,7 @@ import {
 import { showDebrief } from './debrief.js';
 import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, toggleHelpMenu } from './help.js';
 import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
-import { loadSettings, saveSettings, settingsState } from './settings.js';
+import { applySettings, loadSettings, saveSettings, settingsState } from './settings.js';
 import { configureTutorialOverlay, hideTutorialOverlay, isTutorialOverlayVisible, showTutorialOverlay } from './tutorial-overlay.js';
 import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
@@ -131,7 +131,7 @@ import {
 // combatAudio.bark('TAKING FIRE', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' })
 import { animateHolographicCore, createHolographicCore as createEngineHolographicCore } from '../engine/core.js';
 import { projectHitTargets as engineProjectHitTargets, projectLabels as engineProjectLabels, projectNodeById as engineProjectNodeById, projectNodes as engineProjectNodes, relationshipEdges as engineRelationshipEdges } from '../engine/nodes.js';
-import { createAmbientLighting as createEngineAmbientLighting, createCameraAnimationState, createSceneGroups, initScene as initEngineScene, resizeScene } from '../engine/scene.js';
+import { createAmbientLighting as createEngineAmbientLighting, createCameraAnimationState, createSceneGroups, initScene as initEngineScene, resizeScene, setRenderPixelRatio } from '../engine/scene.js';
 import {
   animateDeepSpaceEffects,
   createDebrisField as createEngineDebrisField,
@@ -163,6 +163,7 @@ import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, up
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
+import { configureSettingsMenu } from '../ui/settings-menu.js';
 import {
   activateConsoleMode as activateConsoleModeModule,
   configureConsoleUI,
@@ -542,6 +543,42 @@ function saveCombatStateToHash() {
   history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}:ms:${missionEncoded}:cfg:${saveSettings()}`);
 }
 
+function setMouseSensitivity(value) {
+  const next = Number(value);
+  if (Number.isFinite(next)) flightState.mouseSensitivity = next;
+}
+
+function setTTSEnabled(enabled) {
+  ttsEngine.enabled = Boolean(enabled);
+  if (!ttsEngine.enabled) ttsEngine.stop();
+  updateTtsStatusIndicator();
+}
+
+function setPixelRatio(value) {
+  setRenderPixelRatio(value);
+  onWindowResize();
+}
+
+function getSettingsDeps() {
+  return {
+    documentRef: document,
+    isFlightActive: () => isFlightActive,
+    releasePointerLock: () => document.exitPointerLock?.(),
+    requestPointerLock: requestFlightPointerLock,
+    setBloomRadius,
+    setBloomStrength,
+    setBloomThreshold,
+    setChatterVolume,
+    setMouseSensitivity,
+    setPixelRatio,
+    setRadioVolume,
+    setSfxVolume,
+    setTTSBackendEnabled,
+    setTTSEnabled,
+    speakTts: (text, options) => ttsEngine.speak(text, options)
+  };
+}
+
 function buildPersistentCombatState() {
   return {
     ...combatState,
@@ -699,6 +736,9 @@ export function init() {
     requestPointerLock: requestFlightPointerLock,
     saveSettingsToHash: saveCombatStateToHash
   });
+  const settingsDeps = getSettingsDeps();
+  configureSettingsMenu(settingsDeps);
+  applySettings(settingsDeps);
   configureMissionBoardUI({ documentRef: document });
   configureCombatScene({
     THREE,
@@ -3428,11 +3468,26 @@ function configurePostProcessing() {
   composer.addPass(new RenderPass(scene, camera));
   bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    prefersReducedMotion ? 0 : 0.55,
-    0.4,
-    0.82
+    (prefersReducedMotion || settingsState.reducedMotion) ? 0 : settingsState.bloomStrength,
+    settingsState.bloomRadius,
+    settingsState.bloomThreshold
   );
   composer.addPass(bloomPass);
+}
+
+export function setBloomStrength(value) {
+  const next = Number(value);
+  if (Number.isFinite(next) && bloomPass) bloomPass.strength = (prefersReducedMotion || settingsState.reducedMotion) ? 0 : next;
+}
+
+export function setBloomThreshold(value) {
+  const next = Number(value);
+  if (Number.isFinite(next) && bloomPass) bloomPass.threshold = next;
+}
+
+export function setBloomRadius(value) {
+  const next = Number(value);
+  if (Number.isFinite(next) && bloomPass) bloomPass.radius = next;
 }
 
 function handleVisibilityChange() {

@@ -38,6 +38,7 @@
   --font-display: 'Orbitron', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --font-sans: 'Inter', sans-serif;
+  --hud-scale: 1;
 }
 
 /* Reset & Scrollbar */
@@ -3624,7 +3625,8 @@ body.flight-active:not(.flight-third-person) .cockpit-frame.cockpit-frame-left {
   position: fixed;
   bottom: 0;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--hud-scale));
+  transform-origin: bottom center;
   width: clamp(380px, 46vw, 680px);
   height: clamp(220px, 28vh, 280px);
   z-index: 9100;
@@ -3877,7 +3879,8 @@ body.flight-active:not(.flight-third-person) .cockpit-dash-center {
 body.flight-active #flight-hud {
   opacity: 1 !important;
   pointer-events: auto !important;
-  transform: none !important;
+  transform: scale(var(--hud-scale)) !important;
+  transform-origin: bottom right;
   right: 0 !important;
   left: auto !important;
 }

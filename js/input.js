@@ -11,6 +11,7 @@ import {
 import { registerHeroListeners } from './ui/hero.js';
 import { toggleInventoryPanel } from './ui/inventory-panel.js';
 import { createAutopilotState } from './flight/autopilot.js';
+import { settingsState } from './flight/settings.js';
 
 const THREE = globalThis.THREE;
 
@@ -458,8 +459,9 @@ function onMouseMove(event) {
   if (isFlightActive() && flightState.pointerLocked) {
     if (flightState.paused) return;
     if (Math.abs(event.movementX) + Math.abs(event.movementY) > 4) disableAutopilot('AUTOPILOT MANUAL OVERRIDE');
+    const pitchSensitivity = flightState.mouseSensitivity * (settingsState.mouseInvert ? -1 : 1);
     applyLocalFlightRotation(0, 1, 0, -event.movementX * flightState.mouseSensitivity);
-    applyLocalFlightRotation(1, 0, 0, -event.movementY * flightState.mouseSensitivity);
+    applyLocalFlightRotation(1, 0, 0, -event.movementY * pitchSensitivity);
     return;
   }
   updateCursorPosition(event.clientX, event.clientY);

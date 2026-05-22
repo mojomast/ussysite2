@@ -1,4 +1,6 @@
 // Flight radio, browser TTS backend, combat chatter, and audio settings helpers.
+import { settingsState } from './settings.js';
+
 export function numToWord(value) {
   const words = [
     'zero', 'one', 'two', 'three', 'four',
@@ -43,12 +45,7 @@ export function configureFlightAudio(options = {}) {
   audioRuntime = { ...audioRuntime, ...options };
 }
 
-const SETTINGS_STORAGE_KEY = 'ussy.flight.settings.v1';
-export const gameSettings = {
-  radioVolume: 0.45,
-  chatterVolume: 0.38,
-  sfxVolume: 0.55
-};
+export const gameSettings = {};
 
 let sfxVolumeApplier = () => {};
 
@@ -58,7 +55,13 @@ export function configureSfxVolumeApplier(fn) {
 }
 
 export function clampVolume(value) {
-  return Math.max(0, Math.min(1, Number(value)));
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(1, number > 1 ? number / 100 : number));
+}
+
+function toVolumeSetting(value) {
+  return Math.round(clampVolume(value) * 100);
 }
 
 export function volumePercent(value) {
@@ -66,27 +69,15 @@ export function volumePercent(value) {
 }
 
 export function loadFlightSettings() {
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
-    if (Number.isFinite(saved.radioVolume)) gameSettings.radioVolume = clampVolume(saved.radioVolume);
-    if (Number.isFinite(saved.chatterVolume)) gameSettings.chatterVolume = clampVolume(saved.chatterVolume);
-    if (Number.isFinite(saved.sfxVolume)) gameSettings.sfxVolume = clampVolume(saved.sfxVolume);
-  } catch {
-    // Settings are optional; defaults keep the game fully playable.
-  }
+  return false;
 }
 
 export function saveFlightSettings() {
-  try {
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(gameSettings));
-  } catch {
-    // Ignore private-mode or storage quota failures.
-  }
+  return true;
 }
 
 export function setRadioVolume(value) {
-  gameSettings.radioVolume = clampVolume(value);
-  saveFlightSettings();
+  settingsState.radioVolume = toVolumeSetting(value);
   radioChain.updateOutputGains();
   if (audioRuntime.flightState) audioRuntime.flightState.status = `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}`;
   if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
@@ -94,8 +85,7 @@ export function setRadioVolume(value) {
 }
 
 export function setChatterVolume(value) {
-  gameSettings.chatterVolume = clampVolume(value);
-  saveFlightSettings();
+  settingsState.chatterVolume = toVolumeSetting(value);
   combatAudio.updateGain();
   if (audioRuntime.flightState) audioRuntime.flightState.status = `CHATTER VOLUME ${volumePercent(gameSettings.chatterVolume)}`;
   if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
@@ -103,19 +93,34 @@ export function setChatterVolume(value) {
 }
 
 export function setSfxVolume(value) {
-  gameSettings.sfxVolume = clampVolume(value);
-  saveFlightSettings();
+  settingsState.sfxVolume = toVolumeSetting(value);
   sfxVolumeApplier(gameSettings.sfxVolume);
   if (audioRuntime.flightState) audioRuntime.flightState.status = `SFX VOLUME ${volumePercent(gameSettings.sfxVolume)}`;
   if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
   audioRuntime.updateFlightHud(true);
 }
 
-loadFlightSettings();
+Object.defineProperties(gameSettings, {
+  radioVolume: {
+    get: () => settingsState.radioVolume / 100,
+    set: value => { settingsState.radioVolume = toVolumeSetting(value); }
+  },
+  chatterVolume: {
+    get: () => settingsState.chatterVolume / 100,
+    set: value => { settingsState.chatterVolume = toVolumeSetting(value); }
+  },
+  sfxVolume: {
+    get: () => settingsState.sfxVolume / 100,
+    set: value => { settingsState.sfxVolume = toVolumeSetting(value); }
+  },
+  ttsVolume: {
+    get: () => settingsState.ttsVolume / 100,
+    set: value => { settingsState.ttsVolume = toVolumeSetting(value); }
+  }
+});
 
 export const ttsEngine = {
   supported: 'speechSynthesis' in window,
-  enabled: true,
   activeVoice: null,
   activeTransmission: 0,
   activeRequest: null,
@@ -219,6 +224,11 @@ export const ttsEngine = {
     return this.setVoice();
   }
 };
+
+Object.defineProperty(ttsEngine, 'enabled', {
+  get: () => settingsState.ttsEnabled,
+  set: value => { settingsState.ttsEnabled = Boolean(value); }
+});
 
 export const radioChain = {
   ctx: null,
@@ -497,14 +507,15 @@ export const ttsConfig = {
   model: 'hexgrad/kokoro-82m',
   voiceId: 'onyx',
   audioFormat: 'pcm16',
-  enabled: true
+  enabled: false
 };
 
 let ttsBackendRetryAfter = 0;
 let ttsBackendWarnedAt = 0;
 
 export function setTTSBackendEnabled(enabled = true) {
-  ttsConfig.enabled = Boolean(enabled);
+  settingsState.ttsBackendEnabled = Boolean(enabled);
+  ttsConfig.enabled = settingsState.ttsBackendEnabled;
   if (ttsConfig.enabled) ttsBackendRetryAfter = 0;
   return ttsConfig.enabled;
 }
