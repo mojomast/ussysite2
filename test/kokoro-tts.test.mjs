@@ -14,11 +14,11 @@ function listen(server) {
 }
 
 async function loadTTSBrowserContext() {
-  const appSource = await readFile(new URL('../js/main.js', import.meta.url), 'utf8');
+  let appSource = await readFile(new URL('../js/flight/audio.js', import.meta.url), 'utf8');
+  appSource = appSource.replace(/export\s+/g, '');
   const start = appSource.indexOf('function numToWord');
-  const end = appSource.indexOf('function getRenderPixelRatio');
-  assert.notEqual(start, -1, 'Expected js/main.js TTS helper start marker');
-  assert.notEqual(end, -1, 'Expected js/main.js TTS helper end marker');
+  const end = appSource.length;
+  assert.notEqual(start, -1, 'Expected js/flight/audio.js TTS helper start marker');
 
   const context = vm.createContext({
     AbortController,

@@ -6,7 +6,15 @@ import {
   applySkillEffects,
   getMaxShield
 } from './combat-overhaul.js';
-import { flightState as defaultFlightState } from './state.js';
+
+const defaultFlightState = {
+  shield: 100,
+  armor: 100,
+  energy: 100,
+  fuel: 100,
+  fuelDepleted: false,
+  combatPhase: 'IDLE'
+};
 
 let activeFlightState = defaultFlightState;
 

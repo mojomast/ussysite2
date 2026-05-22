@@ -228,6 +228,222 @@ export function createDeepSpaceEffects({
   return { starField, milkyWayField, brightStarField, dataRibbonGroup };
 }
 
+export function randomizeDebrisInstance({
+  index,
+  ahead = false,
+  flightBounds,
+  flightState,
+  flightForward,
+  flightRight,
+  flightUp,
+  debrisPositions,
+  debrisAxes,
+  debrisSpinRates
+} = {}) {
+  const offset = index * 3;
+  const spread = flightBounds * 0.78;
+  const forwardDistance = ahead ? 35 + Math.random() * 95 : (Math.random() - 0.5) * flightBounds * 1.55;
+  const lateral = (Math.random() - 0.5) * spread;
+  const vertical = (Math.random() - 0.5) * spread;
+  debrisPositions[offset] = flightState.pos.x + flightForward.x * forwardDistance + flightRight.x * lateral + flightUp.x * vertical;
+  debrisPositions[offset + 1] = flightState.pos.y + flightForward.y * forwardDistance + flightRight.y * lateral + flightUp.y * vertical;
+  debrisPositions[offset + 2] = flightState.pos.z + flightForward.z * forwardDistance + flightRight.z * lateral + flightUp.z * vertical;
+  debrisAxes[offset] = Math.random() - 0.5;
+  debrisAxes[offset + 1] = Math.random() - 0.5;
+  debrisAxes[offset + 2] = Math.random() - 0.5;
+  debrisSpinRates[index] = 0.08 + Math.random() * 0.32;
+}
+
+export function updateDebrisMatrix({
+  index,
+  dt = 0,
+  debrisField,
+  debrisPositions,
+  debrisAxes,
+  debrisAngles,
+  debrisSpinRates,
+  debrisMatrix,
+  debrisQuaternion,
+  debrisPosition,
+  debrisScale,
+  debrisAxis
+} = {}) {
+  const offset = index * 3;
+  debrisAngles[index] += debrisSpinRates[index] * dt;
+  debrisPosition.set(debrisPositions[offset], debrisPositions[offset + 1], debrisPositions[offset + 2]);
+  debrisAxis.set(debrisAxes[offset], debrisAxes[offset + 1], debrisAxes[offset + 2]);
+  if (debrisAxis.lengthSq() < 0.001) debrisAxis.set(0, 1, 0);
+  else debrisAxis.normalize();
+  debrisQuaternion.setFromAxisAngle(debrisAxis, debrisAngles[index]);
+  debrisMatrix.compose(debrisPosition, debrisQuaternion, debrisScale);
+  debrisField.setMatrixAt(index, debrisMatrix);
+}
+
+export function createDebrisField({
+  THREE: Three = THREE,
+  scene,
+  debrisCount,
+  updateFlightBasis,
+  randomizeDebris,
+  updateDebris
+} = {}) {
+  const debrisGeo = new Three.IcosahedronGeometry(0.18, 0);
+  const debrisMat = new Three.MeshBasicMaterial({ color: 0x6f7f94, wireframe: true, transparent: true, opacity: 0.32, fog: true });
+  const debrisField = new Three.InstancedMesh(debrisGeo, debrisMat, debrisCount);
+  debrisField.visible = false;
+  scene.add(debrisField);
+  updateFlightBasis();
+  for (let i = 0; i < debrisCount; i += 1) {
+    randomizeDebris(i, false);
+    updateDebris(i, 0, debrisField);
+  }
+  debrisField.instanceMatrix.needsUpdate = true;
+  return debrisField;
+}
+
+export function randomizeDustParticle({
+  index,
+  forwardDistance = 60,
+  flightState,
+  flightForward,
+  flightRight,
+  flightUp,
+  dustPositions,
+  dustSpeeds
+} = {}) {
+  const offset = index * 3;
+  const width = 8 + Math.random() * 24;
+  const lateral = (Math.random() - 0.5) * width;
+  const vertical = (Math.random() - 0.5) * width;
+  dustPositions[offset] = flightState.pos.x + flightForward.x * forwardDistance + flightRight.x * lateral + flightUp.x * vertical;
+  dustPositions[offset + 1] = flightState.pos.y + flightForward.y * forwardDistance + flightRight.y * lateral + flightUp.y * vertical;
+  dustPositions[offset + 2] = flightState.pos.z + flightForward.z * forwardDistance + flightRight.z * lateral + flightUp.z * vertical;
+  dustSpeeds[index] = 8 + Math.random() * 18;
+}
+
+export function createDustField({
+  THREE: Three = THREE,
+  documentRef = document,
+  scene,
+  dustParticleCount,
+  isCoarsePointer = false,
+  updateFlightBasis,
+  randomizeDust,
+  dustPositions,
+  dustSpeeds
+} = {}) {
+  const dustGeo = new Three.BufferGeometry();
+  const targetDustPositions = dustPositions || new Float32Array(dustParticleCount * 3);
+  const targetDustSpeeds = dustSpeeds || new Float32Array(dustParticleCount);
+  const dustTexture = createRadialGlowTexture({
+    THREE: Three,
+    documentRef,
+    inner: 'rgba(255,255,255,0.95)',
+    mid: 'rgba(255,204,0,0.42)',
+    outer: 'rgba(0,0,0,0)',
+    size: 64
+  });
+  updateFlightBasis();
+  for (let i = 0; i < dustParticleCount; i += 1) randomizeDust(i, 8 + Math.random() * 78);
+  dustGeo.setAttribute('position', new Three.BufferAttribute(targetDustPositions, 3));
+  const dustField = new Three.Points(dustGeo, new Three.PointsMaterial({
+    color: 0xfff2cf,
+    size: isCoarsePointer ? 0.18 : 0.12,
+    map: dustTexture,
+    transparent: true,
+    opacity: 0.42,
+    blending: Three.AdditiveBlending,
+    depthWrite: false,
+    fog: false
+  }));
+  dustField.visible = false;
+  scene.add(dustField);
+  return { dustField, dustPositions: targetDustPositions, dustSpeeds: targetDustSpeeds };
+}
+
+export function updateDebrisField({
+  dt,
+  debrisField,
+  flightBounds,
+  debrisCount,
+  debrisPositions,
+  flightState,
+  flightForward,
+  randomizeDebris,
+  updateDebris
+} = {}) {
+  if (!debrisField) return;
+  debrisField.visible = true;
+  const recycleDistanceSq = flightBounds * flightBounds * 1.35;
+  for (let i = 0; i < debrisCount; i += 1) {
+    const offset = i * 3;
+    const dx = debrisPositions[offset] - flightState.pos.x;
+    const dy = debrisPositions[offset + 1] - flightState.pos.y;
+    const dz = debrisPositions[offset + 2] - flightState.pos.z;
+    const forward = dx * flightForward.x + dy * flightForward.y + dz * flightForward.z;
+    const distSq = dx * dx + dy * dy + dz * dz;
+    if (forward < -62 || distSq > recycleDistanceSq) randomizeDebris(i, true);
+    updateDebris(i, dt, debrisField);
+  }
+  debrisField.instanceMatrix.needsUpdate = true;
+}
+
+export function updateDustField({
+  THREE: Three = THREE,
+  dt,
+  dustField,
+  dustPositions,
+  dustSpeeds,
+  dustParticleCount,
+  dustTempVec,
+  flightState,
+  flightForward,
+  combatState,
+  randomizeDust
+} = {}) {
+  if (!dustField || !dustPositions) return;
+  dustField.visible = true;
+  const speed = flightState.vel.length();
+  const streamSpeed = (10 + speed * 1.45) * (combatState.afterburnerActive ? 1.7 : 1);
+  for (let i = 0; i < dustParticleCount; i += 1) {
+    const offset = i * 3;
+    dustPositions[offset] -= flightForward.x * (streamSpeed + dustSpeeds[i]) * dt;
+    dustPositions[offset + 1] -= flightForward.y * (streamSpeed + dustSpeeds[i]) * dt;
+    dustPositions[offset + 2] -= flightForward.z * (streamSpeed + dustSpeeds[i]) * dt;
+    dustTempVec.set(dustPositions[offset] - flightState.pos.x, dustPositions[offset + 1] - flightState.pos.y, dustPositions[offset + 2] - flightState.pos.z);
+    const forward = dustTempVec.dot(flightForward);
+    if (forward < -8 || dustTempVec.lengthSq() > 10000) randomizeDust(i, 45 + Math.random() * 55);
+  }
+  dustField.geometry.attributes.position.needsUpdate = true;
+  dustField.material.opacity = Three.MathUtils.clamp(0.24 + speed * 0.018, 0.28, combatState.afterburnerActive ? 0.82 : 0.58);
+}
+
+export function updateSpaceEnvironment({
+  THREE: Three = THREE,
+  dt,
+  isFlightActive = false,
+  scene,
+  debrisField,
+  dustField,
+  updateDebris,
+  updateDust,
+  flightState,
+  combatState
+} = {}) {
+  if (!isFlightActive) {
+    if (debrisField) debrisField.visible = false;
+    if (dustField) dustField.visible = false;
+    return;
+  }
+  updateDebris(dt);
+  updateDust(dt);
+  if (scene.fog) {
+    const speed = flightState.vel.length();
+    const targetDensity = combatState.afterburnerActive || speed > 16 ? 0.022 : 0.012;
+    scene.fog.density = Three.MathUtils.lerp(scene.fog.density, targetDensity, 0.045);
+  }
+}
+
 export function animateDeepSpaceEffects({ starField, milkyWayField, brightStarField, dataRibbonGroup, prefersReducedMotion = false } = {}) {
   if (prefersReducedMotion) return;
   if (starField) {

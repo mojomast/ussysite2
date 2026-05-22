@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createAppServer, fetchOpenRouterOrchestration, validateOrchestratorResponse } from '../server.mjs';
 import { activateEnemyWave, buildOrchestratorGameState } from '../js/flight/orchestrator.js';
 
-const appSource = await readFile(new URL('../js/main.js', import.meta.url), 'utf8');
+const orchestratorSource = await readFile(new URL('../js/flight/orchestrator.js', import.meta.url), 'utf8');
 
 function listen(server) {
   server.listen(0, '127.0.0.1');
@@ -31,7 +31,7 @@ test('buildOrchestratorPayload returns all required gameState fields', () => {
     assert.ok(Object.hasOwn(gameState, key), `Expected ${key}`);
   }
   assert.equal(gameState.timeSinceLastEvent, 45);
-  assert.match(appSource, /function buildOrchestratorPayload\(\)/);
+  assert.match(orchestratorSource, /function buildOrchestratorGameState\(/);
 });
 
 test('/api/orchestrate returns 403 for missing Origin header', async () => {
@@ -138,7 +138,6 @@ test('fireOrchestratedEvent with spawnEnemies activates exactly 2 enemy objects'
   });
   assert.equal(spawned, 2);
   assert.equal(enemies.filter(enemy => enemy.userData.active).length, 2);
-  assert.match(appSource, /function fireOrchestratedEvent\(event\)/);
 });
 
 test('live orchestrator smoke request returns JSON', { skip: !process.env.ORCHESTRATOR_LIVE }, async () => {

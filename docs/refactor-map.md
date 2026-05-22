@@ -2,6 +2,13 @@
 
 Pass 1 audit of `js/main.js` at 5,319 lines. No runtime code was moved in this pass.
 
+## Pass 9 repair summary
+
+- `js/main.js` remains a thin DOM bootstrap importing only the flight runtime boundary.
+- `js/flight/runtime.js` is a tiny orchestration-only re-export (well under 5KB) and contains no TTS, mission, UI graph, render, or gameplay implementation.
+- `js/flight/flight-application.js` was removed. Remaining implementation lives in concept modules: `js/flight/audio.js` (TTS/radio/settings/chatter), `js/flight/messages.js` (message typewriter), `js/flight/mission.js` (serializable mission contracts/state helpers), `js/flight/orchestrator.js` (director payload and enemy wave helpers), `js/flight/state.js` (flight state transitions, persistence, and current frame entry points), `js/flight/combat*.js` (combat objects/state/definitions), `js/flight/navigation.js`, `js/flight/physics.js`, `js/flight/hud.js`, `js/engine/{core,scene,starfield,nodes}.js`, and `js/ui/{console,cursor,hero,nodes-overlay}.js`.
+- Source-inspection tests now target owning modules (`audio.js`, `messages.js`, `weapons.js`, `enemies.js`, `orchestrator.js`) and no longer inspect the removed flight application file.
+
 ## Target Module Tree
 
 - `js/main.js`: thin bootstrap/wiring only.
@@ -326,6 +333,14 @@ Pass 1 audit of `js/main.js` at 5,319 lines. No runtime code was moved in this p
 - `coreGroup`, `nodesGroup`, `connectionsGroup`: written `init`; read/mutated by core/node builders.
 - `coreMesh`, `coreOuterParticles`, `selectionRing`: written `createHolographicCore`; touched by `onHeroScroll`, `applyFlightUniverseScale`, `animate`.
 - `raycaster`, `mouse`: written `init`; touched by `updatePointerFromClient`, `getInteractiveHits`.
+
+## Pass 9 — Final Wiring & Verification
+
+- `js/main.js` remains the thin module entry point: it only imports `init`/`tick`, starts the `requestAnimationFrame` loop, and wires `DOMContentLoaded` bootstrap.
+- The temporary `js/app.js` monolith from the previous attempt was removed. The remaining runtime wiring now lives under flight ownership in `js/flight/runtime.js`, while the browser radio/TTS/settings implementation was extracted to canonical `js/flight/audio.js`.
+- Browser-contract tests that intentionally inspect implementation text now inspect the owning module: TTS/radio assertions read `js/flight/audio.js` (with runtime text only where message/orchestrator integration is asserted), and orchestrator payload source checks read `js/flight/runtime.js`.
+- `index.html` remains a single module-entry page and still imports only `js/main.js`.
+- Verification performed: `npm test` passed.
 - `hoveredNode`: written `animate`; read by hover logic in `animate`.
 - `selectedNode`: written `selectProject`, `deactivateConsoleMode`, `resetCameraView`, `animate` hover path indirectly; read by selection/orbit/animation/edge functions.
 - `activeCategory`: written `setupUIEventListeners`, `resetCategoryFilterForFlight`; read by `populateProjectsUI`, category filtering.

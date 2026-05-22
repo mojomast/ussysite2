@@ -58,9 +58,43 @@ docs/
 
 `projects.js` remains a standalone script and exposes `window.USSY_PROJECTS` and `window.USSY_CATEGORIES` for module code.
 
+## Module Architecture
+
+- `js/main.js` - Thin browser entry point that starts the DOM bootstrap and animation loop.
+- `js/constants.js` - Shared runtime constants used across modules.
+- `js/input.js` - Keyboard, mouse, pointer-lock, wheel, and touch input state/listeners.
+- `js/engine/core.js` - Holographic core mesh setup and animation helpers.
+- `js/engine/nodes.js` - Project data aliases, graph node registries, label metadata, and relationship edge helpers.
+- `js/engine/renderer.js` - Three.js scene, camera, renderer, and resize ownership.
+- `js/engine/scene.js` - Scene groups, lighting, and camera animation state helpers.
+- `js/engine/starfield.js` - Starfields, debris, dust, and deep-space environment updates.
+- `js/economy/reputation.js` - Faction reputation normalization and price modifiers.
+- `js/economy/trader.js` - Station services, cargo market, inventory, equipment, fuel, and credit transactions.
+- `js/flight/audio.js` - Browser TTS, radio filter chain, audio settings, and combat chatter.
+- `js/flight/combat-overhaul.js` - Combat definitions and pure combat math helpers.
+- `js/flight/combat-state.js` - Shared combat progression, loadout, XP, and resource state.
+- `js/flight/combat.js` - Combat scene object creation plus combat API aggregation.
+- `js/flight/enemies.js` - Enemy pool construction, spawning, AI, damage, and projectile collision handling.
+- `js/flight/hud.js` - Flight HUD, cockpit radar, nav marker, camera, telemetry, and TTS indicators.
+- `js/flight/messages.js` - Radio/game message rendering, typewriter flow, choices, and TTS persona routing.
+- `js/flight/mission.js` - Mission contracts, objective persistence, and orchestrator payload helpers.
+- `js/flight/navigation.js` - Crosshair targeting, nav targets, autopilot, landing target, and nav-line rendering.
+- `js/flight/orchestrator.js` - Client-side director cooldowns, event gating, payload construction, and event application.
+- `js/flight/physics.js` - Flight physics tick, basis vectors, thrust, drag, fuel drain, and bounds handling.
+- `js/flight/runtime.js` - Thin flight runtime re-export boundary used by `js/main.js`.
+- `js/flight/state.js` - Flight runtime state, persistence, mode transitions, and integrated init/tick wiring.
+- `js/flight/weapons.js` - Player/enemy projectiles, missiles, beams, heat, trails, and weapon VFX pools.
+- `js/tts/engine.js` - Reusable TTS transmission queue and playback coordination primitives.
+- `js/ui/console.js` - Console mode, project/category UI, project inspection, and selection actions.
+- `js/ui/cursor.js` - Custom neon cursor state and frame updates.
+- `js/ui/hero.js` - Hero scroll, wheel, touch, nav dots, and section camera/light reactions.
+- `js/ui/inventory-panel.js` - Inventory, station services, equipment, cargo, and skill-tree panel rendering.
+- `js/ui/nodes-overlay.js` - Project label overlay, hover state, cursor hover feedback, and node selection visuals.
+- `js/ui/orbit.js` - Orbit camera drag, wheel zoom, and camera target synchronization.
+
 ## TTS
 
-The browser never receives the OpenRouter API key. `js/main.js` calls the same-origin `/api/tts` endpoint, and `server.mjs` proxies the request to OpenRouter using `OPENROUTER_API_KEY` from the server environment.
+The browser never receives the OpenRouter API key. `js/flight/audio.js` calls the same-origin `/api/tts` endpoint, and `server.mjs` proxies the request to OpenRouter using `OPENROUTER_API_KEY` from the server environment.
 
 Defaults:
 

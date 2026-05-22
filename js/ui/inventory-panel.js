@@ -2,7 +2,12 @@ import { COMMODITIES, traderState } from '../economy/trader.js';
 import { FACTIONS, getReputationLabel, reputationState } from '../economy/reputation.js';
 import { WEAPON_DEFS, SKILL_TREE_NODES } from '../flight/combat-overhaul.js';
 import { combatState } from '../flight/combat-state.js';
-import { flightState } from '../flight/state.js';
+
+let flightReadoutState = { shield: 0, armor: 0, energy: 0 };
+
+export function configureInventoryPanel(options = {}) {
+  if (options.flightState) flightReadoutState = options.flightState;
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -75,9 +80,9 @@ function renderWeapons() {
       <div class="inv-chip-list">${owned || '<span class="inv-chip is-empty">NO OWNED WEAPONS</span>'}</div>
     </div>
     <div class="inv-card inv-flight-readout">
-      <span>SHIELD ${Math.round(flightState.shield || 0)}</span>
-      <span>ARMOR ${Math.round(flightState.armor || 0)}</span>
-      <span>ENERGY ${Math.round(flightState.energy || 0)}</span>
+      <span>SHIELD ${Math.round(flightReadoutState.shield || 0)}</span>
+      <span>ARMOR ${Math.round(flightReadoutState.armor || 0)}</span>
+      <span>ENERGY ${Math.round(flightReadoutState.energy || 0)}</span>
       <span>HEAT ${Math.round(combatState.heat)}/${combatState.maxHeat}</span>
     </div>`;
 }

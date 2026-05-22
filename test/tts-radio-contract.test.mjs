@@ -2,7 +2,16 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const appSource = await readFile(new URL('../js/main.js', import.meta.url), 'utf8');
+const audioSource = await readFile(new URL('../js/flight/audio.js', import.meta.url), 'utf8');
+const messageSource = await readFile(new URL('../js/flight/messages.js', import.meta.url), 'utf8');
+const stateSource = await readFile(new URL('../js/flight/state.js', import.meta.url), 'utf8');
+const weaponSource = await readFile(new URL('../js/flight/weapons.js', import.meta.url), 'utf8');
+const enemySource = await readFile(new URL('../js/flight/enemies.js', import.meta.url), 'utf8');
+const appSource = `${audioSource}
+${messageSource}
+${stateSource}
+${weaponSource}
+${enemySource}`;
 
 function extractStringConfig(name) {
   const match = appSource.match(new RegExp(`${name}:\\s*'([^']+)'`));

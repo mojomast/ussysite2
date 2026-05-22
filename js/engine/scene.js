@@ -1,12 +1,19 @@
+import {
+  camera as rendererCamera,
+  getRenderPixelRatio,
+  initRendererScene,
+  renderer as webglRenderer,
+  resizeRenderer,
+  scene as rendererScene
+} from './renderer.js';
+
+export { getRenderPixelRatio } from './renderer.js';
+
 export let scene = null;
 export let camera = null;
 export let renderer = null;
 export let pointLight1 = null;
 export let pointLight2 = null;
-
-export function getRenderPixelRatio(isCoarsePointer = false, devicePixelRatio = window.devicePixelRatio || 1) {
-  return Math.min(devicePixelRatio, isCoarsePointer ? 1 : 1.25);
-}
 
 export function createAmbientLighting(targetScene = scene, { THREE: Three = THREE } = {}) {
   const ambientLight = new Three.AmbientLight(0x0e172e, 1.5);
@@ -21,26 +28,64 @@ export function createAmbientLighting(targetScene = scene, { THREE: Three = THRE
 }
 
 export function initScene(canvasContainer, { THREE: Three = THREE, isCoarsePointer = false, width = window.innerWidth, height = window.innerHeight } = {}) {
-  scene = new Three.Scene();
-  scene.fog = new Three.FogExp2(0x03060f, 0.02);
-  camera = new Three.PerspectiveCamera(60, width / height, 0.1, 1000);
-  renderer = new Three.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(getRenderPixelRatio(isCoarsePointer));
-  renderer.setSize(width, height);
-  if (Three.sRGBEncoding) renderer.outputEncoding = Three.sRGBEncoding;
-  canvasContainer.appendChild(renderer.domElement);
-  renderer.domElement.className = 'webgl-viewport';
+  ({ scene, camera, renderer } = initRendererScene(canvasContainer, { THREE: Three, isCoarsePointer, width, height }));
   return { scene, camera, renderer };
 }
 
 export function resizeScene({ camera: targetCamera = camera, renderer: targetRenderer = renderer, isCoarsePointer = false, width = window.innerWidth, height = window.innerHeight } = {}) {
-  if (!targetCamera || !targetRenderer) return;
-  targetCamera.aspect = width / height;
-  targetCamera.updateProjectionMatrix();
-  targetRenderer.setPixelRatio(getRenderPixelRatio(isCoarsePointer));
-  targetRenderer.setSize(width, height);
+  resizeRenderer({ camera: targetCamera, renderer: targetRenderer, isCoarsePointer, width, height });
 }
 
 export function onWindowResize(isCoarsePointer = false) {
   resizeScene({ isCoarsePointer });
+}
+
+export function createSceneGroups(targetScene = scene, { THREE: Three = THREE } = {}) {
+  const coreGroup = new Three.Group();
+  const nodesGroup = new Three.Group();
+  const connectionsGroup = new Three.Group();
+  targetScene.add(coreGroup);
+  targetScene.add(nodesGroup);
+  targetScene.add(connectionsGroup);
+  return { coreGroup, nodesGroup, connectionsGroup };
+}
+
+export function createCameraAnimationState({ THREE: Three = THREE } = {}) {
+  const camTarget = {
+    pos: new Three.Vector3(0, 6, 22),
+    lookAt: new Three.Vector3(0, 0, 0)
+  };
+  const camCurrent = {
+    pos: new Three.Vector3(0, 15, 30),
+    lookAt: new Three.Vector3(0, 0, 0)
+  };
+  const sectionCamPositions = [
+    new Three.Vector3(0, 6, 22),
+    new Three.Vector3(5, 4, 15),
+    new Three.Vector3(-6, 8, 18),
+    new Three.Vector3(8, 5, 16),
+    new Three.Vector3(-4, 3, 12),
+    new Three.Vector3(0, 3, 14)
+  ];
+  const sectionColors = [
+    { light1: new Three.Color(0x00f0ff), light2: new Three.Color(0xff0055) },
+    { light1: new Three.Color(0x00ff66), light2: new Three.Color(0x00f0ff) },
+    { light1: new Three.Color(0xb026ff), light2: new Three.Color(0xff0055) },
+    { light1: new Three.Color(0xffcc00), light2: new Three.Color(0x00ff66) },
+    { light1: new Three.Color(0x00f0ff), light2: new Three.Color(0xb026ff) },
+    { light1: new Three.Color(0xff0055), light2: new Three.Color(0x00f0ff) }
+  ];
+  return { camTarget, camCurrent, sectionCamPositions, sectionColors };
+}
+
+export function getScene() {
+  return scene || rendererScene;
+}
+
+export function getCamera() {
+  return camera || rendererCamera;
+}
+
+export function getRenderer() {
+  return renderer || webglRenderer;
 }
