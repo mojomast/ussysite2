@@ -100,6 +100,16 @@ export function capRadarTrajectory(dx, dy, maxLength = RADAR_TRAJECTORY_MAX_PX) 
   return { x: dx * scale, y: dy * scale, length: maxLength };
 }
 
+export function getRadarTrajectoryDelta(velocity, flightRight, flightForward, radarScale) {
+  if (!velocity?.dot || !flightRight || !flightForward) return { x: 0, y: 0, length: 0 };
+  const localVelocity = {
+    x: velocity.dot(flightRight) * RADAR_TRAJECTORY_SECONDS,
+    z: velocity.dot(flightForward) * RADAR_TRAJECTORY_SECONDS
+  };
+  const radarVelocity = worldToRadar(localVelocity, { x: 0, z: 0 }, radarScale);
+  return capRadarTrajectory(radarVelocity.x, radarVelocity.y);
+}
+
 export function shouldDrawEnemyRadarContact(enemy, now = performance.now()) {
   return Boolean(enemy?.userData?.active && enemy.visible && !(enemy.userData.stunUntil > now));
 }
@@ -141,12 +151,7 @@ function drawEnemyRadarTrajectory(ctx, cx, cy, enemy, point, radarScale) {
   const velocity = enemy.userData.velocity;
   if (!velocity) return;
   const { flightForward, flightRight } = deps;
-  const localVelocity = {
-    x: velocity.dot(flightRight) * RADAR_TRAJECTORY_SECONDS,
-    z: velocity.dot(flightForward) * RADAR_TRAJECTORY_SECONDS
-  };
-  const radarVelocity = worldToRadar(localVelocity, { x: 0, z: 0 }, radarScale);
-  const delta = capRadarTrajectory(radarVelocity.x, radarVelocity.y);
+  const delta = getRadarTrajectoryDelta(velocity, flightRight, flightForward, radarScale);
   if (delta.length <= 0) return;
   const x = cx + point.x;
   const y = cy + point.y;

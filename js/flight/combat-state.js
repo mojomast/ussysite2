@@ -82,8 +82,6 @@ export function reset(state = combatState) {
   state.bossActive = false;
   state.bossEnemyRef = null;
   state.bossThresholdIdx = 0;
-  state.activeTurrets ??= [];
-  state.activeTurrets.length = 0;
   return state;
 }
 

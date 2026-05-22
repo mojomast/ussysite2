@@ -7,6 +7,7 @@ const { combatState, reset } = await import('../js/flight/combat-state.js');
 const {
   addKillFeedEntry,
   capRadarTrajectory,
+  getRadarTrajectoryDelta,
   shouldDrawEnemyRadarContact,
   updateBossHealthBar,
   updateKillFeed,
@@ -64,6 +65,21 @@ test('capRadarTrajectory limits trajectory tips to 14px', () => {
   const capped = capRadarTrajectory(30, 40);
   assert.equal(capped.length, 14);
   assert.ok(Math.abs(Math.hypot(capped.x, capped.y) - 14) < 0.000001);
+});
+
+test('trajectory tip never exceeds 14px from dot regardless of velocity magnitude', () => {
+  const flightRight = { axis: 'right' };
+  const flightForward = { axis: 'forward' };
+  const velocity = {
+    dot(axis) {
+      return axis.axis === 'right' ? 100000 : -100000;
+    }
+  };
+
+  const delta = getRadarTrajectoryDelta(velocity, flightRight, flightForward, 0.5);
+
+  assert.ok(Math.hypot(delta.x, delta.y) <= 14.000001);
+  assert.equal(delta.length, 14);
 });
 
 test('stunned enemies do not draw radar contacts or trajectory lines', () => {
