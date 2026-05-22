@@ -1,5 +1,14 @@
 # Changelog
 
+## [fix-pass-2] - 2026-05-22
+### Fixed
+- surface.js: landing Y-lerp now linear; thrust restored from pre-landing value
+- hunters.js: clock standardized to Date.now; lastNodeArrival only set on eligible trigger rolls; hunters spliced on flee/destroy; fallback pool capped at 24
+- missions.js: generation audited for bare Math.random and covered by deterministic same-seed regression
+- civilians.js: fleet cap uses active-count with hard pool cap and reuse; dock timer verified against dt rather than wall clock
+- persist.js: migration deep-clones input; schema version bumped last; migration errors return null without partial state
+- help.js: configureHelpMenu owns Escape handling; KEY_MAP exported from input.js for help/control sync
+
 ## [EXPANSION-1] - 2026-05-22
 ### Added
 - Vast star system with 4 planets, 3 stations, 3 jump points
