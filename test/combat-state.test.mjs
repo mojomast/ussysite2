@@ -12,6 +12,7 @@ globalThis.THREE = {
 
 const {
   COMBAT_PHASES,
+  BOSS_SCORE_THRESHOLDS,
   combatState,
   buildCombatDebriefData,
   consumeCombatDebrief,
@@ -24,6 +25,7 @@ const {
   recordCombatKillStats,
   recordCombatShot,
   recordKillStreak,
+  reset,
   resetCombatSessionStats,
   respawnFlightState,
   serializeCombatState,
@@ -59,6 +61,17 @@ describe('combat state transitions', () => {
     assert.equal(state.fuel, 80, 'respawn should restore max fuel');
     assert.equal(state.fuelDepleted, false, 'respawn should clear fuel depleted flag');
     assert.equal(state.combatPhase, COMBAT_PHASES.IDLE, 'respawn should return combat phase to idle');
+  });
+});
+
+describe('boss combat state', () => {
+  it('exposes boss score thresholds and reset clears runtime boss fields', () => {
+    assert.deepEqual(BOSS_SCORE_THRESHOLDS, [1500, 4000, 8000]);
+    const state = { bossActive: true, bossEnemyRef: { id: 'boss' }, bossThresholdIdx: 2 };
+    reset(state);
+    assert.equal(state.bossActive, false);
+    assert.equal(state.bossEnemyRef, null);
+    assert.equal(state.bossThresholdIdx, 0);
   });
 });
 
