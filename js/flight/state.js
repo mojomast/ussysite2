@@ -147,6 +147,7 @@ import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js'
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
+import { SURFACE_STATES, beginLanding, updateSurface } from './surface.js';
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
@@ -1426,6 +1427,15 @@ function enterFlightMode() {
   flightState.navNode = null;
   flightState.navDistance = Infinity;
   flightState.navEta = '--';
+  flightState.surface = {
+    state: SURFACE_STATES.NONE,
+    planetId: null,
+    approachDist: 0,
+    orbitAltitude: 0,
+    landingProgress: 0,
+    surfaceY: 0,
+    exitQueued: false
+  };
   ensureAutopilotState(flightState);
   disengage(flightState, 'RESET');
   flightState.landed = false;
@@ -1744,8 +1754,15 @@ function dockAtSystemStation(stationObject) {
 
 function updateSystemDocking() {
   if (flightState.landed) return;
+  if (flightState.surface?.state && flightState.surface.state !== SURFACE_STATES.NONE) return;
   const nearest = getNearestBody(flightState.pos, systemStations, DOCK_PROXIMITY);
   if (nearest?.body) dockAtSystemStation(nearest.body);
+}
+
+function getCurrentSurfacePlanet() {
+  const id = flightState.surface?.planetId;
+  if (!id) return null;
+  return systemPlanets.find(planet => planet?.userData?.planetId === id || planet?.id === id) || null;
 }
 
 function registerFlightAssistKeyCapture() {
@@ -2457,6 +2474,16 @@ function getMissionLandingProjectName() {
 }
 
 function landOnNearestProject() {
+  if (flightState.surface?.state === SURFACE_STATES.ORBITAL) {
+    const planet = getCurrentSurfacePlanet();
+    if (planet) {
+      beginLanding(flightState, planet);
+      flightState.status = `LANDING ON ${flightState.surface.planetId.toUpperCase()}`;
+      flightState.statusUntil = performance.now() + 1800;
+      updateFlightHud(true);
+      return;
+    }
+  }
   updateProjectLandingTarget();
   const activeLandingRange = landingRange * activeUniverseScale;
   if (!flightState.nearestNode || flightState.nearestDistance > activeLandingRange) {
@@ -3139,6 +3166,7 @@ export function tick(time = 0) {
     updatePlanetLOD(systemPlanets, camera);
     updateStationRotations(systemStations, frameDt);
     updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+    updateSurface(flightState, systemPlanets, frameDt);
     updateStarfieldWarp(systemStarfield, flightForward, ensureAutopilotState(flightState).hyperspeedMult ?? 1);
     updateNavHUDModule(flightState, combatState);
     updateSystemDocking();

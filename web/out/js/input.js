@@ -62,6 +62,15 @@ export const flightState = {
   navDistance: Infinity,
   navEta: '--',
   autopilot: createAutopilotState(),
+  surface: {
+    state: 'NONE',
+    planetId: null,
+    approachDist: 0,
+    orbitAltitude: 0,
+    landingProgress: 0,
+    surfaceY: 0,
+    exitQueued: false
+  },
   status: 'TYPE USSY TO LAUNCH',
   statusUntil: 0,
   landed: false,
