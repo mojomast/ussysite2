@@ -505,4 +505,4 @@ export const sfxEngine = {
 };
 
 configureSfxVolumeApplier(value => sfxEngine.setMasterVolume(value));
-window.__USSY_SFX__ = sfxEngine;
+globalThis.__USSY_SFX__ = sfxEngine;
