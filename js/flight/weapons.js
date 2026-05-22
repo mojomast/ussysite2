@@ -1,5 +1,6 @@
 import { applyHeatShot, getWeaponDef } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
+import { sfxEngine } from './sfx.js';
 
 const THREE = globalThis.THREE;
 
@@ -358,6 +359,7 @@ export function firePrimaryWeapon(time) {
       if (fireBullet(playerBullets, flightTempVec, direction, weapon.projectileSpeed, weapon.projectileLife / 1000, { damage: weapon.damage, color: weapon.color })) fired += 1;
     }
     if (fired > 0) {
+      sfxEngine.playFlat('laser', { volume: 0.6 });
       flightState.ammo = Math.max(0, flightState.ammo - weapon.ammoCost);
       flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
       applyHeatShot(combatState, weapon.overheatBuildup);
@@ -396,6 +398,7 @@ export function fireSecondaryWeapon(time) {
       }
     }
     if (fired > 0) {
+      sfxEngine.playFlat('missile', { volume: 0.7 });
       flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
       flightState.status = count > 1 ? 'MISSILES AWAY' : 'MISSILE AWAY';
       combatAudio.bark('FOX TWO', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });

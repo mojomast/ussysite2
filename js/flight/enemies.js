@@ -1,5 +1,6 @@
 import { getDifficultyTier, getEnemyClass, getRandomClassForTier, applyDamageModel } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
+import { sfxEngine } from './sfx.js';
 import {
   deactivateCombatObject,
   enemyBullets,
@@ -264,7 +265,9 @@ export function updateCombatObjects(dt) {
         .addScaledVector(flightRight, (Math.random() - 0.5) * jitter)
         .addScaledVector(flightUp, (Math.random() - 0.5) * jitter)
         .normalize();
-      fireBullet(enemyBullets, enemy.position, flightTempVec2, 18, 2.1, { damage: 8, color: cls.color });
+      if (fireBullet(enemyBullets, enemy.position, flightTempVec2, 18, 2.1, { damage: 8, color: cls.color })) {
+        sfxEngine.playPositional('enemy_laser', enemy, { volume: 0.5 });
+      }
       enemy.userData.burstRemaining -= 1;
       enemy.userData.burstNextAt = now + cls.burstDelay;
       if (enemy.userData.burstRemaining <= 0) {

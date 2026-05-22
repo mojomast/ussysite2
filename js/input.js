@@ -153,12 +153,13 @@ export function onPointerLockError() {
 }
 
 function onPointerLockChange() {
-  const { documentRef = document, isFlightActive, renderer, updateFlightHud } = requireDeps();
+  const { documentRef = document, isFlightActive, onUndock, renderer, updateFlightHud } = requireDeps();
   flightState.pointerLocked = documentRef.pointerLockElement === renderer.domElement;
   if (!flightState.pointerLocked) clearFlightInput();
   documentRef.body.classList.toggle('pointer-unlocked', isFlightActive() && !flightState.pointerLocked);
   if (isFlightActive()) {
     if (flightState.pointerLocked) {
+      if (flightState.landed && typeof onUndock === 'function') onUndock();
       flightState.landed = false;
       flightState.status = `MOUSELOOK ${flightState.view.toUpperCase()} VIEW`;
     } else if (performance.now() > flightState.statusUntil) {

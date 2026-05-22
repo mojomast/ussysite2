@@ -46,8 +46,16 @@ export function configureFlightAudio(options = {}) {
 const SETTINGS_STORAGE_KEY = 'ussy.flight.settings.v1';
 export const gameSettings = {
   radioVolume: 0.45,
-  chatterVolume: 0.38
+  chatterVolume: 0.38,
+  sfxVolume: 0.55
 };
+
+let sfxVolumeApplier = () => {};
+
+export function configureSfxVolumeApplier(fn) {
+  sfxVolumeApplier = typeof fn === 'function' ? fn : () => {};
+  sfxVolumeApplier(gameSettings.sfxVolume);
+}
 
 export function clampVolume(value) {
   return Math.max(0, Math.min(1, Number(value)));
@@ -62,6 +70,7 @@ export function loadFlightSettings() {
     const saved = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
     if (Number.isFinite(saved.radioVolume)) gameSettings.radioVolume = clampVolume(saved.radioVolume);
     if (Number.isFinite(saved.chatterVolume)) gameSettings.chatterVolume = clampVolume(saved.chatterVolume);
+    if (Number.isFinite(saved.sfxVolume)) gameSettings.sfxVolume = clampVolume(saved.sfxVolume);
   } catch {
     // Settings are optional; defaults keep the game fully playable.
   }
@@ -89,6 +98,15 @@ export function setChatterVolume(value) {
   saveFlightSettings();
   combatAudio.updateGain();
   if (audioRuntime.flightState) audioRuntime.flightState.status = `CHATTER VOLUME ${volumePercent(gameSettings.chatterVolume)}`;
+  if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
+  audioRuntime.updateFlightHud(true);
+}
+
+export function setSfxVolume(value) {
+  gameSettings.sfxVolume = clampVolume(value);
+  saveFlightSettings();
+  sfxVolumeApplier(gameSettings.sfxVolume);
+  if (audioRuntime.flightState) audioRuntime.flightState.status = `SFX VOLUME ${volumePercent(gameSettings.sfxVolume)}`;
   if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
   audioRuntime.updateFlightHud(true);
 }
@@ -549,4 +567,3 @@ if (ttsEngine.supported) {
   window.speechSynthesis.onvoiceschanged = () => ttsEngine.initVoices();
   document.addEventListener('DOMContentLoaded', () => ttsEngine.initVoices());
 }
-

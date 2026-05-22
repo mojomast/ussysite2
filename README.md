@@ -53,6 +53,7 @@ docs/
   ARCHITECTURE.md
   ECONOMY.md
   ORCHESTRATOR.md
+  sfx-engine.md
   TTS.md
 ```
 
@@ -82,6 +83,7 @@ docs/
 - `js/flight/orchestrator.js` - Client-side director cooldowns, event gating, payload construction, and event application.
 - `js/flight/physics.js` - Flight physics tick, basis vectors, thrust, drag, fuel drain, and bounds handling.
 - `js/flight/runtime.js` - Thin flight runtime re-export boundary used by `js/main.js`.
+- `js/flight/sfx.js` - Shared-context procedural SFX, positional audio pools, engine hum, and dock ambience.
 - `js/flight/state.js` - Flight runtime state, persistence, mode transitions, and integrated init/tick wiring.
 - `js/flight/weapons.js` - Player/enemy projectiles, missiles, beams, heat, trails, and weapon VFX pools.
 - `js/tts/engine.js` - Reusable TTS transmission queue and playback coordination primitives.
@@ -121,7 +123,11 @@ Dogfight mode now opens with a deployment choice: run the guided tutorial or ent
 
 ## Audio Settings
 
-In flight, press `M` to open audio settings for radio volume, combat chatter volume, TTS mute, and quiet defaults. Radio transmissions default quieter than before, and all in-game voices are routed through the radio filter chain so clean and distorted voice paths do not mix.
+In flight, press `M` to open audio settings for radio volume, combat chatter volume, SFX volume, TTS mute, and quiet defaults. Radio transmissions default quieter than before, and all in-game voices are routed through the radio filter chain so clean and distorted voice paths do not mix.
+
+## SFX Engine
+
+Dogfight mode uses `js/flight/sfx.js` for procedural laser, missile, explosion, shield, UI, engine hum, and station ambience sounds. The engine shares `radioChain.ctx`, routes its own master gain directly to the audio destination, pre-synthesizes reusable `AudioBuffer`s, and caps playback with fixed-size pools. Adjust `sfxVolume` from the in-flight audio settings menu; the value persists with the other flight audio settings. See `docs/sfx-engine.md` for the full API and pool layout.
 
 ## How It Works
 

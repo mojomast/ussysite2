@@ -115,7 +115,8 @@ import {
   updateSpaceEnvironment as updateEngineSpaceEnvironment
 } from '../engine/starfield.js';
 import { flightUniverseScale, isCoarsePointer, maxPlayerAmmo, maxPlayerMissilesStored, prefersReducedMotion } from '../constants.js';
-import { combatAudio, configureFlightAudio, gameSettings, radioChain, setChatterVolume, setRadioVolume, setTTSBackendEnabled, ttsEngine, volumePercent } from './audio.js';
+import { combatAudio, configureFlightAudio, gameSettings, radioChain, setChatterVolume, setRadioVolume, setSfxVolume, setTTSBackendEnabled, ttsEngine, volumePercent } from './audio.js';
+import { sfxEngine } from './sfx.js';
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
@@ -295,7 +296,10 @@ configureCombat({
     awardXp(cls.xpReward ?? 25);
     loseReputation(getNearestStationFaction(pos), 1);
   },
-  onPlayerHit: () => awardXp(5),
+  onPlayerHit: () => {
+    sfxEngine.playFlat('shield_hit', { volume: 0.8 });
+    awardXp(5);
+  },
   onMissionComplete: () => awardXp(100)
 });
 
@@ -759,6 +763,7 @@ export function init() {
     radioChain,
     raycaster,
     renderer,
+    onUndock: handleFlightUndock,
     resetCameraView,
     sectionCamPositions,
     selectProject,
@@ -784,6 +789,7 @@ export function init() {
   // Event Listeners
   window.addEventListener('resize', onWindowResize);
   registerInputListeners();
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   window.setInterval(saveCombatStateToHash, 30000);
   window.addEventListener('beforeunload', saveCombatStateToHash);
 
@@ -1238,6 +1244,9 @@ function resetCategoryFilterForFlight() {
 
 function enterFlightMode() {
   if (!renderer || !renderer.domElement) return;
+  sfxEngine.init();
+  sfxEngine.stopStationAmbient();
+  sfxEngine.startEngineHum();
   if (!isConsoleActive) activateConsoleMode();
   resetCategoryFilterForFlight();
 
@@ -1330,6 +1339,8 @@ function enterFlightMode() {
 function exitFlightMode(releasePointer = true) {
   ttsEngine.stop();
   combatAudio.stopAll();
+  sfxEngine.stopEngineHum();
+  sfxEngine.stopStationAmbient();
   isFlightActive = false;
   flightState.pointerLocked = false;
   flightState.keys.clear();
@@ -1409,11 +1420,20 @@ function updateGameMessage(time) {
 }
 
 function dismissGameMessage() {
-  return dismissGameMessageModule();
+  const dismissed = dismissGameMessageModule();
+  if (dismissed) sfxEngine.playFlat('ui_deny', { volume: 0.55 });
+  return dismissed;
 }
 
 function handleGameMessageChoice(event) {
-  return handleGameMessageChoiceModule(event);
+  const handled = handleGameMessageChoiceModule(event);
+  if (handled) sfxEngine.playFlat('ui_confirm', { volume: 0.55 });
+  return handled;
+}
+
+function handleFlightUndock() {
+  sfxEngine.stopStationAmbient();
+  sfxEngine.startEngineHum();
 }
 
 function resetContractState() {
@@ -2035,6 +2055,7 @@ function handleTradeCompleted(trade) {
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
   const pointsBefore = combatState.skillPoints;
+  sfxEngine.playPositional('explosion', enemy, { volume: 0.9 });
   emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position });
   registerMissionKill();
   if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
@@ -2097,6 +2118,8 @@ function landOnNearestProject() {
   flightState.currentDockedProject = project;
   traderState.docked = true;
   traderState.dockedStation = project.id;
+  sfxEngine.stopEngineHum();
+  sfxEngine.startStationAmbient();
   flightState.vel.set(0, 0, 0);
   selectProject(project.id, false);
   if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
@@ -2587,12 +2610,13 @@ function openAudioSettingsMenu() {
   showGameMessage({
     type: 'AUDIO SETTINGS',
     source: 'USSYVERSE CONTROL',
-    text: `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}. COMBAT CHATTER ${volumePercent(gameSettings.chatterVolume)}. TTS ${ttsEngine.enabled ? 'ACTIVE' : 'MUTED'}. SELECT CONTROL:`,
+    text: `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}. COMBAT CHATTER ${volumePercent(gameSettings.chatterVolume)}. SFX ${volumePercent(gameSettings.sfxVolume)}. TTS ${ttsEngine.enabled ? 'ACTIVE' : 'MUTED'}. SELECT CONTROL:`,
     choices: [
       { key: '1', code: 'Digit1', label: `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}`, action: () => openVolumeMenu('radio') },
       { key: '2', code: 'Digit2', label: `CHATTER VOLUME ${volumePercent(gameSettings.chatterVolume)}`, action: () => openVolumeMenu('chatter') },
-      { key: '3', code: 'Digit3', label: ttsEngine.enabled ? 'MUTE TTS' : 'ENABLE TTS', action: () => { toggleFlightTts(); openAudioSettingsMenu(); } },
-      { key: '4', code: 'Digit4', label: 'RESTORE QUIET DEFAULTS', action: () => { setRadioVolume(0.45); setChatterVolume(0.38); openAudioSettingsMenu(); } },
+      { key: '3', code: 'Digit3', label: `SFX VOLUME ${volumePercent(gameSettings.sfxVolume)}`, action: () => openVolumeMenu('sfx') },
+      { key: '4', code: 'Digit4', label: ttsEngine.enabled ? 'MUTE TTS' : 'ENABLE TTS', action: () => { toggleFlightTts(); openAudioSettingsMenu(); } },
+      { key: '5', code: 'Digit5', label: 'RESTORE QUIET DEFAULTS', action: () => { setRadioVolume(0.45); setChatterVolume(0.38); setSfxVolume(0.55); openAudioSettingsMenu(); } },
       { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessage() }
     ],
     ttsPriority: 'low'
@@ -2601,12 +2625,13 @@ function openAudioSettingsMenu() {
 
 function openVolumeMenu(kind) {
   const isRadio = kind === 'radio';
-  const label = isRadio ? 'RADIO' : 'CHATTER';
-  const setter = isRadio ? setRadioVolume : setChatterVolume;
-  const current = isRadio ? gameSettings.radioVolume : gameSettings.chatterVolume;
+  const isSfx = kind === 'sfx';
+  const label = isRadio ? 'RADIO' : (isSfx ? 'SFX' : 'CHATTER');
+  const setter = isRadio ? setRadioVolume : (isSfx ? setSfxVolume : setChatterVolume);
+  const current = isRadio ? gameSettings.radioVolume : (isSfx ? gameSettings.sfxVolume : gameSettings.chatterVolume);
   const presets = isRadio
     ? [0.25, 0.45, 0.7, 1]
-    : [0.2, 0.38, 0.6, 1];
+    : (isSfx ? [0.25, 0.55, 0.75, 1] : [0.2, 0.38, 0.6, 1]);
   showGameMessage({
     type: `${label} VOLUME`,
     source: 'USSYVERSE CONTROL',
@@ -2681,6 +2706,14 @@ function onWindowResize() {
   resizeScene({ camera, renderer, isCoarsePointer });
 }
 
+function handleVisibilityChange() {
+  if (document.hidden) {
+    sfxEngine.suspend();
+  } else {
+    sfxEngine.resume();
+  }
+}
+
 // 5. Engine Animation Tick
 export function tick(time = 0) {
   
@@ -2721,6 +2754,7 @@ export function tick(time = 0) {
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
     updateFlight(time);
+    sfxEngine.updateEngineHum(flightState.vel);
     updateSpaceEnvironment(frameDt);
     if (time - lastPriceDriftTick > 30000) {
       tickPriceDrift();
