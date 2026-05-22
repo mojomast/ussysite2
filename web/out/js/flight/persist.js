@@ -1,4 +1,4 @@
-import { PLANETS, STATIONS } from './world.js';
+import { PLANETS, STATIONS, worldToThree } from './world.js';
 
 export const RUN_STATE_KEY = 'ussysite2.runState.v1';
 
@@ -43,19 +43,37 @@ function missionArray(value) {
   return Array.isArray(value) && value.every(item => isObject(item) && typeof item.id === 'string' && typeof item.type === 'string' && typeof item.status === 'string');
 }
 
-function getCoord(source, axis, index) {
-  if (!source) return 0;
-  if (Array.isArray(source)) return source[index] ?? 0;
-  if (Array.isArray(source.pos)) return source.pos[index] ?? 0;
-  if (Array.isArray(source.position)) return source.position[index] ?? 0;
-  if (source.position && typeof source.position === 'object') return source.position[axis] ?? 0;
-  return source[axis] ?? 0;
+function getVectorClass() {
+  if (globalThis.THREE?.Vector3) return globalThis.THREE;
+  return {
+    Vector3: class {
+      constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+      }
+
+      distanceTo(other) {
+        const dx = this.x - (other?.x ?? 0);
+        const dy = this.y - (other?.y ?? 0);
+        const dz = this.z - (other?.z ?? 0);
+        return Math.hypot(dx, dy, dz);
+      }
+    }
+  };
 }
 
 function toFinitePositionArray(pos) {
   if (!pos) return null;
-  const position = [getCoord(pos, 'x', 0), getCoord(pos, 'y', 1), getCoord(pos, 'z', 2)];
+  const source = Array.isArray(pos) ? pos : (pos.pos ?? pos.position ?? pos);
+  const vector = worldToThree(source, getVectorClass());
+  const position = [vector.x, vector.y, vector.z];
   return position.every(finiteNumber) ? position : null;
+}
+
+function asWorldVector(source) {
+  const position = toFinitePositionArray(source);
+  return position ? worldToThree(position, getVectorClass()) : null;
 }
 
 function getBodyId(body) {
@@ -67,19 +85,16 @@ function isValidPositionArray(position) {
 }
 
 export function getNearestPersistedBody(playerPos, bodies = [...PLANETS, ...STATIONS], maxDist = Infinity) {
-  const origin = toFinitePositionArray(playerPos);
+  const origin = asWorldVector(playerPos);
   if (!origin) return null;
   let nearest = null;
 
   for (const body of bodies ?? []) {
     const id = getBodyId(body);
     if (!id) continue;
-    const position = toFinitePositionArray(body);
+    const position = asWorldVector(body);
     if (!position) continue;
-    const dx = position[0] - origin[0];
-    const dy = position[1] - origin[1];
-    const dz = position[2] - origin[2];
-    const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    const dist = origin.distanceTo(position);
     if (dist <= maxDist && (!nearest || dist < nearest.dist)) nearest = { body: { ...body, id }, dist };
   }
 

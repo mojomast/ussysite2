@@ -1,23 +1,22 @@
-import { LOD_FAR, LOD_MID, PLANETS } from './world.js';
+import { LOD_FAR, LOD_MID, PLANETS, worldToThree } from './world.js';
 
 export const PLANET_ATMOSPHERE_TAG = 'flight-planet-atmosphere';
 
-function setObjectPosition(object, pos = [0, 0, 0]) {
-  const [x = 0, y = 0, z = 0] = pos;
-  if (typeof object.position?.set === 'function') {
-    object.position.set(x, y, z);
-  } else {
-    object.position = { x, y, z };
-  }
-}
+function getThree() {
+  if (globalThis.THREE?.Vector3) return globalThis.THREE;
+  return {
+    Vector3: class {
+      constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+      }
 
-function getCoord(source, axis, index) {
-  if (!source) return 0;
-  if (Array.isArray(source)) return source[index] ?? 0;
-  if (Array.isArray(source.pos)) return source.pos[index] ?? 0;
-  if (Array.isArray(source.position)) return source.position[index] ?? 0;
-  if (source.position && typeof source.position === 'object') return source.position[axis] ?? 0;
-  return source[axis] ?? 0;
+      distanceTo(other) {
+        return Math.hypot(this.x - (other?.x ?? 0), this.y - (other?.y ?? 0), this.z - (other?.z ?? 0));
+      }
+    }
+  };
 }
 
 function createPlanetMesh(planetDef, THREE, widthSegments, heightSegments) {
@@ -55,12 +54,19 @@ export function createPlanet(planetDef, THREE) {
   };
   lod.add(atmosphere);
 
-  setObjectPosition(lod, planetDef.pos);
+  const worldPos = worldToThree(planetDef.pos, THREE);
+  if (typeof lod.position?.copy === 'function') lod.position.copy(worldPos);
+  else if (typeof lod.position?.set === 'function') lod.position.set(worldPos.x, worldPos.y, worldPos.z);
+  else lod.position = worldPos;
   lod.userData = {
     ...(lod.userData ?? {}),
+    id: planetDef.id,
+    name: planetDef.name,
+    pos: planetDef.pos,
     planetId: planetDef.id,
     type: planetDef.type,
     radius: planetDef.radius,
+    hasStation: planetDef.hasStation,
     isPlanet: true
   };
 
@@ -82,15 +88,18 @@ export function updatePlanetLOD(planets, camera) {
 
 export function getNearestBody(playerPos, bodies, maxDist = Infinity) {
   let nearest = null;
-  const px = getCoord(playerPos, 'x', 0);
-  const py = getCoord(playerPos, 'y', 1);
-  const pz = getCoord(playerPos, 'z', 2);
+  const THREE = getThree();
+  const playerVector = (playerPos?.isVector3 || typeof playerPos?.distanceTo === 'function')
+    ? playerPos
+    : worldToThree(playerPos, THREE);
 
   for (const body of bodies ?? []) {
-    const dx = getCoord(body, 'x', 0) - px;
-    const dy = getCoord(body, 'y', 1) - py;
-    const dz = getCoord(body, 'z', 2) - pz;
-    const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    const bodyPos = body?.pos ?? body?.position;
+    if (!bodyPos) continue;
+    const bodyVector = (bodyPos?.isVector3 || typeof bodyPos?.distanceTo === 'function')
+      ? bodyPos
+      : worldToThree(bodyPos, THREE);
+    const dist = playerVector.distanceTo(bodyVector);
     if (dist <= maxDist && (!nearest || dist < nearest.dist)) {
       nearest = { body, dist };
     }

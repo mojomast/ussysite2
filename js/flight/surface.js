@@ -1,3 +1,6 @@
+import { handleMissionLanding as missionHandleMissionLanding } from './mission.js';
+import { worldToThree } from './world.js';
+
 export const SURFACE_STATES = Object.freeze({
   NONE: 'NONE',
   APPROACH: 'APPROACH',
@@ -9,6 +12,24 @@ export const SURFACE_STATES = Object.freeze({
 
 const LANDING_SECONDS = 3;
 const APPROACH_RADIUS_MULT = 1.6;
+const STATION_SERVICE_TYPES = new Set(['core', 'ai', 'infra', 'creative']);
+
+function getThree() {
+  if (globalThis.THREE?.Vector3) return globalThis.THREE;
+  return {
+    Vector3: class {
+      constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+      }
+
+      distanceTo(other) {
+        return Math.hypot(this.x - (other?.x ?? 0), this.y - (other?.y ?? 0), this.z - (other?.z ?? 0));
+      }
+    }
+  };
+}
 
 function ensureSurface(flightState) {
   if (!flightState.surface || typeof flightState.surface !== 'object') {
@@ -25,20 +46,20 @@ function ensureSurface(flightState) {
   return flightState.surface;
 }
 
-function getCoord(source, axis, index) {
-  if (!source) return 0;
-  if (Array.isArray(source)) return source[index] ?? 0;
-  if (Array.isArray(source.pos)) return source.pos[index] ?? 0;
-  if (Array.isArray(source.position)) return source.position[index] ?? 0;
-  if (source.position && typeof source.position === 'object') return source.position[axis] ?? 0;
-  return source[axis] ?? 0;
+function asWorldVector(source) {
+  if (!source) return null;
+  if (source.isVector3 || typeof source.distanceTo === 'function') return source;
+  return worldToThree(source, getThree());
 }
 
-function distance(a, b) {
-  const dx = getCoord(a, 'x', 0) - getCoord(b, 'x', 0);
-  const dy = getCoord(a, 'y', 1) - getCoord(b, 'y', 1);
-  const dz = getCoord(a, 'z', 2) - getCoord(b, 'z', 2);
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+function planetPosition(planet) {
+  return asWorldVector(planet?.pos ?? planet?.position);
+}
+
+function distanceBetween(a, b) {
+  const posA = asWorldVector(a);
+  const posB = asWorldVector(b);
+  return posA && posB ? posA.distanceTo(posB) : Infinity;
 }
 
 function planetId(planet) {
@@ -51,6 +72,15 @@ function planetRadius(planet) {
 
 function planetType(planet) {
   return planet?.type ?? planet?.userData?.type ?? 'unknown';
+}
+
+function planetHasStation(planet) {
+  return Boolean(planet?.hasStation ?? planet?.userData?.hasStation);
+}
+
+function surfaceYForPlanet(planet) {
+  const pos = planetPosition(planet);
+  return (pos?.y ?? 0) + planetRadius(planet);
 }
 
 function setVelocity(flightState, scalar = 0) {
@@ -87,7 +117,7 @@ export function checkPlanetProximity(flightState, planets = []) {
   let nearest = null;
   for (const planet of planets ?? []) {
     const radius = planetRadius(planet);
-    const dist = distance(flightState?.pos, planet?.pos ?? planet?.position);
+    const dist = distanceBetween(flightState?.pos, planet?.pos ?? planet?.position);
     if (!nearest || dist < nearest.dist) nearest = { planet, dist, radius };
   }
   if (!nearest?.planet) return surface;
@@ -107,10 +137,10 @@ export function enterApproach(flightState, planet, distanceToPlanet = null) {
   surface.approachDist = radius * APPROACH_RADIUS_MULT;
   surface.orbitAltitude = radius * 1.2;
   surface.landingProgress = 0;
-  surface.surfaceY = getCoord(planet?.pos ?? planet?.position, 'y', 1) + radius;
+  surface.surfaceY = surfaceYForPlanet(planet);
   surface.exitQueued = false;
   disengageRouteAutopilot(flightState, 'PLANET APPROACH');
-  if ((distanceToPlanet ?? distance(flightState?.pos, planet?.pos ?? planet?.position)) <= radius * 1.2) {
+  if ((distanceToPlanet ?? distanceBetween(flightState?.pos, planet?.pos ?? planet?.position)) <= radius * 1.2) {
     enterOrbital(flightState, planet);
   }
   return surface;
@@ -123,7 +153,7 @@ export function enterOrbital(flightState, planet) {
   surface.planetId = planetId(planet);
   surface.orbitAltitude = radius * 1.2;
   surface.approachDist = radius * APPROACH_RADIUS_MULT;
-  surface.surfaceY = getCoord(planet?.pos ?? planet?.position, 'y', 1) + radius;
+  surface.surfaceY = surfaceYForPlanet(planet);
   dampVelocity(flightState, 0.4);
   return surface;
 }
@@ -135,7 +165,7 @@ export function beginLanding(flightState, planet) {
   surface.landingProgress = 0;
   surface.startY = flightState.pos.y ?? 0;
   surface.preLandingThrust = flightState.thrust ?? 14;
-  surface.surfaceY = getCoord(planet?.pos ?? planet?.position, 'y', 1) + planetRadius(planet);
+  surface.surfaceY = surfaceYForPlanet(planet);
   surface.exitQueued = planetType(planet) === 'hostile';
   flightState.landed = false;
   flightState.throttleEnabled = false;
@@ -162,8 +192,9 @@ export function onSurface(flightState, planet) {
   surface.state = SURFACE_STATES.SURFACE;
   surface.planetId = planetId(planet) ?? surface.planetId;
   surface.landingProgress = 1;
-  surface.surfaceY = getCoord(planet?.pos ?? planet?.position, 'y', 1) + planetRadius(planet);
+  surface.surfaceY = surfaceYForPlanet(planet);
   surface.exitQueued = surface.exitQueued || planetType(planet) === 'hostile';
+  if (surface.planetId && planetHasStation(planet)) missionHandleMissionLanding(surface.planetId);
   flightState.landed = true;
   setVelocity(flightState, 0);
   flightState.throttleEnabled = false;
@@ -203,7 +234,7 @@ export function updateSurface(flightState, planets = [], dt = 0) {
   const planet = planets.find(item => planetId(item) === surface.planetId) ?? null;
   if (surface.state === SURFACE_STATES.NONE || surface.state === SURFACE_STATES.APPROACH) checkPlanetProximity(flightState, planets);
   if (surface.state === SURFACE_STATES.APPROACH && planet) {
-    if (distance(flightState?.pos, planet?.pos ?? planet?.position) <= planetRadius(planet) * 1.2) enterOrbital(flightState, planet);
+    if (distanceBetween(flightState?.pos, planet?.pos ?? planet?.position) <= planetRadius(planet) * 1.2) enterOrbital(flightState, planet);
   } else if (surface.state === SURFACE_STATES.LANDING) {
     updateLanding(flightState, planet, dt);
   } else if (surface.state === SURFACE_STATES.SURFACE && surface.exitQueued) {
@@ -243,5 +274,15 @@ export function getSurfaceServices(planet) {
     ];
   }
   if (type === 'anomaly') return [{ id: 'special_event', label: 'Special Event', available: true }];
+  if (planetHasStation(planet) && STATION_SERVICE_TYPES.has(type)) {
+    const services = [
+      { id: 'repair', label: 'Repair', available: true },
+      { id: 'refuel', label: 'Refuel', available: true },
+      { id: 'missions', label: 'Missions', available: true },
+      { id: 'trade', label: 'Trade', available: true }
+    ];
+    if (type === 'core') services.push({ id: 'save', label: 'Save', available: true });
+    return services;
+  }
   return [];
 }

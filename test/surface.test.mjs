@@ -51,28 +51,29 @@ function flightState(pos = new Vector3(0, 0, 2100)) {
 }
 
 const planet = {
-  id: 'nexus-prime',
-  type: 'homeworld',
-  pos: [0, 0, 0],
-  radius: 1000
+  id: 'devussy',
+  type: 'core',
+  hasStation: true,
+  pos: [5800, 187, 0],
+  radius: 852
 };
 
 test('checkPlanetProximity enters approach inside planet radius times 1.6', () => {
-  const state = flightState(new Vector3(0, 0, 1599));
+  const state = flightState(new Vector3(5800, 187, 1362));
   checkPlanetProximity(state, [planet]);
   assert.equal(state.surface.state, SURFACE_STATES.APPROACH);
-  assert.equal(state.surface.planetId, 'nexus-prime');
-  assert.equal(state.surface.approachDist, 1600);
+  assert.equal(state.surface.planetId, 'devussy');
+  assert.equal(state.surface.approachDist, 1363.2);
 });
 
 test('checkPlanetProximity does not enter approach outside planet radius times 1.6', () => {
-  const state = flightState(new Vector3(0, 0, 1601));
+  const state = flightState(new Vector3(5800, 187, 1365));
   checkPlanetProximity(state, [planet]);
   assert.equal(state.surface.state, SURFACE_STATES.NONE);
 });
 
 test('checkPlanetProximity does not retrigger when surface state is not NONE', () => {
-  const state = flightState(new Vector3(0, 0, 1599));
+  const state = flightState(new Vector3(5800, 187, 1362));
   state.surface.state = SURFACE_STATES.ORBITAL;
   checkPlanetProximity(state, [planet]);
   assert.equal(state.surface.state, SURFACE_STATES.ORBITAL);
@@ -89,10 +90,10 @@ test('enterApproach idles route autopilot without UI dependencies', () => {
 });
 
 test('APPROACH transitions to ORBITAL within planet radius times 1.2', () => {
-  const state = flightState(new Vector3(0, 0, 1199));
+  const state = flightState(new Vector3(5800, 187, 1022));
   enterApproach(state, planet);
   assert.equal(state.surface.state, SURFACE_STATES.ORBITAL);
-  assert.equal(state.surface.orbitAltitude, 1200);
+  assert.equal(state.surface.orbitAltitude, 1022.4);
 });
 
 test('beginLanding and updateLanding lerp progress over 3 seconds then surface', () => {
@@ -102,7 +103,7 @@ test('beginLanding and updateLanding lerp progress over 3 seconds then surface',
   updateLanding(state, planet, 1.5);
   assert.equal(state.surface.state, SURFACE_STATES.LANDING);
   assert.equal(state.surface.landingProgress, 0.5);
-  assert.equal(state.pos.y, 1250);
+  assert.equal(state.pos.y, 1269.5);
   updateLanding(state, planet, 1.5);
   assert.equal(state.surface.state, SURFACE_STATES.SURFACE);
   assert.equal(state.surface.landingProgress, 1);
@@ -138,7 +139,7 @@ test('updateSurface: full NONE → SURFACE → NONE round-trip', () => {
 });
 
 test('getSurfaceServices returns combat encounter for hostile planet', () => {
-  const hostile = { ...planet, id: 'cinder', type: 'hostile' };
+  const hostile = { ...planet, id: 'battlebussy', type: 'hostile' };
   const state = flightState();
   onSurface(state, hostile);
   assert.equal(state.surface.state, SURFACE_STATES.SURFACE);
@@ -148,12 +149,12 @@ test('getSurfaceServices returns combat encounter for hostile planet', () => {
 });
 
 test('getSurfaceServices returns special event for anomaly planet', () => {
-  const anomaly = { ...planet, id: 'the-breach', type: 'anomaly' };
+  const anomaly = { ...planet, id: 'nexussy', type: 'anomaly' };
   assert.deepEqual(getSurfaceServices(anomaly), [{ id: 'special_event', label: 'Special Event', available: true }]);
 });
 
 test('hostile surface auto-departs using exitQueued', () => {
-  const hostile = { ...planet, id: 'cinder', type: 'hostile' };
+  const hostile = { ...planet, id: 'battlebussy', type: 'hostile' };
   const state = flightState();
   onSurface(state, hostile);
   updateSurface(state, [hostile], 0.1);

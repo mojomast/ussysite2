@@ -144,7 +144,7 @@ import {
 import { flightUniverseScale, isCoarsePointer, maxPlayerAmmo, maxPlayerMissilesStored, prefersReducedMotion } from '../constants.js';
 import { combatAudio, configureFlightAudio, gameSettings, radioChain, setChatterVolume, setRadioVolume, setSfxVolume, setTTSBackendEnabled, ttsEngine, volumePercent } from './audio.js';
 import { sfxEngine } from './sfx.js';
-import { PLANETS, STATIONS } from './world.js';
+import { STATIONS, SYSTEM_RADIUS, worldToThree } from './world.js';
 import { createStarfield } from './starfield.js';
 import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js';
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
@@ -244,17 +244,14 @@ const maxPlayerMissiles = 8;
 const playerLaserStreakLength = 5.4;
 const playerLaserTrailPoints = 14;
 const playerLaserMaxDistanceSq = 320 * 320;
-const constellationScale = 2.25;
 const nodeBaseScale = 1;
 const planetNodeRadius = isCoarsePointer ? 1.55 : 1.75;
 const planetNodeFlightScale = isCoarsePointer ? 3.8 : 4.4;
 const planetDistantHaloScale = isCoarsePointer ? 14 : 18;
-const flightPlanetMinDistance = 260;
-const flightPlanetMaxDistance = 1080;
 const planetNodeHitRadius = isCoarsePointer ? planetNodeRadius * 1.18 : planetNodeRadius * 1.06;
 const planetLabelRadius = planetNodeRadius * 1.35;
 const landingRange = 7.2;
-const flightBounds = 135;
+const flightBounds = SYSTEM_RADIUS;
 const radarRange = 140;
 const debrisCount = prefersReducedMotion ? 72 : (isCoarsePointer ? 210 : 300);
 const dustParticleCount = prefersReducedMotion ? 180 : (isCoarsePointer ? 420 : 600);
@@ -553,7 +550,7 @@ function addKillFeedEntry(text, colorOrOptions = '#ffffff') {
 function saveCurrentRunState({ manual = false } = {}) {
   const saved = saveRunState(buildPersistentCombatState(), traderState, reputationState, skillTree, {
     flightState,
-    bodies: [...systemPlanets, ...systemStations, ...PLANETS, ...STATIONS]
+    bodies: [...systemPlanets, ...systemStations]
   });
   if (saved && manual) addKillFeedEntry('STATE SAVED', '#44ff88');
   return saved;
@@ -699,7 +696,6 @@ export function init() {
     playerLaserMaxDistanceSq
   });
   configureFlightPhysics({
-    activeUniverseScale: () => activeUniverseScale,
     firePrimaryWeapon,
     fireSecondaryWeapon,
     findNearestEnemy,
@@ -1022,28 +1018,18 @@ function createFlightGameObjects() {
 
 // 2. Procedural Nodes Graph
 function buildProjectNodes() {
-  const count = USSY_PROJECTS.length;
-  
-  USSY_PROJECTS.forEach((proj, idx) => {
-    // Position nodes in an expanding spiral
-    const angle = (idx / count) * Math.PI * 2 * 2.5; 
-    const radius = (5.5 + (idx / count) * 8.5) * constellationScale;
-    const yHeight = ((Math.sin(angle * 2) * 1.5) + (Math.random() * 0.5)) * constellationScale;
-    
-    const posX = Math.cos(angle) * radius;
-    const posZ = Math.sin(angle) * radius;
-    
+  USSY_PROJECTS.forEach(proj => {
     const cat = USSY_CATEGORIES[proj.category];
     const catColor = cat ? cat.color : '#00f0ff';
     const hexColor = parseInt(catColor.replace('#', '0x'));
+    const worldPos = worldToThree(proj.planet?.pos, THREE);
 
     const nodeMesh = createPlanetNodeLOD(hexColor);
-    nodeMesh.position.set(posX, yHeight, posZ);
+    nodeMesh.position.copy(worldPos);
     Object.assign(nodeMesh.userData, {
       project: proj,
       baseScale: nodeBaseScale,
-      basePosition: nodeMesh.position.clone(),
-      flightPosition: createFlightProjectPosition(idx, count, proj)
+      worldPos
     });
     nodeMesh.userData.visualRadius = planetNodeRadius;
     nodeMesh.scale.setScalar(nodeBaseScale);
@@ -1085,23 +1071,6 @@ function buildProjectNodes() {
     labelsContainer.appendChild(label);
     projectLabels.push({ element: label, object3d: nodeMesh });
   });
-}
-
-function createFlightProjectPosition(idx, count, project) {
-  const total = Math.max(1, count);
-  const t = total === 1 ? 0.5 : idx / (total - 1);
-  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  const idOffset = Array.from(project.id || '').reduce((sum, char) => sum + char.charCodeAt(0), 0) * 0.0017;
-  const theta = idx * goldenAngle + idOffset;
-  const vertical = 1 - 2 * ((idx + 0.5) / total);
-  const radial = Math.sqrt(Math.max(0, 1 - vertical * vertical));
-  const shellRadius = THREE.MathUtils.lerp(flightPlanetMinDistance, flightPlanetMaxDistance, t)
-    + Math.sin((idx + 1) * 12.9898 + idOffset) * 54;
-  return new THREE.Vector3(
-    Math.cos(theta) * radial * shellRadius,
-    vertical * shellRadius * 0.92 + Math.sin(theta * 1.7) * 120,
-    Math.sin(theta) * radial * shellRadius
-  );
 }
 
 function buildRelatedProjectEdges() {
@@ -1194,12 +1163,6 @@ function applyFlightUniverseScale(scale) {
   const flightScaleActive = scale === flightUniverseScale;
   const visualScale = flightScaleActive ? planetNodeFlightScale : 1;
   projectNodes.forEach(node => {
-    if (!node.userData.basePosition) node.userData.basePosition = node.position.clone();
-    if (flightScaleActive && node.userData.flightPosition) {
-      node.position.copy(node.userData.flightPosition);
-    } else {
-      node.position.copy(node.userData.basePosition).multiplyScalar(scale);
-    }
     node.scale.setScalar((node.userData.baseScale ?? nodeBaseScale) * visualScale);
     if (node.userData.distantHalo) node.userData.distantHalo.visible = flightScaleActive;
     const line = node.userData.connectionLine;
@@ -1716,12 +1679,33 @@ function setSystemWorldVisible(visible) {
 }
 
 function getSurfacePlanetDefinition(planetObject) {
-  const id = planetObject?.userData?.planetId ?? planetObject?.id;
-  return PLANETS.find(planet => planet.id === id) ?? planetObject;
+  const data = planetObject?.userData ?? {};
+  return {
+    id: data.id ?? data.planetId ?? planetObject?.id,
+    name: data.name ?? planetObject?.name,
+    pos: data.pos,
+    position: planetObject?.position,
+    type: data.type ?? planetObject?.type,
+    radius: data.radius ?? planetObject?.radius ?? 0,
+    hasStation: data.hasStation,
+    userData: data
+  };
 }
 
 function getSurfacePlanetsForHUD() {
-  return systemPlanets.map(planet => ({ ...getSurfacePlanetDefinition(planet), position: planet.position, userData: planet.userData }));
+  return systemPlanets.map(getSurfacePlanetDefinition);
+}
+
+function getSystemStationDefinitions() {
+  return systemStations.map(station => ({
+    id: station.userData?.stationId ?? station.id,
+    name: station.userData?.name ?? station.name ?? station.userData?.stationId,
+    position: station.position,
+    type: station.userData?.type,
+    hasTrading: station.userData?.hasTrading,
+    hasMissions: station.userData?.hasMissions,
+    userData: station.userData
+  }));
 }
 
 function updateSurfaceVisuals() {
@@ -1755,7 +1739,7 @@ function createSystemWorldObjects() {
   systemStarfield = createStarfield(scene, THREE);
   systemPlanets = createAllPlanets(scene, THREE);
   systemStations = createAllStations(scene, THREE);
-  navGraph = buildNavGraph(PLANETS, STATIONS);
+  navGraph = buildNavGraph(getSurfacePlanetsForHUD(), getSystemStationDefinitions());
   spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState });
   setSystemWorldVisible(false);
 }
@@ -1771,7 +1755,7 @@ function setSystemMapVisible(visible) {
   if (!overlay) return false;
   overlay.classList.toggle('hidden', !visible);
   overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
-  if (visible) renderSystemMap(canvas, navGraph, flightState, PLANETS, STATIONS, getCivilianMapData(flightState.civilianTraffic?.ships), combatState.activeIntercept);
+  if (visible) renderSystemMap(canvas, navGraph, flightState, getSurfacePlanetsForHUD(), getSystemStationDefinitions(), getCivilianMapData(flightState.civilianTraffic?.ships), combatState.activeIntercept);
   return true;
 }
 
@@ -1846,7 +1830,18 @@ function registerSurfacePanelControls() {
 
 function getMissionBoardStationDef(stationId = traderState.dockedStation) {
   if (!stationId) return null;
-  return STATIONS.find(station => station.id === stationId) || null;
+  const station = STATIONS.find(item => item.id === stationId);
+  if (station) return station;
+  const project = USSY_PROJECTS.find(item => item.id === stationId);
+  if (!project) return null;
+  return {
+    id: project.id,
+    name: project.name,
+    pos: project.planet?.pos,
+    type: project.category,
+    hasTrading: true,
+    hasMissions: true
+  };
 }
 
 function getMissionBoardContext(stationId = traderState.dockedStation) {
@@ -1945,6 +1940,26 @@ function getCurrentSurfacePlanet() {
   const id = flightState.surface?.planetId;
   if (!id) return null;
   return systemPlanets.find(planet => planet?.userData?.planetId === id || planet?.id === id) || null;
+}
+
+function dockAtSurfaceProject() {
+  const projectId = flightState.surface?.planetId;
+  const project = USSY_PROJECTS.find(item => item.id === projectId);
+  if (!project) return false;
+  if (!missionState.active) handleDirectorLanding(project);
+  restockAtProject(project);
+  flightState.currentDockedProject = project;
+  traderState.docked = true;
+  traderState.dockedStation = project.id;
+  sfxEngine.stopEngineHum();
+  sfxEngine.startStationAmbient();
+  selectProject(project.id, false);
+  if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
+    document.exitPointerLock();
+  }
+  if (!gameMessageState.active) openStationMenu(project.id);
+  saveCurrentRunState({ manual: true });
+  return true;
 }
 
 function registerFlightAssistKeyCapture() {
@@ -2680,7 +2695,7 @@ function landOnNearestProject() {
     }
   }
   updateProjectLandingTarget();
-  const activeLandingRange = landingRange * activeUniverseScale;
+  const activeLandingRange = landingRange;
   if (!flightState.nearestNode || flightState.nearestDistance > activeLandingRange) {
     flightState.status = 'APPROACH PROJECT NODE TO LAND';
     updateFlightHud(true);
@@ -3393,7 +3408,9 @@ export function tick(time = 0) {
       updateCivilians(frameDt, { THREE, gameRoot, flightState, navGraph, enemies, playerBullets, playerMissiles, addKillFeedEntry, now: time });
       spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState, enemies, now: time });
       updateMissionBoardProgress(time);
+      const previousSurfaceState = flightState.surface?.state;
       updateSurface(flightState, systemPlanets, frameDt);
+      if (previousSurfaceState !== SURFACE_STATES.SURFACE && flightState.surface?.state === SURFACE_STATES.SURFACE) dockAtSurfaceProject();
     }
     updateSurfaceVisuals();
     updateStarfieldWarp(systemStarfield, flightForward, ensureAutopilotState(flightState).hyperspeedMult ?? 1);

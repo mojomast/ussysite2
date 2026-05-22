@@ -82,7 +82,7 @@ function cloneVector(ThreeRef, pos) {
 }
 
 function nodePosition(ThreeRef, node) {
-  return cloneVector(ThreeRef, node?.pos || node?.position || node?.userData?.flightPosition);
+  return cloneVector(ThreeRef, node?.pos || node?.position);
 }
 
 function ensureTrafficState(flightState) {

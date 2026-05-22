@@ -64,7 +64,7 @@ describe('flight navgraph', () => {
   it('findRoute returns a two-node route for directly connected nodes', () => {
     const graph = buildNavGraph();
 
-    assert.deepEqual(findRoute(graph, 'nexus-prime', 'cinder'), ['nexus-prime', 'cinder']);
+    assert.deepEqual(findRoute(graph, 'devussy', 'openclawssy'), ['devussy', 'openclawssy']);
   });
 
   it('findRoute returns a valid path array for a multi-hop route', () => {
@@ -83,6 +83,6 @@ describe('flight navgraph', () => {
   it('distanceBetweenNodes returns Infinity for unknown ids', () => {
     const graph = buildNavGraph();
 
-    assert.equal(distanceBetweenNodes(graph, 'nexus-prime', 'unknown'), Infinity);
+    assert.equal(distanceBetweenNodes(graph, 'devussy', 'unknown'), Infinity);
   });
 });

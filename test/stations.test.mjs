@@ -13,6 +13,9 @@ class TestVector3 {
     this.z = z;
     return this;
   }
+  copy(other) {
+    return this.set(other.x, other.y, other.z);
+  }
 }
 
 class TestObject3D {
@@ -52,6 +55,7 @@ class TestMesh extends TestObject3D {
 }
 
 const TestTHREE = {
+  Vector3: TestVector3,
   Group: TestGroup,
   Mesh: TestMesh,
   MeshBasicMaterial: TestMaterial,

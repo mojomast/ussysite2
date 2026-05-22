@@ -82,22 +82,23 @@ Manual override currently disables autopilot for manual flight keys and mouse de
 
 ## 3. Navigation Graph Design
 
-Use a graph over logical locations, not live meshes. The current live target can remain `navNode`, but route planning should reference stable IDs so routes survive scene rebuilds and can include stations/jump points that are not project meshes.
+Use a graph over logical locations, not live meshes. Route planning should reference stable IDs so routes survive scene rebuilds and can include project-backed planets, standalone stations, and jump points.
 
 Recommended storage:
 
 - Runtime graph module: `js/flight/nav-graph.js`.
-- Static authored data, if needed later: `js/data/navigation.js` or generated from `USSY_PROJECTS` during `buildProjectNodes()`.
+- Static authored data lives in `js/flight/world.js`; `PLANETS` is generated to match `USSY_PROJECTS`, while `STATIONS` and `JUMP_POINTS` remain standalone route anchors.
+- `worldToThree(posArray, THREE)` is the canonical conversion from authored world coordinates to Three.js vectors.
 - `flightState.navGraphId` stores the active graph version/id; `flightState.routeNodeIds` stores the current path by node id.
-- Keep `projectNodeById` as the bridge from graph node id to render/landing mesh for project planets.
+- Keep `projectNodeById` as the bridge from graph node id to render/landing mesh for project-backed planets.
 
 Node types:
 
 | Type | Meaning | Position source |
 | --- | --- | --- |
-| `planet` | Existing project planet/node | `node.userData.flightPosition` or active `node.position` in flight mode. |
-| `station` | Dockable/economy station | Authored position, often near a planet with `parentId`. |
-| `jump` | Hyperspeed/jump route gate or deep-space nav point | Authored/generated position. |
+| `planet` | Project-backed planet/node whose id matches `USSY_PROJECTS` | `PLANETS[].pos` via `worldToThree()`. |
+| `station` | Standalone dockable/economy station | `STATIONS[].pos` via `worldToThree()`. |
+| `jump` | Hyperspeed/jump route gate or deep-space nav point | `JUMP_POINTS[].pos` via `worldToThree()`. |
 
 Adjacency-list schema:
 
@@ -151,7 +152,7 @@ Implementation notes:
 
 - Store `distance` in flight-world units. If omitted, compute from node positions at graph build time.
 - Store edges as directed entries even when `bidirectional` is true; graph build can expand bidirectional definitions into both adjacency lists.
-- Start with direct routes between visible project planets using nearest-neighbor or existing relationship edges, then add stations and jump points.
+- Build routes from canonical `PLANETS`, `STATIONS`, and `JUMP_POINTS`; planet ids already match project ids, while stations and jump points remain standalone graph nodes.
 - Route planning can use Dijkstra/A* over `distance`, with optional cost multipliers for `routeType`, hostile zones, fuel, faction restrictions, or mission locks.
 
 ## 4. Autopilot State Machine Design

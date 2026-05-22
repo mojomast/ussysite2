@@ -28,9 +28,10 @@ Credits are the canonical spendable balance in `traderState.credits`; combat per
 Existing station/world facts relevant to mission boards:
 
 - `STATIONS`: `relay-7`, `hub-alpha`, and `fort-kova`; all have `hasMissions: true`, and only `hub-alpha` has trading.
-- `PLANETS`: `nexus-prime`, `cinder`, `vaultholm`, and `the-breach`; some have `hasStation: true` but mission boards currently route mostly through project/station menus.
+- `PLANETS`: 23 project-backed bodies matching `USSY_PROJECTS`; planet ids are project ids, so mission targets can resolve through project, planet, nav graph, and station-profile paths without a separate expansion-id mapping.
+- `worldToThree(posArray, THREE)` is the authoritative converter from authored world coordinates to Three.js vectors used by planet, station, nav graph, surface, HUD, and persistence paths.
 - `createStation()` copies `stationId`, `type`, `hasTrading`, `hasMissions`, and `isStation` into `userData`.
-- `buildNavGraph(PLANETS, STATIONS)` creates nodes for planets, stations, and jump points, connects local nodes within `NAVGRAPH_LOCAL_RANGE`, and adds nearest jump connections.
+- `buildNavGraph(PLANETS, STATIONS, JUMP_POINTS)` creates nodes for planets, stations, and jump points, connects local nodes within `NAVGRAPH_LOCAL_RANGE`, and adds nearest jump connections.
 - Autopilot uses `flightState.autopilot.targetId`, `route`, `routeIndex`, and `state`; completion is detectable when `updateAutopilot()` sets `state` to `ARRIVED`.
 
 Existing mission behavior in `state.js` is contract based, with `missionState.active`, `contractId`, `contractStepIndex`, `contractProgress`, and one tracked current objective. Contract steps already support `land`, `landDifferent`, `kills`, and `trade`. Kills integrate through `handleEnemyDestroyed()` -> `registerMissionKill(enemy)`. Landings integrate through project landing via `handleMissionLanding(project)` and system station docking via `dockAtSystemStation(stationObject)`, though only project landings currently pass into contract landing logic. Rewards are paid in `completeMissionContract()` with `addCombatCredits()`, optional fuel, and `gainReputation()`.

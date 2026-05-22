@@ -66,10 +66,7 @@ function getNodeName(navGraph, id) {
 function distance(a, b) {
   if (!a || !b) return Infinity;
   if (typeof a.distanceTo === 'function') return a.distanceTo(b);
-  const dx = (a.x ?? 0) - (b.x ?? 0);
-  const dy = (a.y ?? 0) - (b.y ?? 0);
-  const dz = (a.z ?? 0) - (b.z ?? 0);
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0), (a.z ?? 0) - (b.z ?? 0));
 }
 
 function routeDistance(navGraph, route = []) {

@@ -1,4 +1,4 @@
-import { PLANETS, SYSTEM_RADIUS } from './world.js';
+import { PLANETS, SYSTEM_RADIUS, worldToThree } from './world.js';
 
 export const STARFIELD_COUNT = 8000;
 export const STARFIELD_RADIUS = SYSTEM_RADIUS * 1.8;
@@ -24,14 +24,30 @@ export function pickStarColor(randomValue) {
   return STAR_COLORS.find(entry => randomValue < entry.threshold)?.color ?? STAR_COLORS.at(-1).color;
 }
 
-export function isPositionExcludedFromPlanets(x, y, z, planets = PLANETS) {
+function getThree(Three) {
+  if (Three?.Vector3) return Three;
+  if (globalThis.THREE?.Vector3) return globalThis.THREE;
+  return {
+    Vector3: class {
+      constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+      }
+
+      distanceTo(other) {
+        return Math.hypot(this.x - (other?.x ?? 0), this.y - (other?.y ?? 0), this.z - (other?.z ?? 0));
+      }
+    }
+  };
+}
+
+export function isPositionExcludedFromPlanets(x, y, z, planets = PLANETS, Three = globalThis.THREE) {
+  const ThreeRef = getThree(Three);
+  const point = worldToThree([x, y, z], ThreeRef);
   for (const planet of planets) {
-    const [px, py, pz] = planet.pos;
     const minDistance = planet.radius * 2;
-    const dx = x - px;
-    const dy = y - py;
-    const dz = z - pz;
-    if ((dx * dx + dy * dy + dz * dz) < minDistance * minDistance) return true;
+    if (point.distanceTo(worldToThree(planet.pos, ThreeRef)) < minDistance) return true;
   }
   return false;
 }
@@ -63,7 +79,7 @@ export function generateStarfieldData({
   for (let i = 0; i < count; i += 1) {
     let point = randomPointInSphere(radius, random);
     let attempts = 0;
-    while (isPositionExcludedFromPlanets(point[0], point[1], point[2], planets) && attempts < 100) {
+    while (isPositionExcludedFromPlanets(point[0], point[1], point[2], planets, Three) && attempts < 100) {
       point = randomPointInSphere(radius, random);
       attempts += 1;
     }

@@ -8,6 +8,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/devussy",
     "demo": "",
     "status": "Stable",
+    "planet": { "pos": [5800, 187, 0], "radius": 852, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Python 3.11 / Next.js",
       "Runtime": "FastAPI Server",
@@ -30,6 +31,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/openclawssy",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [4962, -192, 3605], "radius": 532, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Go 1.21",
       "Runtime": "Single Binary Operator",
@@ -52,6 +54,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/swarmussy",
     "demo": "",
     "status": "Stable",
+    "planet": { "pos": [1998, 22, 6150], "radius": 589, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Python 3.10",
       "TUI Framework": "Textual / Rich",
@@ -74,6 +77,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/Tchaikovskussy",
     "demo": "https://chat.ussyco.de",
     "status": "Active",
+    "planet": { "pos": [12000, 147, 0], "radius": 542, "color": "0x1a6a6a", "atmosphereColor": "0x44ddcc", "type": "ai", "hasStation": true },
     "specs": {
       "Backend Tech": "Python / WebSockets",
       "Frontend Tech": "React / TailwindCSS",
@@ -96,6 +100,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/ussycode",
     "demo": "https://ussyco.de/hub",
     "status": "Active",
+    "planet": { "pos": [19000, -121, 0], "radius": 539, "color": "0x8a4a1a", "atmosphereColor": "0xdd8833", "type": "infra", "hasStation": true },
     "specs": {
       "Platform Tech": "Go / Firecracker SDK",
       "Storage Backing": "SQLite 3 / Local Volumes",
@@ -118,6 +123,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/hermesdashboard",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [-2101, -175, 6467], "radius": 601, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Python / HTML5 / JS",
       "Monitoring Scope": "Agent Run Session Telemetry",
@@ -140,6 +146,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/iMaCoMpUtERussy",
     "demo": "https://psp2.vercel.app",
     "status": "Stable",
+    "planet": { "pos": [28000, -142, 0], "radius": 426, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Engine": "Vanilla JS / HTML5 Canvas",
       "Virtual Architecture": "8-bit Custom CPU Emulator",
@@ -162,6 +169,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/stallionussy",
     "demo": "https://horse.ussyco.de",
     "status": "Active",
+    "planet": { "pos": [20708, -62, 20708], "radius": 365, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Language": "Go / PostgreSQL",
       "Interface": "Vue.js Single Page App",
@@ -184,6 +192,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/templeossy",
     "demo": "https://templeos.ussyco.de",
     "status": "Active",
+    "planet": { "pos": [0, 109, 30571], "radius": 277, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Language": "JavaScript / C",
       "Emulator Core": "QEMU x86 (v6.0) compiled to WASM",
@@ -206,6 +215,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/fruityboofs",
     "demo": "https://fruityboofs.ussyco.de",
     "status": "Active",
+    "planet": { "pos": [-22526, -188, 22526], "radius": 286, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Synthesis Engine": "Paul Batchelor soundpipe (WASM)",
       "Audio API": "Web Audio API / AudioWorklets",
@@ -228,6 +238,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/mediageckussy",
     "demo": "https://geck.ussyco.de",
     "status": "Active",
+    "planet": { "pos": [-33143, -10, 0], "radius": 523, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Backend Tech": "Node.js / Express",
       "Transcoding Engine": "FFmpeg WebAssembly Core",
@@ -250,6 +261,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/strudelussy",
     "demo": "https://strudel.ussyco.de",
     "status": "Active",
+    "planet": { "pos": [-24345, -161, -24345], "radius": 368, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Audio Platform": "Strudel Live-coding music engine",
       "Synthesis Engine": "Web Audio API / AudioWorklets",
@@ -272,6 +284,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/scoreboardussy",
     "demo": "",
     "status": "Stable",
+    "planet": { "pos": [0, 128, -35714], "radius": 335, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Language": "React / TypeScript",
       "Backend Tech": "Node.js / Express Server",
@@ -294,6 +307,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/geoffrussy",
     "demo": "",
     "status": "Stable",
+    "planet": { "pos": [-5771, 101, 4193], "radius": 504, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Go (Golang)",
       "CLI Engine": "Cobra CLI Framework",
@@ -316,6 +330,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/battlebussy",
     "demo": "https://battleb.ussy.host/",
     "status": "Active",
+    "planet": { "pos": [-7467, -198, 0], "radius": 508, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Platform Tech": "Go / Docker SDK",
       "Container Base": "Alpine Security Sandbox",
@@ -338,6 +353,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/ussyring",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [-10500, -100, 18187], "radius": 300, "color": "0x8a4a1a", "atmosphereColor": "0xdd8833", "type": "infra", "hasStation": true },
     "specs": {
       "Language": "Vanilla HTML / CSS / JS",
       "API Type": "Client-Side Decentralized JSON Parser",
@@ -360,6 +376,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/ghstatsussy",
     "demo": "",
     "status": "Stable",
+    "planet": { "pos": [-6310, -166, -4585], "radius": 637, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Go (Golang)",
       "CLI Engine": "Cobra CLI / Go-git",
@@ -382,6 +399,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/stenographussy",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [-2513, 151, -7735], "radius": 706, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Python 3.10",
       "Scan Engine": "AST Parsers / RegEx",
@@ -404,6 +422,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/fireslice",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [-11500, -50, -19919], "radius": 452, "color": "0x8a4a1a", "atmosphereColor": "0xdd8833", "type": "infra", "hasStation": true },
     "specs": {
       "Language": "Go (Golang)",
       "API Framework": "Gin Gonic REST API",
@@ -426,6 +445,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/ralphussy",
     "demo": "",
     "status": "Stable",
+    "planet": { "pos": [2616, 3, -8052], "radius": 512, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Language": "Python 3.9",
       "Interface": "Terminal User Interface (TUI)",
@@ -448,6 +468,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/ragussy",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [-16000, 182, 0], "radius": 648, "color": "0x1a6a6a", "atmosphereColor": "0x44ddcc", "type": "ai", "hasStation": true },
     "specs": {
       "Backend Tech": "Python / FastAPI",
       "Vector Storage": "ChromaDB / SQLite",
@@ -470,6 +491,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/nexussy",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [7119, 199, -5173], "radius": 900, "color": "0x3a5a8a", "atmosphereColor": "0x5588cc", "type": "core", "hasStation": true },
     "specs": {
       "Core Tech": "Python / Starlette / SQLite WAL",
       "TUI Engine": "TypeScript / Bun / OpenTUI",
@@ -492,6 +514,7 @@ const USSY_PROJECTS = [
     "github": "https://github.com/mojomast/rpg-dm-bot",
     "demo": "",
     "status": "Active",
+    "planet": { "pos": [26163, -47, -26163], "radius": 411, "color": "0x5a2a8a", "atmosphereColor": "0xaa55ff", "type": "creative", "hasStation": true },
     "specs": {
       "Language": "Python 3.10+ / discord.py",
       "Database": "SQLite 3 (rpg.db)",

@@ -25,7 +25,7 @@ js/flight/loadout.js
   -> dock loadout panel rendering, weapon buy/equip, armor and shield service actions
 
 js/flight/world.js
-  -> static system-scale planets, stations, jump points, world radius, LOD, and hyperspeed constants
+  -> canonical project-backed planet, station, jump point, world radius, LOD, hyperspeed constants, and worldToThree coordinate conversion
 
 js/flight/starfield.js
   -> 8,000-point flight-system starfield generation and disposal
@@ -101,9 +101,9 @@ Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStrea
 
 ## Space Visuals
 
-`js/engine/scene.js`, `js/engine/core.js`, `js/engine/starfield.js`, and `js/engine/nodes.js` own scene construction, holographic core visuals, deep-space backgrounds, and shared node registries. `main.js` still orchestrates flight-specific updates and project graph behavior. Project nodes render as planet-scale `THREE.LOD` objects with high-detail icosphere, medium icosphere, far sprite impostor, additive BackSide glow shells, and flight-only distant halo sprites. Flight mode switches from the console spiral to a deterministic 3D shell layout with much larger planet spacing, then applies an additional visual multiplier so bodies read at planetary scale while console mode remains readable. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
+`js/engine/scene.js`, `js/engine/core.js`, `js/engine/starfield.js`, and `js/engine/nodes.js` own scene construction, holographic core visuals, deep-space backgrounds, and shared node registries. `main.js` still orchestrates flight-specific updates and project graph behavior. Project nodes now sit at the same fixed world-space coordinates as their project-backed planet definitions from `USSY_PROJECTS[].planet.pos`; flight mode changes visual scale and halos only, not node position. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
 
-The expanded system adds flight-only world objects from `js/flight/world.js`: four planet definitions, three standalone stations, and three jump points inside `SYSTEM_RADIUS = 50000`. `createStarfield()` builds an 8,000-point static backdrop inside `STARFIELD_RADIUS = SYSTEM_RADIUS * 1.8`, with white/blue/warm brightness tiers and planet exclusion zones. `createAllPlanets()` creates `THREE.LOD` planet bodies plus additive atmosphere shells. `createAllStations()` builds three primitive station silhouettes: outpost, trading hub, and military base.
+The expanded system adds world objects from `js/flight/world.js`: 23 `PLANETS` entries backed by `USSY_PROJECTS`, three standalone `STATIONS`, and three `JUMP_POINTS` inside `SYSTEM_RADIUS = 50000`. `worldToThree(posArray, THREE)` is the authoritative coordinate converter; project nodes, planet meshes, surface proximity, nav graph nodes, starfield exclusion zones, station placement, HUD nearest-body lookup, and persisted position/nearest-body restore all share the same world-space coordinates. `createStarfield()` builds an 8,000-point static backdrop inside `STARFIELD_RADIUS = SYSTEM_RADIUS * 1.8`, with white/blue/warm brightness tiers and planet exclusion zones. `createAllPlanets()` creates `THREE.LOD` planet bodies plus additive atmosphere shells. `createAllStations()` builds three primitive station silhouettes: outpost, trading hub, and military base.
 
 System LOD constants are exported by `world.js` and consumed primarily by planet rendering:
 
@@ -133,7 +133,7 @@ Fuel drains while thrusting or using autopilot. Landing calls restock/refuel beh
 
 ## Navigation Graph
 
-`buildNavGraph(planets, stations, jumpPoints)` returns a `Map<string, NavNode>` rather than a plain JSON object. Nodes are created from `PLANETS`, `STATIONS`, and `JUMP_POINTS`; edges are bidirectional when nodes are within `NAVGRAPH_LOCAL_RANGE = 15000`, and each jump point also connects to its two nearest graph nodes.
+`buildNavGraph(planets, stations, jumpPoints)` returns a `Map<string, NavNode>` rather than a plain JSON object. Nodes are created from canonical `PLANETS`, `STATIONS`, and `JUMP_POINTS`; planet node ids match `USSY_PROJECTS`. Positions are resolved through the shared world-space coordinate model, with `worldToThree()` as the converter when Three.js vectors are needed. Edges are bidirectional when nodes are within `NAVGRAPH_LOCAL_RANGE = 15000`, and each jump point also connects to its two nearest graph nodes.
 
 ```ts
 type NavNode = {

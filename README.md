@@ -1,6 +1,6 @@
 # USSYSITE2
 
-USSYSITE2 is the USSYVERSE portfolio site: a browser-native Three.js project constellation with a hidden space combat and trade easter egg. The public site is a cybernetic 3D index of projects from `projects.js`; typing `ussy` launches the flight layer where those project nodes become stations.
+USSYSITE2 is the USSYVERSE portfolio site: a browser-native Three.js project constellation with a hidden space combat and trade easter egg. The public site is a cybernetic 3D index of projects from `projects.js`; typing `ussy` launches the flight layer where those project nodes become project-backed planets and service hubs.
 
 ## How To Run
 
@@ -14,7 +14,7 @@ Type `ussy` anywhere outside an input field to enter dogfight mode.
 
 ## Combat
 
-Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, heat/overheat, adrenaline feedback, station equipment, and a dock-only skill tree. Land at a project station, press `T` for station services, or press `U` while landed to spend skill points.
+Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, heat/overheat, adrenaline feedback, station equipment, and a dock-only skill tree. Land at a project-backed planet or dock at a standalone station to use services; press `U` while landed to spend skill points.
 
 ## Controls
 
@@ -29,7 +29,7 @@ Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, 
 | `V` | Set nav target from crosshair project |
 | `Y` | Toggle autopilot |
 | `Shift+C` | Toggle cockpit/chase view |
-| `L` | Approach/land at nearby project station |
+| `L` | Begin landing when in orbital approach |
 | `B` | Open mission board while landed and no modal is active |
 | `R` | Toggle throttle hold |
 | `T` | Reserved target cycle |
@@ -118,7 +118,7 @@ To switch back to GPT Audio, set `OPENROUTER_TTS_MODEL=openai/gpt-audio`. See `d
 
 ## Economy
 
-The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The player starts with credits, fuel, and an empty cargo hold. Project nodes act as stations with deterministic markets, lore-specific merchants, a docked services grid, and cross-project mission boards that turn real project relationships into delivery, recon, intel, and escort contracts.
+The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The player starts with credits, fuel, and an empty cargo hold. Project-backed planets and standalone stations expose deterministic markets, lore-specific merchants, a docked services grid, and mission boards that turn real project relationships into delivery, recon, intel, and escort contracts.
 
 ## Objectives
 
@@ -160,3 +160,5 @@ The client runs all rendering, flight, combat, trade, objective, mission, and HU
 ## Adding Projects
 
 Edit the `USSY_PROJECTS` array in `projects.js`. New projects automatically receive a graph node and a station profile based on category.
+
+Flight-system planet ids are the same project ids from `USSY_PROJECTS`. `js/flight/world.js` is the canonical world model, and `worldToThree(posArray, THREE)` converts authored world coordinates for rendering, navigation, proximity, HUD, and persistence systems.

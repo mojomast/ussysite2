@@ -52,7 +52,6 @@ function requireDeps() {
 
 export function updateFlight(time = 0) {
   const {
-    activeUniverseScale,
     firePrimaryWeapon,
     fireSecondaryWeapon,
     findNearestEnemy,
@@ -266,8 +265,7 @@ export function updateFlight(time = 0) {
     ttsEngine.speak('FUEL DEPLETED. EMERGENCY DRIFT ONLY.', getVoicePersona('USSYVERSE CONTROL'));
   }
   flightState.fuel = traderState.fuel;
-  const universeScale = typeof activeUniverseScale === 'function' ? activeUniverseScale() : activeUniverseScale;
-  flightState.pos.clampLength(1.8, flightBounds * universeScale);
+  flightState.pos.clampLength(1.8, flightBounds);
 
   updateProjectLandingTarget();
   updateFlightNavigation();

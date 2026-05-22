@@ -1,5 +1,11 @@
 # Changelog
 
+## [planet-unification] - 2026-05-22
+### Changed
+- Unified `PLANETS` with the 23 project-backed `USSY_PROJECTS` bodies and removed the old standalone expansion planet ids.
+- Standardized world-space placement through `worldToThree(posArray, THREE)` for project nodes, planets, surface proximity, nav graph nodes, starfield exclusions, stations, HUD nearest-body logic, and persisted nearest-body restore.
+- Kept `STATIONS` as 3 standalone stations and `JUMP_POINTS` as 3 route anchors, repositioned for the larger 50k system.
+
 ## [fix-pass-2] - 2026-05-22
 ### Fixed
 - surface.js: landing Y-lerp now linear; thrust restored from pre-landing value

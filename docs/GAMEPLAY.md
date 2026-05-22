@@ -24,32 +24,29 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 
 ## Star System
 
-The expanded flight system is authored in `js/flight/world.js` with system-space coordinates in `[x, y, z]` units.
+The expanded flight system is authored in `js/flight/world.js` with system-space coordinates in `[x, y, z]` units. `worldToThree(posArray, THREE)` is the canonical converter from authored world coordinates to Three.js vectors, and project nodes, planet meshes, proximity checks, navigation, starfield exclusions, stations, HUD nearest-body logic, and persistence all use that unified world-space model.
 
 ### Planets
 
-| Body | Description | Coordinates |
-| --- | --- | --- |
-| Nexus Prime | Homeworld hub world with an associated station presence. | `[0, 0, 0]` |
-| Cinder | Hostile inner-system planet with a hot red/orange atmosphere and no station. | `[8000, 0, 3000]` |
-| Vaultholm | Large trading world with green atmosphere and station support. | `[-12000, 0, -5000]` |
-| The Breach | Small anomaly world with a purple atmosphere and station support near the outer route. | `[20000, 0, -15000]` |
+`PLANETS` contains 23 project-backed planets matching `USSY_PROJECTS`. Planet ids are project ids, not separate expansion-only ids, so navigation, surface state, nearest-body persistence, project landing, and station-profile lookups can all refer to the same stable project body.
+
+Examples: `devussy`, `openclawssy`, `nexussy`, `ussycode`, `templeossy`, and `rpg-dm-bot` are planets in the 50k system.
 
 ### Stations
 
 | Station | Description | Coordinates |
 | --- | --- | --- |
-| Relay Station 7 | Outpost station focused on missions and relay services. | `[4000, 0, -2000]` |
-| Hub Alpha | Trading hub with market access and missions. | `[-6000, 0, 8000]` |
-| Fort Kova | Military base with mission services and defensive silhouette. | `[15000, 0, 5000]` |
+| Relay Station 7 | Outpost station focused on missions and relay services. | `[2600, 0, -4200]` |
+| Hub Alpha | Trading hub with market access and missions. | `[-3600, 0, 6200]` |
+| Fort Kova | Military base with mission services and defensive silhouette. | `[14500, 0, 2400]` |
 
 ### Jump Points
 
 | Jump Point | Description | Coordinates |
 | --- | --- | --- |
-| Inner Ring Jump | Inner-system fast-travel anchor. | `[3500, 0, 3500]` |
-| Mid Ring Jump | Mid-system route anchor. | `[-9000, 0, 2000]` |
-| Outer Jump Gate | Outer-system gate near The Breach route. | `[18000, 0, -10000]` |
+| Inner Ring Jump | Inner-system fast-travel anchor. | `[0, 0, 9500]` |
+| Mid Ring Jump | Mid-system route anchor. | `[0, 0, 24500]` |
+| Outer Jump Gate | Outer-system gate for the larger 50k route network. | `[0, 0, -41000]` |
 
 ## Navigation
 
@@ -136,7 +133,7 @@ Match speed displays `SPEED MATCH ACTIVE` under the reticle while the assist is 
 
 ## Docking
 
-Project nodes still use the existing station services flow. System stations use proximity-based docking: flying within `120` units of Relay Station 7, Hub Alpha, or Fort Kova automatically docks, stops velocity, opens station services, and releases mouselook.
+Project-backed planets still use the existing station services flow. Standalone system stations use proximity-based docking: flying within `120` units of Relay Station 7, Hub Alpha, or Fort Kova automatically docks, stops velocity, opens station services, and releases mouselook.
 
 Mission-capable stations allow `B` to open the board from the docked/landed state. The mission board pauses flight through `flightState.pauseReasons` and closes with `Escape`.
 

@@ -15,7 +15,7 @@ Additional state-definition references checked: `js/input.js`, `js/flight/physic
 
 - `LOD_NEAR` is exported from `js/flight/world.js` as `800` world units.
 - `createPlanet()` adds the high-detail planet mesh at LOD distance `0`, medium at `LOD_MID` (`8000`), and far at `LOD_FAR` (`40000`). `LOD_NEAR` is not currently wired into `createPlanet()`; it is still the right existing world-scale constant for near-planet gameplay triggers.
-- Since planet radii vary from `300` to `1200`, a fixed `800` trigger is too small for Vaultholm and equal to Nexus Prime's radius. It would put the player at or inside larger planet surfaces if interpreted as center distance.
+- Since project-backed planet radii vary significantly, a fixed `800` trigger can be too small for large bodies and overly generous for small bodies. It could put the player at or inside larger planet surfaces if interpreted as center distance.
 - Recommended orbital entry trigger: `planet.radius * 1.6` from planet center.
 - Recommended visual/UX approach hint: begin warning/approach affordance around `Math.max(LOD_NEAR, planet.radius * 2.0)` and transition to orbital control at `planet.radius * 1.6`.
 
@@ -23,16 +23,16 @@ Planet radii and suggested orbital entry zones:
 
 | Planet | Type | Radius | `radius * 1.6` |
 | --- | --- | ---: | ---: |
-| Nexus Prime | `homeworld` | 800 | 1280 |
-| Cinder | `hostile` | 500 | 800 |
-| Vaultholm | `trading` | 1200 | 1920 |
-| The Breach | `anomaly` | 300 | 480 |
+| Devussy | `core` | 852 | 1363.2 |
+| Nexussy | `core` | 900 | 1440 |
+| TempleOSsy | `creative` | 277 | 443.2 |
+| Ussyring Webring | `infra` | 300 | 480 |
 
-For The Breach, clamp to `LOD_NEAR` if the goal is a consistent minimum player-recognizable approach radius. Otherwise `480` is valid as a tight anomaly-skimming zone.
+For smaller bodies, clamp to `LOD_NEAR` if the goal is a consistent minimum player-recognizable approach radius. Otherwise their radius-relative values are valid as tight skimming zones.
 
 ## Current Dock Flow
 
-Current docking is split between project-node landing and system-station proximity docking. Planets are render/navigation bodies only; they do not currently dock or land.
+Current docking is split between project-backed planet landing/surface services and standalone station proximity docking. The same world-space coordinates drive project nodes, planet meshes, and surface proximity.
 
 Project-node landing call chain:
 
@@ -209,14 +209,14 @@ Compatibility note: reuse `flightState.landed` only for `SURFACE` if existing ph
 
 ## Surface Service Matrix By Planet Type
 
-`world.js` defines four planet types: `homeworld`, `hostile`, `trading`, `anomaly`. Services are not currently defined on planets, so this matrix is a design mapping from type and existing economy/combat systems.
+`world.js` planet entries are project-backed and use project/category-style types such as `core`, `ai`, `infra`, and `creative`. Surface services can derive from those types plus project/station profiles.
 
 | Planet Type | Example | Existing Flags | Suggested Surface Services | Suggested Orbital Services |
 | --- | --- | --- | --- | --- |
-| `homeworld` | Nexus Prime | `hasStation: true` | Full restock, refuel, repair, equipment, cargo market, mission board, skill/loadout terminals. | Safe orbital traffic control, tutorial handoff, guided landing. |
-| `hostile` | Cinder | `hasStation: false` | Limited salvage, emergency repair/refuel at high price, bounty/combat contracts, black-market risk. | Combat interdiction, warning zone, no safe auto-land unless mission/event grants access. |
-| `trading` | Vaultholm | `hasStation: true` | Cargo market, refuel, missions, repairs, commodity bonuses, reputation pricing. | Trade beacon, price preview, convoy/escort hooks. |
-| `anomaly` | The Breach | `hasStation: true` | Research terminal, rare resources, anomaly missions, fuel/energy effects, restricted equipment. | Scan interaction, unstable orbit, random director events, hyperspeed disruption. |
+| `core` | Devussy | `hasStation: true` | Full restock, refuel, repair, equipment, cargo market, mission board, skill/loadout terminals. | Safe orbital traffic control, tutorial handoff, guided landing. |
+| `ai` | RAGussy | `hasStation: true` | Research/intel contracts, refuel, repairs, equipment, mission board. | Scan interaction, data relay, director hooks. |
+| `infra` | ussycode | `hasStation: true` | Cargo market, refuel, missions, repairs, commodity bonuses, reputation pricing. | Trade beacon, price preview, convoy/escort hooks. |
+| `creative` | TempleOSsy | `hasStation: true` | Rare resources, anomaly-style missions, fuel/energy effects, restricted equipment. | Unstable orbit events, scan interaction, hyperspeed disruption. |
 
 Suggested service flags:
 
@@ -235,7 +235,7 @@ Suggested service flags:
 Fields/logic that conflict with orbital/surface modes:
 
 - `flightState.landed`: `physics.updateFlight()` returns early when true, damping velocity and skipping manual thrust/combat. Good for `SURFACE`, wrong for `ORBITAL`.
-- `traderState.docked` and `traderState.dockedStation`: existing economy assumes a project/station id. Planet ids are valid strings but not present in `USSY_PROJECTS`; helper functions like `stationName()` fallback to `UNKNOWN` unless planet-aware service naming is added.
+- `traderState.docked` and `traderState.dockedStation`: existing economy assumes a project/station id. Current planet ids are project ids from `USSY_PROJECTS`, so project-backed surface services can share station/profile naming. Standalone station ids still need the station lookup path.
 - `flightState.currentDockedProject`: expects project object, not planet object. Use `surfacePlanetId` instead.
 - `gameMessageState.active`: blocks auto-opening dock menus and orchestrator polling. Surface menus should follow this, but approach/orbital prompts should avoid starving orchestrator messages.
 - `flightState.pointerLocked`: recapturing pointer currently implicitly undocks when `flightState.landed` is true. For `SURFACE`, this can be departure; for station docks it is current behavior. For `ORBITAL`, do not set `landed`.
@@ -246,8 +246,8 @@ Fields/logic that conflict with orbital/surface modes:
 - `combatState.coldJumpCooldown` / cold jump skill: cold jump moves player forward by `40`; should be blocked during `LANDING` and probably `ORBITAL` to prevent clipping through a planet.
 - `combatState.evasionCooldown` / evasion roll: should be blocked during `LANDING` and `SURFACE`; allowed or damped in `ORBITAL` depending on desired combat.
 - `flightState.throttleEnabled`, `throttleLevel`, `matchSpeedActive`, `matchSpeedTarget`: should be reset on `LANDING` and `SURFACE`, same as dock flow resets flight assist state.
-- `updateSystemDocking()`: only checks standalone stations and skips if `flightState.landed`; it does not know planets. Planet orbital code must run separately before/after this without triggering station dock accidentally.
-- `flightState.pos.clampLength(1.8, flightBounds * activeUniverseScale)`: flight bounds are centered on origin. Large planet positions up to `20000` rely on `activeUniverseScale`; surface approach near far planets must verify this clamp does not pull the ship away when active scale changes.
+- `updateSystemDocking()`: only checks standalone stations and skips if `flightState.landed`; planet orbital code runs separately and should not trigger station dock accidentally.
+- `flightState.pos.clampLength(1.8, flightBounds)`: flight bounds are centered on origin. `flightBounds` now follows `SYSTEM_RADIUS`, so large project-backed planet positions remain reachable inside the 50k system without applying the old visual universe scale to physics.
 
 ## Concise Summary
 

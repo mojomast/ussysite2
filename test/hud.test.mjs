@@ -211,17 +211,17 @@ test('updateSurfaceHUD shows approach hint with planet name and altitude', () =>
     'surface-services': createElement()
   };
   const state = {
-    pos: { x: 0, y: 0, z: 1200 },
-    surface: { state: 'APPROACH', planetId: 'nexus-prime' }
+    pos: { x: 5800, y: 187, z: 1252 },
+    surface: { state: 'APPROACH', planetId: 'devussy' }
   };
-  const planet = { id: 'nexus-prime', name: 'Nexus Prime', pos: [0, 0, 0], radius: 800, type: 'homeworld' };
+  const planet = { id: 'devussy', name: 'Devussy', pos: [5800, 187, 0], radius: 852, type: 'core', hasStation: true };
 
   const result = updateSurfaceHUD(state, [planet], createDocument(elements));
 
   assert.equal(result.state, 'APPROACH');
   assert.equal(elements['approach-hint'].classList.contains('active'), true);
   assert.equal(elements['orbital-panel'].classList.contains('active'), false);
-  assert.equal(elements['approach-planet'].textContent, 'NEXUS PRIME');
+  assert.equal(elements['approach-planet'].textContent, 'DEVUSSY');
   assert.equal(elements['approach-altitude'].textContent, '400u');
   assert.equal(elements['orbital-services'].textContent, 'Repair // Refuel // Missions // Trade // Save');
 });
@@ -240,16 +240,16 @@ test('updateSurfaceHUD shows surface panel and service list', () => {
     'surface-services': createElement()
   };
   const state = {
-    pos: { x: 8000, y: 0, z: 3500 },
-    surface: { state: 'SURFACE', planetId: 'cinder' }
+    pos: { x: -7467, y: -198, z: 508 },
+    surface: { state: 'SURFACE', planetId: 'battlebussy' }
   };
-  const planet = { id: 'cinder', name: 'Cinder', pos: [8000, 0, 3000], radius: 500, type: 'hostile' };
+  const planet = { id: 'battlebussy', name: 'Battlebussy', pos: [-7467, -198, 0], radius: 508, type: 'hostile' };
 
   updateSurfaceHUD(state, [planet], createDocument(elements));
 
   assert.equal(elements['surface-panel'].classList.contains('active'), true);
   assert.equal(elements['approach-hint'].classList.contains('active'), false);
-  assert.equal(elements['surface-planet'].textContent, 'CINDER');
+  assert.equal(elements['surface-planet'].textContent, 'BATTLEBUSSY');
   assert.equal(elements['surface-services'].textContent, 'Combat Encounter');
 });
 
@@ -267,17 +267,17 @@ test('updateSurfaceHUD uses userData planet id before numeric three object id', 
     'surface-services': createElement()
   };
   const state = {
-    pos: { x: 0, y: 0, z: 1200 },
-    surface: { state: 'APPROACH', planetId: 'nexus-prime' }
+    pos: { x: 5800, y: 187, z: 1252 },
+    surface: { state: 'APPROACH', planetId: 'devussy' }
   };
   const planet = {
     id: 784,
     name: '',
-    position: { x: 0, y: 0, z: 0 },
-    userData: { planetId: 'nexus-prime', name: 'Nexus Prime', radius: 800, type: 'homeworld' }
+    position: { x: 5800, y: 187, z: 0 },
+    userData: { planetId: 'devussy', name: 'Devussy', radius: 852, type: 'core', hasStation: true }
   };
 
   updateSurfaceHUD(state, [planet], createDocument(elements));
 
-  assert.equal(elements['approach-planet'].textContent, 'NEXUS PRIME');
+  assert.equal(elements['approach-planet'].textContent, 'DEVUSSY');
 });

@@ -17,6 +17,7 @@ globalThis.performance ??= { now: () => 1000 };
 const { configureHeroUI } = await import('../js/ui/hero.js');
 const { configureInput, registerInputListeners } = await import('../js/input.js');
 const { HELP_CONTROLS, HELP_TIPS, configureHelpMenu, getBindingDiscrepancies, openHelpMenu, renderHelpContent, switchHelpTab } = await import('../js/flight/help.js');
+const { PLANETS, STATIONS } = await import('../js/flight/world.js');
 
 function createClassList() {
   const classes = new Set();
@@ -198,15 +199,15 @@ test('controls tab renders canonical rows per category', () => {
   }
 });
 
-test('universe tab renders 4 planets and 3 stations', () => {
+test('universe tab renders project planets and stations', () => {
   const documentRef = createHelpDocument();
   renderHelpContent(documentRef);
   const universe = documentRef.elements['help-panel-universe'];
   const planetCount = walk(universe, node => node.dataset?.helpUniverseCount === 'planets')[0];
   const stationCount = walk(universe, node => node.dataset?.helpUniverseCount === 'stations')[0];
 
-  assert.equal(planetCount.children[0].textContent, '4');
-  assert.equal(stationCount.children[0].textContent, '3');
+  assert.equal(planetCount.children[0].textContent, String(PLANETS.length));
+  assert.equal(stationCount.children[0].textContent, String(STATIONS.length));
 });
 
 test('tips tab renders at least eight tips', () => {

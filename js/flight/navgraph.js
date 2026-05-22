@@ -1,32 +1,27 @@
-import { JUMP_POINTS, PLANETS, STATIONS } from './world.js';
+import { JUMP_POINTS, PLANETS, STATIONS, worldToThree } from './world.js';
 
 export const NAVGRAPH_LOCAL_RANGE = 15000;
 export const JUMP_POINT_NEAREST_CONNECTIONS = 2;
-
-function createVector3(pos = [0, 0, 0]) {
-  const THREE = globalThis.THREE;
-  if (!THREE?.Vector3) throw new Error('buildNavGraph requires globalThis.THREE.Vector3');
-
-  const [x = 0, y = 0, z = 0] = pos;
-  return new THREE.Vector3(x, y, z);
-}
 
 function distanceBetweenPositions(posA, posB) {
   if (!posA || !posB) return Infinity;
   if (typeof posA.distanceTo === 'function') return posA.distanceTo(posB);
 
-  const dx = (posA.x ?? 0) - (posB.x ?? 0);
-  const dy = (posA.y ?? 0) - (posB.y ?? 0);
-  const dz = (posA.z ?? 0) - (posB.z ?? 0);
-  return Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+  return Math.hypot((posA.x ?? 0) - (posB.x ?? 0), (posA.y ?? 0) - (posB.y ?? 0), (posA.z ?? 0) - (posB.z ?? 0));
 }
 
 function addNode(graph, definition, type) {
   if (!definition?.id) return;
+  const THREE = globalThis.THREE;
+  if (!THREE?.Vector3) throw new Error('buildNavGraph requires globalThis.THREE.Vector3');
+  const sourcePos = definition.pos ?? definition.position;
+  const pos = (sourcePos?.isVector3 || typeof sourcePos?.distanceTo === 'function')
+    ? sourcePos
+    : worldToThree(sourcePos, THREE);
   graph.set(definition.id, {
     id: definition.id,
     name: definition.name ?? definition.id,
-    pos: createVector3(definition.pos),
+    pos,
     type,
     edges: []
   });

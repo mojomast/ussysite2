@@ -1,4 +1,4 @@
-import { STATIONS } from './world.js';
+import { STATIONS, worldToThree } from './world.js';
 
 export const DOCK_PROXIMITY = 120;
 
@@ -16,15 +16,6 @@ export const STATION_COLORS = {
   militaryHull: 0x556655,
   militaryTurret: 0xff3333
 };
-
-function setObjectPosition(object, pos = [0, 0, 0]) {
-  const [x = 0, y = 0, z = 0] = pos;
-  if (typeof object.position?.set === 'function') {
-    object.position.set(x, y, z);
-  } else {
-    object.position = { x, y, z };
-  }
-}
 
 export function createStationMaterial(THREE, color) {
   return new THREE.MeshBasicMaterial({
@@ -144,9 +135,15 @@ export function createStation(stationDef, THREE) {
   if (!THREE) throw new Error('createStation requires THREE');
 
   const station = buildStationGeometry(stationDef.type, THREE);
-  setObjectPosition(station, stationDef.pos);
+  const worldPos = worldToThree(stationDef.pos, THREE);
+  if (typeof station.position?.copy === 'function') station.position.copy(worldPos);
+  else if (typeof station.position?.set === 'function') station.position.set(worldPos.x, worldPos.y, worldPos.z);
+  else station.position = worldPos;
   station.userData = {
     ...(station.userData ?? {}),
+    id: stationDef.id,
+    name: stationDef.name,
+    pos: stationDef.pos,
     stationId: stationDef.id,
     type: stationDef.type,
     hasTrading: stationDef.hasTrading,

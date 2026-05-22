@@ -4,6 +4,7 @@ import { WEAPON_DEFS, getWeaponDef } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
 import { ensureAutopilotState, isAutopilotActive } from './autopilot.js';
 import { SURFACE_STATES, getSurfaceServices } from './surface.js';
+import { worldToThree } from './world.js';
 
 let deps = {};
 let radarLastUpdate = 0;
@@ -300,13 +301,23 @@ export function updateBountyHUD(state = traderState, documentRef = deps.document
   return true;
 }
 
-function getPlanetCoord(source, axis, index) {
-  if (!source) return 0;
-  if (Array.isArray(source)) return source[index] ?? 0;
-  if (Array.isArray(source.pos)) return source.pos[index] ?? 0;
-  if (Array.isArray(source.position)) return source.position[index] ?? 0;
-  if (source.position && typeof source.position === 'object') return source.position[axis] ?? 0;
-  return source[axis] ?? source.userData?.[axis] ?? 0;
+function asWorldVector(source) {
+  if (!source) return null;
+  if (source.isVector3 || typeof source.distanceTo === 'function') return source;
+  const THREE = globalThis.THREE?.Vector3 ? globalThis.THREE : {
+    Vector3: class {
+      constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+      }
+
+      distanceTo(other) {
+        return Math.hypot(this.x - (other?.x ?? 0), this.y - (other?.y ?? 0), this.z - (other?.z ?? 0));
+      }
+    }
+  };
+  return worldToThree(source, THREE);
 }
 
 function getPlanetId(planet) {
@@ -324,10 +335,10 @@ function findSurfacePlanet(surface, planets = []) {
 
 function formatSurfaceAltitude(flightState, planet) {
   if (!flightState?.pos || !planet) return '--';
-  const dx = getPlanetCoord(flightState.pos, 'x', 0) - getPlanetCoord(planet.pos ?? planet.position ?? planet, 'x', 0);
-  const dy = getPlanetCoord(flightState.pos, 'y', 1) - getPlanetCoord(planet.pos ?? planet.position ?? planet, 'y', 1);
-  const dz = getPlanetCoord(flightState.pos, 'z', 2) - getPlanetCoord(planet.pos ?? planet.position ?? planet, 'z', 2);
-  return `${Math.max(0, Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz) - getPlanetRadius(planet)))}u`;
+  const playerPos = asWorldVector(flightState.pos);
+  const planetPos = asWorldVector(planet.pos ?? planet.position);
+  if (!playerPos || !planetPos) return '--';
+  return `${Math.max(0, Math.round(playerPos.distanceTo(planetPos) - getPlanetRadius(planet)))}u`;
 }
 
 function setPanelActive(panel, active) {
