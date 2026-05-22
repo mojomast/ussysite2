@@ -86,7 +86,8 @@ import {
 import { showDebrief } from './debrief.js';
 import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, toggleHelpMenu } from './help.js';
 import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
-import { loadSettings, saveSettings } from './settings.js';
+import { loadSettings, saveSettings, settingsState } from './settings.js';
+import { configureTutorialOverlay, hideTutorialOverlay, isTutorialOverlayVisible, showTutorialOverlay } from './tutorial-overlay.js';
 import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
   MISSION_INTRO_TEXT,
@@ -692,6 +693,12 @@ export function init() {
     isFlightActive: () => isFlightActive,
     updateFlightHud
   });
+  configureTutorialOverlay({
+    documentRef: document,
+    isFlightActive: () => isFlightActive,
+    requestPointerLock: requestFlightPointerLock,
+    saveSettingsToHash: saveCombatStateToHash
+  });
   configureMissionBoardUI({ documentRef: document });
   configureCombatScene({
     THREE,
@@ -898,8 +905,10 @@ export function init() {
     exitFlightMode,
     gameMessageState,
     handleGameMessageChoice,
+    hideTutorialOverlay,
     handleSurfaceEscape,
     isHelpMenuOpen,
+    isTutorialOverlayVisible,
     heroContainer,
     isConsoleActive: () => isConsoleActive,
     isFlightActive: () => isFlightActive,
@@ -1539,13 +1548,19 @@ function enterFlightMode() {
     clearRunState();
     showFlightStartupChoice();
   }
+  if (!gameOrchestrator.tutorialComplete && !settingsState.tutorialOverlayDismissed) {
+    showTutorialOverlay();
+  }
   updateFlightHud(true);
   updateCockpitRadar(0, true);
-  if (!isCoarsePointer && renderer.domElement.requestPointerLock) {
-    const lockRequest = renderer.domElement.requestPointerLock();
-    if (lockRequest && typeof lockRequest.catch === 'function') {
-      lockRequest.catch(onPointerLockError);
-    }
+  if (!isTutorialOverlayVisible()) requestFlightPointerLock();
+}
+
+function requestFlightPointerLock() {
+  if (isCoarsePointer || !renderer?.domElement?.requestPointerLock) return;
+  const lockRequest = renderer.domElement.requestPointerLock();
+  if (lockRequest && typeof lockRequest.catch === 'function') {
+    lockRequest.catch(onPointerLockError);
   }
 }
 
