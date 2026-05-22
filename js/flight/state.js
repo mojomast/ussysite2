@@ -833,8 +833,8 @@ function createDebrisField() {
   });
 }
 
-function updateDebrisMatrix(index, dt) {
-  updateEngineDebrisMatrix({ index, dt, debrisField, debrisPositions, debrisAxes, debrisAngles, debrisSpinRates, debrisMatrix, debrisQuaternion, debrisPosition, debrisScale, debrisAxis });
+function updateDebrisMatrix(index, dt, targetDebrisField = debrisField) {
+  updateEngineDebrisMatrix({ index, dt, debrisField: targetDebrisField, debrisPositions, debrisAxes, debrisAngles, debrisSpinRates, debrisMatrix, debrisQuaternion, debrisPosition, debrisScale, debrisAxis });
 }
 
 function createDustField() {
