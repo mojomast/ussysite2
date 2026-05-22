@@ -65,6 +65,7 @@ export const sfxEngine = {
   nonPositionalPool: {},
   engineHumSource: null,
   engineHumGain: null,
+  engineHumLayerGains: null,
   ambientSources: [],
   ambientGain: null,
   _initialized: false,
@@ -302,89 +303,119 @@ export const sfxEngine = {
     if (!this.ctx) return null;
     if (type === 'laser' || type === 'enemy_laser') {
       const enemy = type === 'enemy_laser';
-      const duration = enemy ? 0.12 : 0.17;
-      const start = enemy ? 2700 : 5200;
-      const end = enemy ? 260 : 170;
-      const primaryAmp = enemy ? 0.7 : 0.82;
-      const harmonicAmp = enemy ? 0.28 : 0.36;
-      const gritAmp = enemy ? 0.18 : 0.28;
-      const snapAmp = enemy ? 0.62 : 0.78;
-      const snapDuration = enemy ? 0.01 : 0.014;
-      let phase2 = 0;
-      let phase3 = 0;
-      let grit = 0;
+      const duration = enemy ? 0.13 : 0.11;
+      const startFreq = enemy ? 1600 : 2200;
+      const endFreq = enemy ? 180 : 240;
+      const sweepPower = enemy ? 3.0 : 3.2;
+      const twangFreq = enemy ? 3400 : 4200;
+      const twangDecay = enemy ? 0.012 : 0.014;
+      const twangDuration = enemy ? 0.018 : 0.022;
+      const twangAmp = enemy ? 0.38 : 0.45;
+      const shimmerAmp = enemy ? 0.18 : 0.22;
+      const subFreq = enemy ? 55 : 70;
+      const subDuration = 0.035;
+      const subAmp = 0.28;
+      let shimmerPhase = 0;
+      let subPhase = 0;
       return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
         const progress = t / duration;
-        const sweep = Math.pow(1 - progress, enemy ? 2.1 : 3.4);
-        const wobble = 1 + Math.sin(progress * Math.PI * 18) * 0.035;
-        const freq = (end + (start - end) * sweep) * wobble;
+        const freq = endFreq + (startFreq - endFreq) * Math.pow(1 - progress, sweepPower);
         const nextPhase = phase + (Math.PI * 2 * freq) / sampleRate;
-        phase2 += (Math.PI * 2 * freq * 1.5) / sampleRate;
-        phase3 += (Math.PI * 2 * freq * 0.5) / sampleRate;
-        grit = grit * 0.55 + (Math.random() * 2 - 1) * 0.45;
-        const amp = envelope(t, duration, 0.001, enemy ? 2.0 : 1.65);
-        const saw = 2 * (nextPhase / (Math.PI * 2) - Math.floor(0.5 + nextPhase / (Math.PI * 2)));
-        const tone = Math.sin(nextPhase) * primaryAmp + Math.sin(phase2) * harmonicAmp + saw * gritAmp + Math.sin(phase3) * 0.22;
-        const snap = t < snapDuration ? (Math.random() * 2 - 1) * snapAmp * Math.pow(1 - t / snapDuration, 2) : 0;
-        const scream = Math.tanh(tone * (enemy ? 1.7 : 2.35)) * amp;
-        return [(scream * (enemy ? 0.78 : 0.92)) + snap + grit * amp * 0.12, nextPhase];
+        shimmerPhase += (Math.PI * 2 * freq * 1.5) / sampleRate;
+        subPhase += (Math.PI * 2 * subFreq) / sampleRate;
+        const holdTime = duration * 0.08;
+        const amp = t < holdTime ? 1 : Math.pow(Math.max(0, 1 - (t - holdTime) / (duration - holdTime)), 1.8);
+        const fundamental = Math.sin(nextPhase) * 0.82;
+        const shimmer = Math.sin(shimmerPhase) * shimmerAmp;
+        const twangEnvelope = Math.exp(-t / twangDecay);
+        const twangRing = Math.sin(Math.PI * 2 * twangFreq * t);
+        const twang = t < twangDuration * 3 ? (Math.random() * 2 - 1) * twangRing * twangEnvelope * twangAmp : 0;
+        const sub = Math.sin(subPhase) * Math.exp(-t / subDuration) * subAmp;
+        return [Math.tanh((fundamental + shimmer) * amp + twang + sub), nextPhase];
       });
     }
     if (type === 'missile') {
-      const duration = 0.2;
+      const duration = 0.22;
+      let last = 0;
+      let rumblePhase = 0;
       return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
         const progress = t / duration;
-        const freq = 180 + (80 - 180) * progress;
-        const nextPhase = phase + (Math.PI * 2 * freq) / sampleRate;
-        const saw = 2 * (nextPhase / (Math.PI * 2) - Math.floor(0.5 + nextPhase / (Math.PI * 2)));
-        const noise = (Math.random() * 2 - 1) * 0.18;
-        return [(saw * 0.62 + noise) * envelope(t, duration, 0.01, 1.5), nextPhase];
+        const white = Math.random() * 2 - 1;
+        const ignition = t < 0.015 ? white * Math.sin(2200 * t) * Math.exp(-t / 0.008) * 0.95 : 0;
+        last = last * 0.72 + white * 0.28;
+        const bodyRise = Math.min(1, Math.max(0, (t - 0.015) / 0.02));
+        const bodyFall = t < 0.12 ? 1 : Math.max(0, 1 - (t - 0.12) / 0.08);
+        const flicker = 1 + 0.12 * Math.sin(Math.PI * 2 * 18 * t);
+        const whoosh = t >= 0.015 ? last * bodyRise * bodyFall * flicker * 0.72 : 0;
+        const rumbleFreq = 90 + (38 - 90) * progress;
+        rumblePhase += (Math.PI * 2 * rumbleFreq) / sampleRate;
+        const rumbleDecay = t < 0.06 ? 1 : Math.exp(-(t - 0.06) / 0.11);
+        const rumble = Math.sin(rumblePhase) * 0.3 * rumbleDecay;
+        return [Math.tanh(ignition + whoosh + rumble), phase];
       });
     }
     if (type === 'explosion') {
-      const duration = 1.05;
-      let body = 0;
-      let rumblePhase = 0;
-      let boomPhase = 0;
-      let crackle = 0;
-      return renderBuffer(this.ctx, duration, (t, i, sampleRate) => {
-        const progress = t / duration;
+      const duration = 0.65;
+      let last = 0;
+      let rumble = 0;
+      let thumpPhase = 0;
+      return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
         const white = Math.random() * 2 - 1;
-        body = body * 0.935 + white * 0.065;
-        crackle = Math.random() > 0.945 - progress * 0.03 ? (Math.random() * 2 - 1) : crackle * 0.72;
-        const boomFreq = 92 - 54 * Math.min(1, progress * 1.3);
-        const rumbleFreq = 42 - 16 * progress;
-        boomPhase += (Math.PI * 2 * boomFreq) / sampleRate;
-        rumblePhase += (Math.PI * 2 * rumbleFreq) / sampleRate;
-        const pressure = Math.sin(boomPhase) * Math.exp(-t * 5.2) * 1.6;
-        const tail = Math.sin(rumblePhase) * Math.exp(-t * 1.45) * 0.9;
-        const blast = body * Math.exp(-t * 3.1) * 1.45;
-        const secondThump = Math.sin(Math.PI * 2 * 58 * Math.max(0, t - 0.08)) * Math.exp(-Math.max(0, t - 0.08) * 7) * 0.55;
-        const snap = t < 0.018 ? white * Math.pow(1 - t / 0.018, 2) * 2.2 : 0;
-        const debris = crackle * Math.exp(-t * 2.7) * 0.42;
-        return Math.tanh(snap + pressure + secondThump + tail + blast + debris) * envelope(t, duration, 0.0005, 0.55);
+        const shockwave = t < 0.03 ? white * Math.exp(-t / 0.008) * 0.9 : 0;
+        last = last * 0.84 + white * 0.16;
+        rumble = rumble * 0.96 + white * 0.04;
+        const bodyAmp = t < 0.03 ? 0 : Math.exp(-(t - 0.03) / 0.32);
+        const debris = (last * 0.6 + rumble * 0.4) * bodyAmp * 1.15;
+        const thumpProgress = Math.min(1, t / 0.2);
+        const thumpFreq = 74 + (28 - 74) * thumpProgress;
+        thumpPhase += (Math.PI * 2 * thumpFreq) / sampleRate;
+        const subKick = t < 0.2 ? Math.sin(thumpPhase) * Math.pow(1 - thumpProgress, 2.5) * 0.55 : 0;
+        const metallicRing = Math.sin(Math.PI * 2 * 820 * t) * Math.exp(-t / 0.035) * 0.12;
+        return [Math.tanh(shockwave + debris + subKick + metallicRing), phase];
       });
     }
     if (type === 'shield_hit') {
-      const duration = 0.12;
+      const duration = 0.18;
+      let phase2 = 0;
+      let subPhase = 0;
       return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
         const progress = t / duration;
-        const freq = 1200 + Math.sin(progress * Math.PI * 8) * 80;
+        const freq = 1400 + (1650 - 1400) * progress;
         const nextPhase = phase + (Math.PI * 2 * freq) / sampleRate;
-        return [Math.sin(nextPhase) * envelope(t, duration, 0.003, 2.6), nextPhase];
+        phase2 += (Math.PI * 2 * (freq + 12)) / sampleRate;
+        subPhase += (Math.PI * 2 * 38) / sampleRate;
+        const white = Math.random() * 2 - 1;
+        const impact = t < 0.02 ? white * Math.sin(3600 * t) * Math.exp(-t / 0.006) * 0.6 : 0;
+        const ring = (Math.sin(nextPhase) + Math.sin(phase2)) * 0.5 * Math.pow(Math.max(0, 1 - progress), 2.2) * 0.65;
+        const subPulse = Math.sin(subPhase) * Math.exp(-t / 0.02) * 0.35;
+        return [Math.tanh(impact + ring + subPulse), nextPhase];
       });
     }
     if (type === 'ui_confirm' || type === 'ui_deny') {
       const confirm = type === 'ui_confirm';
-      const duration = confirm ? 0.16 : 0.2;
+      const duration = confirm ? 0.18 : 0.22;
       return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
-        const split = duration * 0.5;
-        const freq = confirm
-          ? (t < split ? 660 : 880)
-          : (t < split ? 330 : 220);
-        const localT = t < split ? t : t - split;
+        const firstEnd = confirm ? 0.08 : 0.1;
+        const secondStart = confirm ? 0.088 : 0.1;
+        const secondEnd = duration;
+        const activeSecond = t >= secondStart;
+        const inGap = t >= firstEnd && t < secondStart;
+        const freq = confirm ? (activeSecond ? 660 : 440) : (activeSecond ? 220 : 330);
         const nextPhase = phase + (Math.PI * 2 * freq) / sampleRate;
-        return [Math.sin(nextPhase) * envelope(localT, split, 0.004, 2.2) * 0.72, nextPhase];
+        const localT = activeSecond ? t - secondStart : t;
+        const noteDuration = activeSecond ? secondEnd - secondStart : firstEnd;
+        if (inGap) return [confirm ? Math.sin(Math.PI * 2 * 3300 * t) * 0.03 : (Math.random() * 2 - 1) * 0.03, nextPhase];
+        if (confirm) {
+          const saw = 2 * ((nextPhase % (Math.PI * 2)) / (Math.PI * 2)) - 1;
+          const triangle = 2 * Math.abs(saw) - 1;
+          const shimmer = Math.sin(Math.PI * 2 * 3300 * t) * 0.08;
+          const noteAmp = envelope(localT, noteDuration, 0.003, 2.0) * (activeSecond ? 0.85 : 1);
+          return [(triangle * 0.58 * noteAmp) + shimmer * Math.pow(Math.max(0, 1 - t / duration), 1.4), nextPhase];
+        }
+        const saw = 2 * (nextPhase / (Math.PI * 2) - Math.floor(0.5 + nextPhase / (Math.PI * 2)));
+        const noise = (Math.random() * 2 - 1) * (activeSecond ? 0.18 : 0.12);
+        const noteAmp = envelope(localT, noteDuration, 0.001, activeSecond ? 2.8 : 2.2) * (activeSecond ? 0.82 : 1);
+        return [Math.tanh(saw * 0.62 * noteAmp + noise * noteAmp), nextPhase];
       });
     }
     return renderBuffer(this.ctx, 0.05, () => 0);
@@ -397,19 +428,42 @@ export const sfxEngine = {
     const now = this.ctx.currentTime;
     const base = this.ctx.createOscillator();
     const harmonic = this.ctx.createOscillator();
+    const grind = this.ctx.createOscillator();
+    const pulse = this.ctx.createOscillator();
+    const baseGain = this.ctx.createGain();
+    const harmonicGain = this.ctx.createGain();
+    const grindGain = this.ctx.createGain();
+    const pulseGain = this.ctx.createGain();
     this.engineHumGain = this.ctx.createGain();
     base.type = 'sine';
     harmonic.type = 'triangle';
+    grind.type = 'sawtooth';
+    pulse.type = 'sine';
     base.frequency.setValueAtTime(52, now);
     harmonic.frequency.setValueAtTime(104, now);
+    grind.frequency.setValueAtTime(156, now);
+    pulse.frequency.setValueAtTime(78.3, now);
+    baseGain.gain.setValueAtTime(0.018, now);
+    harmonicGain.gain.setValueAtTime(0.012, now);
+    grindGain.gain.setValueAtTime(0.008, now);
+    pulseGain.gain.setValueAtTime(0.005, now);
     this.engineHumGain.gain.setValueAtTime(0.001, now);
     this.engineHumGain.gain.linearRampToValueAtTime(0.04, now + 0.12);
-    base.connect(this.engineHumGain);
-    harmonic.connect(this.engineHumGain);
+    base.connect(baseGain);
+    harmonic.connect(harmonicGain);
+    grind.connect(grindGain);
+    pulse.connect(pulseGain);
+    baseGain.connect(this.engineHumGain);
+    harmonicGain.connect(this.engineHumGain);
+    grindGain.connect(this.engineHumGain);
+    pulseGain.connect(this.engineHumGain);
     this.engineHumGain.connect(this.masterGain);
     base.start(now);
     harmonic.start(now);
-    this.engineHumSource = { base, harmonic };
+    grind.start(now);
+    pulse.start(now);
+    this.engineHumSource = { base, harmonic, grind, pulse };
+    this.engineHumLayerGains = { baseGain, harmonicGain, grindGain, pulseGain };
   },
 
   stopEngineHum(options = {}) {
@@ -417,25 +471,31 @@ export const sfxEngine = {
     if (!this.ctx || !this.engineHumSource || !this.engineHumGain) {
       this.engineHumSource = null;
       this.engineHumGain = null;
+      this.engineHumLayerGains = null;
       return;
     }
     const now = this.ctx.currentTime;
     const gain = this.engineHumGain;
     const sources = this.engineHumSource;
+    const layerGains = this.engineHumLayerGains;
     try {
       gain.gain.cancelScheduledValues(now);
       gain.gain.setValueAtTime(gain.gain.value, now);
       gain.gain.linearRampToValueAtTime(0.001, now + 0.12);
-      sources.base.stop(now + 0.14);
-      sources.harmonic.stop(now + 0.14);
+      Object.values(sources).forEach(source => source.stop(now + 0.14));
     } catch {}
     window.setTimeout(() => {
-      try { sources.base.disconnect(); } catch {}
-      try { sources.harmonic.disconnect(); } catch {}
+      Object.values(sources).forEach(source => {
+        try { source.disconnect(); } catch {}
+      });
+      Object.values(layerGains || {}).forEach(layerGain => {
+        try { layerGain.disconnect(); } catch {}
+      });
       try { gain.disconnect(); } catch {}
     }, 180);
     this.engineHumSource = null;
     this.engineHumGain = null;
+    this.engineHumLayerGains = null;
   },
 
   updateEngineHum(vel) {
@@ -448,6 +508,9 @@ export const sfxEngine = {
     this.engineHumGain.gain.setTargetAtTime(gainValue, now, 0.08);
     this.engineHumSource.base.frequency.setTargetAtTime(freq, now, 0.08);
     this.engineHumSource.harmonic.frequency.setTargetAtTime(freq * 2, now, 0.08);
+    this.engineHumSource.grind.frequency.setTargetAtTime(freq * 3, now, 0.08);
+    this.engineHumSource.pulse.frequency.setTargetAtTime(freq * 1.5 + 0.3, now, 0.08);
+    this.engineHumLayerGains?.grindGain.gain.setTargetAtTime(0.004 + speed * 0.0003, now, 0.08);
   },
 
   startStationAmbient() {
@@ -456,15 +519,26 @@ export const sfxEngine = {
     const now = this.ctx.currentTime;
     this.ambientGain = this.ctx.createGain();
     this.ambientGain.gain.setValueAtTime(0.001, now);
-    this.ambientGain.gain.linearRampToValueAtTime(0.035, now + 0.35);
+    this.ambientGain.gain.linearRampToValueAtTime(1, now + 0.5);
     this.ambientGain.connect(this.masterGain);
-    [82, 110, 138, 165].forEach((freq, index) => {
+    [
+      { type: 'sine', freq: 36, gain: 0.018 },
+      { type: 'sine', freq: 54, gain: 0.022 },
+      { type: 'sine', freq: 110.4, gain: 0.014 },
+      { type: 'triangle', freq: 165, gain: 0.010 },
+      { type: 'sine', freq: 220.8, gain: 0.006 },
+      { type: 'sine', freq: 880, gain: 0.002 }
+    ].forEach(layer => {
       const oscillator = this.ctx.createOscillator();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(freq + (index - 1.5) * 0.7, now);
-      oscillator.connect(this.ambientGain);
+      const layerGain = this.ctx.createGain();
+      oscillator.type = layer.type;
+      oscillator.frequency.setValueAtTime(layer.freq, now);
+      layerGain.gain.setValueAtTime(0.001, now);
+      layerGain.gain.linearRampToValueAtTime(layer.gain, now + 0.5);
+      oscillator.connect(layerGain);
+      layerGain.connect(this.ambientGain);
       oscillator.start(now);
-      this.ambientSources.push(oscillator);
+      this.ambientSources.push({ oscillator, gain: layerGain });
     });
   },
 
@@ -482,11 +556,12 @@ export const sfxEngine = {
       gain.gain.cancelScheduledValues(now);
       gain.gain.setValueAtTime(gain.gain.value, now);
       gain.gain.linearRampToValueAtTime(0.001, now + 0.4);
-      sources.forEach(source => source.stop(now + 0.42));
+      sources.forEach(source => source.oscillator.stop(now + 0.42));
     } catch {}
     window.setTimeout(() => {
       sources.forEach(source => {
-        try { source.disconnect(); } catch {}
+        try { source.oscillator.disconnect(); } catch {}
+        try { source.gain.disconnect(); } catch {}
       });
       try { gain.disconnect(); } catch {}
     }, 480);

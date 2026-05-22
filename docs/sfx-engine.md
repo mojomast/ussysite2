@@ -31,17 +31,31 @@ For browser debugging, `window.__USSY_SFX__` exposes `testTone()` and `getDebugS
 
 ## Sound Types
 
-- `laser`: player laser, non-positional, short descending tone.
-- `missile`: player missile launch, non-positional, saw sweep plus noise.
-- `explosion`: enemy kill explosion, positional, filtered noise and low thump.
-- `shield_hit`: player damage feedback, non-positional, short high sine ring.
-- `enemy_laser`: enemy fire, positional, lower laser sweep.
-- `ui_confirm`: ascending two-tone UI acknowledgement.
-- `ui_deny`: descending two-tone UI dismiss/reject cue.
+- `laser`: player blaster, non-positional, descending bolt with metallic twang, harmonic shimmer, and sub thump.
+- `missile`: player missile launch, non-positional, ignition crack, pink-ish rocket whoosh, and descending low rumble.
+- `explosion`: enemy kill explosion, positional, overpressure crack, rolling debris body, sub kick, and metallic hull ping.
+- `shield_hit`: player damage feedback, non-positional, crack transient, detuned crystal resonance, and low shield pulse.
+- `enemy_laser`: enemy fire, positional, darker lower blaster sweep with shorter metallic transient.
+- `ui_confirm`: ascending triangle-wave acknowledgement with a quiet cyber shimmer.
+- `ui_deny`: descending sawtooth rejection cue with gritty noise texture.
 
 ## Sound Design
 
-Laser buffers use a Star Wars-style energy bolt shape: a near-instant attack, exponential downward frequency sweep, harmonic fifth shimmer, and a sub-10ms white-noise transient for the initial crack. Player `laser` is brighter and longer at 1800Hz to 280Hz over 90ms, while positional `enemy_laser` is lower and shorter at 1400Hz to 220Hz over 75ms so it reads as distant hostile fire in the spatial mix.
+All one-shot buffers are procedural and synthesized once with `renderBuffer()`. No external audio files are loaded.
+
+Laser buffers use a Star Wars-style blaster shape: an exponential downward sweep, resonant metallic twang transient, perfect-fifth shimmer, and a short low-frequency thump. Player `laser` sweeps `2200Hz -> 240Hz` over `0.11s`; positional `enemy_laser` sweeps `1600Hz -> 180Hz` over `0.13s` so hostile fire reads darker in the spatial mix.
+
+The `missile` cue is a `0.22s` rocket launch: a 15ms ignition crack, a filtered pink-ish noise body with tremolo flicker, and a `90Hz -> 38Hz` descending rumble tone.
+
+The `explosion` cue is a `0.65s` layered kill impact: broadband shockwave crack, two-stage filtered debris/fire noise, `74Hz -> 28Hz` sub kick, and a short `820Hz` metallic ring for hull-strike character.
+
+The `shield_hit` cue is a `0.18s` force-field impact: a filtered crack transient, detuned `1400Hz/1412Hz` crystal resonance sweeping upward toward `1650Hz`, and a `38Hz` body pulse.
+
+UI cues are intentionally synthetic but tactile. `ui_confirm` is a two-note `440Hz -> 660Hz` triangle acknowledgement with a quiet `3300Hz` shimmer. `ui_deny` is a harsher `330Hz -> 220Hz` sawtooth rejection with noise grit.
+
+Continuous engine hum is a four-oscillator stack routed through the SFX bus: `52Hz` sine fundamental, `104Hz` triangle warmth, `156Hz` sawtooth grind, and a detuned `78Hz` sine pulse. `updateEngineHum(vel)` raises pitch with speed and increases the grind layer so high velocity sounds more mechanical.
+
+Docked station ambience is a six-oscillator atmosphere: `36Hz` structural bass, `54Hz` power hum, `110.4Hz` corridor resonance, `165Hz` triangle body, `220.8Hz` upper shimmer, and a nearly subliminal `880Hz` electronics bleed. All layers fade in over `0.5s` and create motion through natural beating instead of LFO nodes.
 
 ## Pools
 
@@ -83,7 +97,7 @@ Hook volumes:
 | Enemy fire | `enemy_laser` | `0.5` |
 | UI choice/dismiss | `ui_confirm` / `ui_deny` | `0.55` |
 
-Engine hum gain follows `clamp(0.04 + vel.length() * 0.006, 0, 0.18)`. Hum frequency follows `52 + vel.length() * 1.8` Hz.
+Engine hum gain follows `clamp(0.04 + vel.length() * 0.006, 0, 0.18)`. Hum frequency follows `52 + vel.length() * 1.8` Hz, with the sawtooth grind layer scaling from `0.004 + vel.length() * 0.0003`.
 
 ## Soft Suspend
 
