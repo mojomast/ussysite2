@@ -189,7 +189,8 @@ function onGlobalKeyDown(event) {
     toggleFlightTts,
     toggleFlightView,
     toggleObjectivesView,
-    traderState
+    traderState,
+    unlockAudio
   } = requireDeps();
 
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
@@ -201,12 +202,14 @@ function onGlobalKeyDown(event) {
     if (launchCodeBuffer === 'ussy') {
       event.preventDefault();
       launchCodeBuffer = '';
+      if (typeof unlockAudio === 'function') unlockAudio();
       enterFlightMode();
       return;
     }
   }
 
   if (!isFlightActive()) return;
+  if (typeof unlockAudio === 'function') unlockAudio();
 
   if (event.code === 'Escape') {
     const invPanel = documentRef.getElementById('inventory-panel');
@@ -292,9 +295,10 @@ function onGlobalKeyUp(event) {
 }
 
 function onPointerDown(event) {
-  const { documentRef = document, isConsoleActive, isFlightActive, radioChain, renderer } = requireDeps();
+  const { documentRef = document, isConsoleActive, isFlightActive, radioChain, renderer, unlockAudio } = requireDeps();
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
   if (isFlightActive()) {
+    if (typeof unlockAudio === 'function') unlockAudio();
     if (event.button === 0 || event.button === 2) {
       event.preventDefault();
       flightState.mouseButtons.add(event.button);

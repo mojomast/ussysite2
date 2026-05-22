@@ -109,6 +109,27 @@ export const sfxEngine = {
     return true;
   },
 
+  unlock() {
+    if (!this.init() || !this.ctx || !this.masterGain) return false;
+    this._ensureContextRunning();
+    try {
+      const source = this.ctx.createBufferSource();
+      const gain = this.ctx.createGain();
+      source.buffer = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+      gain.gain.value = 0;
+      source.connect(gain);
+      gain.connect(this.masterGain);
+      source.onended = () => {
+        try { source.disconnect(); } catch {}
+        try { gain.disconnect(); } catch {}
+      };
+      source.start(this.ctx.currentTime);
+    } catch {
+      // Unlock is opportunistic; regular play calls still handle failures safely.
+    }
+    return true;
+  },
+
   _allocatePools() {
     Object.entries(NON_POSITIONAL_POOL_SIZES).forEach(([type, size]) => {
       this.nonPositionalPool[type] = Array.from({ length: size }, () => ({ busy: false, buffer: this._buffers[type], timer: null }));

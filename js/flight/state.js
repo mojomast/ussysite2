@@ -774,6 +774,7 @@ export function init() {
     toggleFlightView,
     toggleObjectivesView,
     traderState,
+    unlockAudio: () => sfxEngine.unlock(),
     updateFlightHud,
     windowRef: window
   });
