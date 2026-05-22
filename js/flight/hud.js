@@ -1,4 +1,4 @@
-import { maxPlayerAmmo, maxPlayerMissilesStored } from '../constants.js';
+import { isCoarsePointer, maxPlayerAmmo, maxPlayerMissilesStored } from '../constants.js';
 import { traderState } from '../economy/trader.js';
 import { WEAPON_DEFS, getWeaponDef } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
@@ -19,8 +19,69 @@ const killFeedEntries = [];
 const RADAR_TRAJECTORY_SECONDS = 1.2;
 const RADAR_TRAJECTORY_MAX_PX = 14;
 
+const HUD_PRIMARY_HINTS = [
+  ['H', 'HELP'],
+  ['TAB', 'SETTINGS'],
+  ['Y', 'AUTOPILOT'],
+  ['M', 'MAP'],
+  ['ESC', 'EXIT'],
+  ['G', 'BRAKE']
+];
+
+const HUD_SECONDARY_HINTS = [
+  ['V', 'NAV TARGET'],
+  ['L', 'LAND'],
+  ['O', 'OBJECTIVES'],
+  ['I', 'INVENTORY'],
+  ['B', 'MISSIONS']
+];
+
+const HUD_TOUCH_HINTS = [
+  ['❓', 'HELP'],
+  ['⚙️', 'SETTINGS'],
+  ['🗺️', 'MAP'],
+  ['🚪', 'EXIT']
+];
+
+function createHint(documentRef, key, action, secondary = false) {
+  const hint = documentRef.createElement('span');
+  hint.className = secondary ? 'hud-control-hint hud-control-hint-secondary' : 'hud-control-hint';
+  const keyEl = documentRef.createElement('kbd');
+  keyEl.className = 'hud-key';
+  keyEl.textContent = key;
+  const actionEl = documentRef.createElement('span');
+  actionEl.className = 'hud-key-action';
+  actionEl.textContent = action;
+  hint.append(keyEl, actionEl);
+  return hint;
+}
+
+export function renderHudControlsBar(documentRef = deps.documentRef || document) {
+  const bar = documentRef?.getElementById?.('hud-controls-bar') || documentRef?.querySelector?.('.dash-center-help');
+  if (!bar) return false;
+  bar.replaceChildren();
+  bar.classList.add('hud-controls-bar');
+
+  if (isCoarsePointer) {
+    HUD_TOUCH_HINTS.forEach(([icon, label]) => {
+      const button = documentRef.createElement('button');
+      button.type = 'button';
+      button.className = 'hud-touch-control';
+      button.setAttribute('aria-label', label);
+      button.textContent = `${icon} ${label}`;
+      bar.appendChild(button);
+    });
+    return true;
+  }
+
+  HUD_PRIMARY_HINTS.forEach(([key, action]) => bar.appendChild(createHint(documentRef, key, action)));
+  HUD_SECONDARY_HINTS.forEach(([key, action]) => bar.appendChild(createHint(documentRef, key, action, true)));
+  return true;
+}
+
 export function configureHud(options = {}) {
   deps = { ...deps, ...options };
+  renderHudControlsBar(deps.documentRef || document);
 }
 
 export function addKillFeedEntry(text, colorOrOptions = 'var(--cyber-cyan)') {

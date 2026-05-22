@@ -3767,17 +3767,88 @@ body.flight-active:not(.flight-third-person) .cockpit-dash-center {
 }
 
 .dash-center-help {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px 0;
   font-family: var(--font-mono);
-  font-size: clamp(6px, 0.48vw, 8px);
-  color: rgba(148, 200, 220, 0.28);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
   letter-spacing: 0.06em;
   margin-top: clamp(4px, 0.5vh, 8px);
   padding-top: 4px;
   border-top: 1px solid rgba(0, 240, 255, 0.08);
   text-align: center;
+  overflow: visible;
+}
+
+.hud-control-hint {
+  display: inline-flex;
+  align-items: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.hud-key {
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: monospace;
+  font-size: 13px;
+  color: #00f0ff;
+  line-height: 1;
+}
+
+.hud-key-action {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-left: 3px;
+  margin-right: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hud-touch-control {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid rgba(0, 240, 255, 0.42);
+  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--cyber-cyan);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.hud-settings-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 240, 255, 0.26);
+  background: transparent;
+  color: var(--cyber-cyan);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.hud-settings-btn:hover,
+.hud-settings-btn:focus-visible {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.72);
+}
+
+@media (max-width: 599px) {
+  .hud-control-hint-secondary {
+    display: none;
+  }
 }
 
 /* ── BOTTOM RIGHT ── */
