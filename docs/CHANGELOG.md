@@ -1,5 +1,14 @@
 # Changelog
 
+## [visual-performance-pass] - 2026-05-22
+### Added
+- Added ACESFilmic renderer tone mapping, SRGB output color space, and guarded UnrealBloom post-processing for the WebGL viewport.
+- Added emissive high-detail project node materials, Fresnel shader glow shells, and an animated relationship-edge opacity pulse.
+
+### Changed
+- Batched project node core connection lines into one `LineSegments` draw call, dirty-gated relationship edge buffer updates, raised desktop radar throttling to 150ms, and replaced the enemy kill flash forced reflow with Web Animations API.
+- Replaced the global resize listener with a `ResizeObserver` on the canvas container and verified debris instance matrix uploads remain outside the debris update loop.
+
 ## [planet-unification] - 2026-05-22
 ### Changed
 - Unified `PLANETS` with the 23 project-backed `USSY_PROJECTS` bodies and removed the old standalone expansion planet ids.

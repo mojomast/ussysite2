@@ -1,5 +1,8 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { COMMODITIES, configureTrader, openTradeMenu, refuelAt, tickPriceDrift, traderState } from '../economy/trader.js';
 import { getStationLore, getStationMissions } from '../economy/lore.js';
 import { gainReputation, getEnemyAggressionMultiplier, loseReputation, normalizeCategory, reputationState } from '../economy/reputation.js';
@@ -172,7 +175,7 @@ import { configureNodesOverlay, renderProjectLabels, updateNodeHoverSelection } 
 const USSY_PROJECTS = window.USSY_PROJECTS || [];
 const USSY_CATEGORIES = window.USSY_CATEGORIES || {};
 
-let scene, camera, renderer;
+let scene, camera, renderer, composer, bloomPass;
 let coreGroup, nodesGroup, connectionsGroup;
 let coreMesh, coreOuterParticles;
 let raycaster, mouse;
@@ -182,7 +185,7 @@ let activeCategory = 'all';
 let isConsoleActive = false; // Hero state by default
 let isFlightActive = false;
 let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
-let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
+let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, coreLinesMesh, relationshipEdgesMesh, selectedEdgesMesh;
 let debrisField, dustField;
 let systemStarfield = null;
 let systemPlanets = [];
@@ -192,6 +195,7 @@ let systemMapKeyWasDown = false;
 let navigationPanelControlsRegistered = false;
 let surfacePanelControlsRegistered = false;
 let missionBoardControlsRegistered = false;
+let canvasResizeObserver = null;
 let telemetryLastUpdate = 0;
 let gameRoot, playerShip, flightNavLine;
 let flightAssistKeyCaptureRegistered = false;
@@ -267,6 +271,7 @@ let lastPriceDriftTick = 0;
 let lastAutoSave = 0;
 let pendingRunState = null;
 let activeUniverseScale = 1;
+let _edgesNeedUpdate = false;
 
 const loadoutState = {
   get primary() {
@@ -627,6 +632,7 @@ export function init() {
 
   // Initialize Three.js Scene
   ({ scene, camera, renderer } = initEngineScene(canvasContainer, { THREE, isCoarsePointer }));
+  configurePostProcessing();
 
   // Groups
   ({ coreGroup, nodesGroup, connectionsGroup } = createSceneGroups(scene, { THREE }));
@@ -785,7 +791,7 @@ export function init() {
     setProjectNodeOpacity,
     setSelectedNode: value => { selectedNode = value; },
     syncOrbitFromCamera,
-    updateRelationshipEdges,
+    updateRelationshipEdges: markEdgesDirty,
     updateSelectedRelationEdges
   });
   configureInventoryPanel({ flightState });
@@ -936,7 +942,8 @@ export function init() {
   selectProject('devussy', false);
 
   // Event Listeners
-  window.addEventListener('resize', onWindowResize);
+  canvasResizeObserver = new ResizeObserver(() => onWindowResize());
+  canvasResizeObserver.observe(canvasContainer);
   registerInputListeners();
   document.addEventListener('visibilitychange', handleVisibilityChange);
   window.setInterval(saveCombatStateToHash, 30000);
@@ -1049,20 +1056,6 @@ function buildProjectNodes() {
     projectNodes.push(nodeMesh);
     projectNodeById.set(proj.id, nodeMesh);
     
-    // Add dynamic connection lines to core
-    const lineMat = new THREE.LineBasicMaterial({
-      color: hexColor,
-      transparent: true,
-      opacity: 0.15
-    });
-    const lineGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      nodeMesh.position
-    ]);
-    const connectionLine = new THREE.Line(lineGeo, lineMat);
-    connectionsGroup.add(connectionLine);
-    nodeMesh.userData.connectionLine = connectionLine;
-
     // Create 2D Overlay Label
     const label = document.createElement('div');
     label.className = 'floating-node-label';
@@ -1071,6 +1064,39 @@ function buildProjectNodes() {
     labelsContainer.appendChild(label);
     projectLabels.push({ element: label, object3d: nodeMesh });
   });
+
+  const positions = new Float32Array(USSY_PROJECTS.length * 6);
+  const coreLineGeo = new THREE.BufferGeometry();
+  coreLineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  coreLinesMesh = new THREE.LineSegments(
+    coreLineGeo,
+    new THREE.LineBasicMaterial({
+      color: 0x00f0ff,
+      transparent: true,
+      opacity: 0.12,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  updateCoreConnectionLines();
+  connectionsGroup.add(coreLinesMesh);
+}
+
+function updateCoreConnectionLines() {
+  if (!coreLinesMesh) return;
+  const position = coreLinesMesh.geometry.attributes.position;
+  const positions = position.array;
+  projectNodes.forEach((node, idx) => {
+    const offset = idx * 6;
+    positions[offset] = 0;
+    positions[offset + 1] = 0;
+    positions[offset + 2] = 0;
+    positions[offset + 3] = node.position.x;
+    positions[offset + 4] = node.position.y;
+    positions[offset + 5] = node.position.z;
+  });
+  position.needsUpdate = true;
+  coreLinesMesh.geometry.computeBoundingSphere();
 }
 
 function buildRelatedProjectEdges() {
@@ -1155,6 +1181,11 @@ function buildRelatedProjectEdges() {
   );
   selectedEdgesMesh.geometry.setDrawRange(0, 0);
   connectionsGroup.add(selectedEdgesMesh);
+  markEdgesDirty();
+}
+
+function markEdgesDirty() {
+  _edgesNeedUpdate = true;
 }
 
 function applyFlightUniverseScale(scale) {
@@ -1165,15 +1196,9 @@ function applyFlightUniverseScale(scale) {
   projectNodes.forEach(node => {
     node.scale.setScalar((node.userData.baseScale ?? nodeBaseScale) * visualScale);
     if (node.userData.distantHalo) node.userData.distantHalo.visible = flightScaleActive;
-    const line = node.userData.connectionLine;
-    if (line && line.geometry && line.geometry.attributes.position) {
-      const position = line.geometry.attributes.position;
-      position.setXYZ(1, node.position.x, node.position.y, node.position.z);
-      position.needsUpdate = true;
-      line.geometry.computeBoundingSphere();
-    }
   });
-  updateRelationshipEdges();
+  updateCoreConnectionLines();
+  markEdgesDirty();
   if (selectedNode && selectionRing) selectionRing.position.copy(selectedNode.position);
 }
 
@@ -1242,15 +1267,48 @@ function createPlanetNodeLOD(hexColor) {
     });
   }
   const lod = new THREE.LOD();
-  const highMat = new THREE.MeshBasicMaterial({ color: hexColor, wireframe: true, transparent: true, opacity: 0.92 });
-  const midMat = new THREE.MeshBasicMaterial({ color: hexColor, wireframe: true, transparent: true, opacity: 0.78 });
-  const glowMat = new THREE.MeshBasicMaterial({
+  const highMat = new THREE.MeshStandardMaterial({
     color: hexColor,
-    side: THREE.BackSide,
+    emissive: hexColor,
+    emissiveIntensity: 0.45,
+    wireframe: true,
+    roughness: 0.0,
+    metalness: 0.7,
     transparent: true,
-    opacity: 0.18,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
+    opacity: 0.92
+  });
+  const midMat = new THREE.MeshBasicMaterial({ color: hexColor, wireframe: true, transparent: true, opacity: 0.78 });
+  const glowMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(hexColor) },
+      opacity: { value: 1 }
+    },
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+
+      void main() {
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vViewDir = normalize(-mvPosition.xyz);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float opacity;
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+
+      void main() {
+        float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0), 3.5);
+        gl_FragColor = vec4(uColor, fresnel * 0.55 * opacity);
+      }
+    `,
+    side: THREE.FrontSide,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
   });
   const spriteMat = new THREE.SpriteMaterial({
     map: createPlanetNodeLOD.glowTexture,
@@ -1297,7 +1355,12 @@ function setProjectNodeOpacity(node, opacity) {
   node.userData.visualMaterials?.forEach(material => {
     material.opacity = material.isSpriteMaterial ? opacity * 0.48 : opacity;
   });
-  if (node.userData.glowMaterial) node.userData.glowMaterial.opacity = 0.18 * opacity;
+  if (node.userData.glowMaterial?.isShaderMaterial) {
+    if (node.userData.glowMaterial.uniforms?.opacity) node.userData.glowMaterial.uniforms.opacity.value = opacity;
+    else node.userData.glowMaterial.opacity = 0.18 * opacity;
+  } else if (node.userData.glowMaterial) {
+    node.userData.glowMaterial.opacity = 0.18 * opacity;
+  }
   if (node.userData.distantHaloMaterial) node.userData.distantHaloMaterial.opacity = 0.18 * opacity;
 }
 
@@ -1342,7 +1405,9 @@ function setupUIEventListeners() {
 
 // Select project by ID
 function selectProject(projId, triggerFly = true) {
-  return selectProjectModule(projId, triggerFly);
+  const result = selectProjectModule(projId, triggerFly);
+  markEdgesDirty();
+  return result;
 }
 
 // Mode Transitions
@@ -1589,14 +1654,10 @@ function triggerEnemyDeathFeedback(enemy, cls) {
   const isDreadnought = cls.id === 'dreadnought';
   const overlay = globalThis.document?.getElementById?.('cockpit-overlay');
   if (overlay) {
-    const color = `#${cls.color.toString(16).padStart(6, '0')}`;
-    const durationMs = isDreadnought ? 400 : 180;
-    overlay.style.setProperty('--death-flash-color', color);
-    overlay.style.setProperty('--death-flash-duration', `${durationMs}ms`);
-    overlay.classList.remove('enemy-death-flash');
-    void overlay.offsetWidth;
-    overlay.classList.add('enemy-death-flash');
-    globalThis.setTimeout?.(() => overlay.classList.remove('enemy-death-flash'), durationMs);
+    overlay.animate([
+      { opacity: 0.7, background: 'rgba(255,60,0,0.35)' },
+      { opacity: 0, background: 'rgba(255,60,0,0)' }
+    ], { duration: 400, easing: 'ease-out' });
   }
   if (enemy?.userData?.engineGlow) {
     enemy.userData.engineGlow.intensity = isDreadnought ? 12.0 : 6.0;
@@ -3202,8 +3263,8 @@ function resetCameraView() {
   projectNodes.forEach(node => {
     node.scale.setScalar(node.userData.baseScale);
     setProjectNodeOpacity(node, 0.85);
-    node.userData.connectionLine.material.opacity = 0.15;
   });
+  if (coreLinesMesh) coreLinesMesh.material.opacity = 0.12;
   updateSelectedRelationEdges();
   
   document.querySelectorAll('.project-item').forEach(item => item.classList.remove('active'));
@@ -3341,6 +3402,19 @@ function updateDustField(dt) {
 
 function onWindowResize() {
   resizeScene({ camera, renderer, isCoarsePointer });
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function configurePostProcessing() {
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    prefersReducedMotion ? 0 : 0.55,
+    0.4,
+    0.82
+  );
+  composer.addPass(bloomPass);
 }
 
 function handleVisibilityChange() {
@@ -3379,14 +3453,18 @@ export function tick(time = 0) {
       pos.x = x;
       pos.z = z;
       
-      const positions = node.userData.connectionLine.geometry.attributes.position.array;
-      positions[3] = x;
-      positions[5] = z;
-      node.userData.connectionLine.geometry.attributes.position.needsUpdate = true;
       nodesMoved = true;
     }
   });
-  if (nodesMoved || isConsoleActive) updateRelationshipEdges();
+  if (nodesMoved) updateCoreConnectionLines();
+  if (_edgesNeedUpdate) {
+    updateRelationshipEdges();
+    _edgesNeedUpdate = false;
+  }
+  const _t = performance.now() * 0.001;
+  if (relationshipEdgesMesh) {
+    relationshipEdgesMesh.material.opacity = 0.07 + 0.04 * Math.sin(_t * 0.8);
+  }
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
@@ -3494,7 +3572,8 @@ export function tick(time = 0) {
   updateFlightNavMarker();
 
   // Render WebGL
-  renderer.render(scene, camera);
+  if (prefersReducedMotion || !composer) renderer.render(scene, camera);
+  else composer.render();
 
   renderProjectLabels();
 

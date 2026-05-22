@@ -86,7 +86,7 @@ The expansion bounty system is separate from security reputation consequences: i
 
 ## Radar
 
-The cockpit minimap plots active targets within radar range. Active, non-stunned enemies also show a short red velocity projection line from their contact dot, capped to 14px, with dreadnoughts using a thicker/brighter projection.
+The cockpit minimap plots active targets within radar range. Active, non-stunned enemies also show a short red velocity projection line from their contact dot, capped to 14px, with dreadnoughts using a thicker/brighter projection. Desktop radar refreshes are throttled to 150ms to reduce HUD CPU work while preserving target readability.
 
 Kill streaks chain within a four-second window. Rewards scale to `1.5x` at two kills, `2x` at three kills, and `3x` at five kills. The HUD flashes the active streak near the economy/status panel.
 
@@ -106,7 +106,7 @@ Boss encounters trigger when the player score reaches `1500`, `4000`, and `8000`
 
 Boss dreadnoughts override the regular class stats with `18` hull, `6` shield HP, `3.2x` scale, and a dedicated cockpit health bar. Their attack phase is based on remaining hull: phase 1 fires 4-shot bursts, phase 2 at 66% hull fires 6-shot bursts with a 0.7s cooldown, and phase 3 at 33% hull fires 8-shot bursts with a 0.5s cooldown plus one elite escort every 12 seconds when no elite is active.
 
-Destroying the boss clears the boss HUD/state, plays the large explosion at full volume, awards `+1200` score and credits, and announces `DREADNOUGHT DESTROYED +1200CR`.
+Destroying the boss clears the boss HUD/state, plays the large explosion at full volume, awards `+1200` score and credits, and announces `DREADNOUGHT DESTROYED +1200CR`. Enemy death flash feedback is driven through the Web Animations API rather than forcing a layout reflow to restart CSS animation state.
 
 Delayed enemy spawns now enter with a short approach burst once their delay expires, so waves lunge into the arena instead of drifting in from their spawn point. Elite aggressors and flankers add a side-to-side strafe relative to the player's current right vector, while support elites keep the longer-range support behavior.
 
