@@ -1257,13 +1257,37 @@ function createPlanetNodeLOD(hexColor) {
     opacity: 0.92
   });
   const midMat = new THREE.MeshBasicMaterial({ color: hexColor, wireframe: true, transparent: true, opacity: 0.78 });
-  const glowMat = new THREE.MeshBasicMaterial({
-    color: hexColor,
-    side: THREE.BackSide,
+  const glowMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(hexColor) },
+      opacity: { value: 1 }
+    },
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+
+      void main() {
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vViewDir = normalize(-mvPosition.xyz);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float opacity;
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+
+      void main() {
+        float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0), 3.5);
+        gl_FragColor = vec4(uColor, fresnel * 0.55 * opacity);
+      }
+    `,
+    side: THREE.FrontSide,
     transparent: true,
-    opacity: 0.18,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
   });
   const spriteMat = new THREE.SpriteMaterial({
     map: createPlanetNodeLOD.glowTexture,
@@ -1310,7 +1334,12 @@ function setProjectNodeOpacity(node, opacity) {
   node.userData.visualMaterials?.forEach(material => {
     material.opacity = material.isSpriteMaterial ? opacity * 0.48 : opacity;
   });
-  if (node.userData.glowMaterial) node.userData.glowMaterial.opacity = 0.18 * opacity;
+  if (node.userData.glowMaterial?.isShaderMaterial) {
+    if (node.userData.glowMaterial.uniforms?.opacity) node.userData.glowMaterial.uniforms.opacity.value = opacity;
+    else node.userData.glowMaterial.opacity = 0.18 * opacity;
+  } else if (node.userData.glowMaterial) {
+    node.userData.glowMaterial.opacity = 0.18 * opacity;
+  }
   if (node.userData.distantHaloMaterial) node.userData.distantHaloMaterial.opacity = 0.18 * opacity;
 }
 
