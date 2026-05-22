@@ -174,7 +174,7 @@ function drawEnemyRadarTrajectory(ctx, cx, cy, enemy, point, radarScale) {
 export function updateCockpitRadar(time = performance.now(), force = false) {
   const { cockpitRadar, enemies = [], flightState, isCoarsePointer, isFlightActive, missionState, projectNodes = [], radarCtx, radarRange, activeUniverseScale } = deps;
   if (!radarCtx || !cockpitRadar || !isFlightActive?.()) return;
-  const interval = isCoarsePointer ? 160 : 95;
+  const interval = isCoarsePointer ? 160 : 150;
   if (!force && time - radarLastUpdate < interval) return;
   radarLastUpdate = time;
 
