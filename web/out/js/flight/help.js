@@ -10,44 +10,45 @@ export const HELP_TABS = [
 
 export const HELP_CONTROLS = {
   FLIGHT: [
-    ['Mouse move', 'Look/aim ship while pointer locked'],
-    ['W / ArrowUp', 'Forward thrust'],
-    ['S / ArrowDown', 'Reverse thrust/brake'],
-    ['A / ArrowLeft', 'Strafe left'],
-    ['D / ArrowRight', 'Strafe right'],
+    ['Mouse Move', 'Look / aim ship (pointer locked)'],
+    ['W / Arrow Up', 'Forward thrust'],
+    ['S / Arrow Down', 'Reverse thrust / brake'],
+    ['A / Arrow Left', 'Strafe left'],
+    ['D / Arrow Right', 'Strafe right'],
     ['Q', 'Roll left'],
     ['E', 'Roll right'],
-    ['Shift', 'Afterburner when unlocked'],
+    ['Shift', 'Afterburner (when unlocked)'],
     ['G', 'Match speed / emergency brake'],
-    ['F', 'Cold jump when unlocked'],
+    ['F', 'Cold jump (when unlocked)'],
     ['R', 'Toggle throttle hold'],
-    ['Z / X', 'Throttle level up/down while throttle hold is enabled']
+    ['Z / X', 'Throttle level up / down (throttle hold active)'],
+    ['Shift+C', 'Toggle cockpit / third-person view']
   ],
   COMBAT: [
-    ['Left mouse', 'Primary fire'],
-    ['Right mouse', 'Secondary fire'],
-    ['C', 'Evasion roll'],
-    ['T', 'Cycle target reserved; safe no-op until implemented']
+    ['Left Mouse Button', 'Primary fire'],
+    ['Right Mouse Button', 'Secondary fire / missile'],
+    ['C', 'Evasion roll']
   ],
   NAVIGATION: [
-    ['V', 'Set navigation target from crosshair'],
+    ['V', 'Set nav target from crosshair'],
     ['Y', 'Toggle autopilot'],
     ['M', 'System map'],
-    ['L', 'Surface approach / land'],
-    ['Wheel in console', 'Zoom orbit camera'],
-    ['Double-click scene in console', 'Reset console camera']
+    ['L', 'Surface approach / land']
   ],
   UI: [
     ['H / F1', 'Help overlay'],
-    ['P', 'Pause/menu reserved'],
-    ['I', 'Inventory/manifest'],
-    ['B', 'Mission board when no modal/message is active'],
-    ['O', 'Objectives'],
-    ['U', 'Upgrades/skills while landed'],
-    ['Escape / Backspace', 'Close topmost overlay/back; exit flight only from clear state'],
+    ['O', 'Objectives panel'],
+    ['I', 'Inventory / manifest'],
+    ['B', 'Mission board (when docked or no modal active)'],
+    ['U', 'Upgrades / skills (when landed)'],
+    ['[TAB]', 'Settings menu (NEW - added in this feature)'],
+    ['Escape', 'Close topmost overlay / exit flight (pointer unlocked)'],
     ['Space', 'Dismiss message / activate focused UI'],
-    ['1-6', 'Modal/menu choices'],
-    ['Click button/card', 'Activate UI action']
+    ['1-6', 'Modal/menu choices']
+  ],
+  SYSTEM: [
+    ['"ussy" (typed)', 'Enter flight mode from console'],
+    ['Shift+M', 'Toggle flight TTS']
   ]
 };
 

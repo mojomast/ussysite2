@@ -4,10 +4,11 @@ import {
   initRendererScene,
   renderer as webglRenderer,
   resizeRenderer,
+  setRenderPixelRatio,
   scene as rendererScene
 } from './renderer.js';
 
-export { getRenderPixelRatio } from './renderer.js';
+export { getRenderPixelRatio, setRenderPixelRatio } from './renderer.js';
 
 export let scene = null;
 export let camera = null;

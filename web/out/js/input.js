@@ -11,44 +11,44 @@ import {
 import { registerHeroListeners } from './ui/hero.js';
 import { toggleInventoryPanel } from './ui/inventory-panel.js';
 import { createAutopilotState } from './flight/autopilot.js';
+import { settingsState } from './flight/settings.js';
 
 const THREE = globalThis.THREE;
 
 export const manualFlightKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']);
 
 export const KEY_MAP = Object.freeze({
-  'Mouse move': 'Look/aim ship while pointer locked',
-  'W / ArrowUp': 'Forward thrust',
-  'S / ArrowDown': 'Reverse thrust/brake',
-  'A / ArrowLeft': 'Strafe left',
-  'D / ArrowRight': 'Strafe right',
+  'Mouse Move': 'Look / aim ship (pointer locked)',
+  'W / Arrow Up': 'Forward thrust',
+  'S / Arrow Down': 'Reverse thrust / brake',
+  'A / Arrow Left': 'Strafe left',
+  'D / Arrow Right': 'Strafe right',
   Q: 'Roll left',
   E: 'Roll right',
-  Shift: 'Afterburner when unlocked',
+  Shift: 'Afterburner (when unlocked)',
   G: 'Match speed / emergency brake',
-  F: 'Cold jump when unlocked',
+  F: 'Cold jump (when unlocked)',
   R: 'Toggle throttle hold',
-  'Z / X': 'Throttle level up/down while throttle hold is enabled',
-  'Left mouse': 'Primary fire',
-  'Right mouse': 'Secondary fire',
+  'Z / X': 'Throttle level up / down (throttle hold active)',
+  'Shift+C': 'Toggle cockpit / third-person view',
+  'Left Mouse Button': 'Primary fire',
+  'Right Mouse Button': 'Secondary fire / missile',
   C: 'Evasion roll',
-  T: 'Cycle target reserved; safe no-op until implemented',
-  V: 'Set navigation target from crosshair',
+  V: 'Set nav target from crosshair',
   Y: 'Toggle autopilot',
   M: 'System map',
   L: 'Surface approach / land',
-  'Wheel in console': 'Zoom orbit camera',
-  'Double-click scene in console': 'Reset console camera',
   'H / F1': 'Help overlay',
-  P: 'Pause/menu reserved',
-  I: 'Inventory/manifest',
-  B: 'Mission board when no modal/message is active',
-  O: 'Objectives',
-  U: 'Upgrades/skills while landed',
-  'Escape / Backspace': 'Close topmost overlay/back; exit flight only from clear state',
+  O: 'Objectives panel',
+  I: 'Inventory / manifest',
+  B: 'Mission board (when docked or no modal active)',
+  U: 'Upgrades / skills (when landed)',
+  '[TAB]': 'Settings menu (NEW - added in this feature)',
+  Escape: 'Close topmost overlay / exit flight (pointer unlocked)',
   Space: 'Dismiss message / activate focused UI',
   '1-6': 'Modal/menu choices',
-  'Click button/card': 'Activate UI action'
+  '"ussy" (typed)': 'Enter flight mode from console',
+  'Shift+M': 'Toggle flight TTS'
 });
 
 export const orbitState = {
@@ -244,9 +244,14 @@ function onGlobalKeyDown(event) {
     handleGameMessageChoice,
     handleSurfaceEscape,
     isFlightActive,
+    isSettingsMenuOpen,
+    isTutorialOverlayVisible,
     landOnNearestProject,
+    closeSettingsMenu,
+    hideTutorialOverlay,
     openAudioSettingsMenu,
     openMissionBoard,
+    openSettingsMenu,
     openSkillTree,
     openStationMenu,
     radioChain,
@@ -264,6 +269,28 @@ function onGlobalKeyDown(event) {
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
   if (isTypingTarget(event.target) || event.metaKey || event.altKey) return;
   if (!isFlightActive() && event.ctrlKey) return;
+
+  if (event.code === 'Tab') {
+    event.preventDefault();
+    if (isSettingsMenuOpen?.()) {
+      closeSettingsMenu?.();
+      return;
+    }
+    if (!event.repeat) openSettingsMenu?.();
+    return;
+  }
+
+  if (event.code === 'Escape' && isSettingsMenuOpen?.()) {
+    event.preventDefault();
+    closeSettingsMenu?.();
+    return;
+  }
+
+  if (event.code === 'Escape' && isTutorialOverlayVisible?.()) {
+    event.preventDefault();
+    hideTutorialOverlay?.();
+    return;
+  }
 
   if (event.key.length === 1 && !isFlightActive()) {
     launchCodeBuffer = (launchCodeBuffer + event.key.toLowerCase()).slice(-4);
@@ -458,8 +485,9 @@ function onMouseMove(event) {
   if (isFlightActive() && flightState.pointerLocked) {
     if (flightState.paused) return;
     if (Math.abs(event.movementX) + Math.abs(event.movementY) > 4) disableAutopilot('AUTOPILOT MANUAL OVERRIDE');
+    const pitchSensitivity = flightState.mouseSensitivity * (settingsState.mouseInvert ? -1 : 1);
     applyLocalFlightRotation(0, 1, 0, -event.movementX * flightState.mouseSensitivity);
-    applyLocalFlightRotation(1, 0, 0, -event.movementY * flightState.mouseSensitivity);
+    applyLocalFlightRotation(1, 0, 0, -event.movementY * pitchSensitivity);
     return;
   }
   updateCursorPosition(event.clientX, event.clientY);

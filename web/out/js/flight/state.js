@@ -86,6 +86,8 @@ import {
 import { showDebrief } from './debrief.js';
 import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, toggleHelpMenu } from './help.js';
 import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
+import { applySettings, loadSettings, saveSettings, settingsState } from './settings.js';
+import { configureTutorialOverlay, hideTutorialOverlay, isTutorialOverlayVisible, showTutorialOverlay } from './tutorial-overlay.js';
 import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
   MISSION_INTRO_TEXT,
@@ -129,7 +131,7 @@ import {
 // combatAudio.bark('TAKING FIRE', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' })
 import { animateHolographicCore, createHolographicCore as createEngineHolographicCore } from '../engine/core.js';
 import { projectHitTargets as engineProjectHitTargets, projectLabels as engineProjectLabels, projectNodeById as engineProjectNodeById, projectNodes as engineProjectNodes, relationshipEdges as engineRelationshipEdges } from '../engine/nodes.js';
-import { createAmbientLighting as createEngineAmbientLighting, createCameraAnimationState, createSceneGroups, initScene as initEngineScene, resizeScene } from '../engine/scene.js';
+import { createAmbientLighting as createEngineAmbientLighting, createCameraAnimationState, createSceneGroups, initScene as initEngineScene, resizeScene, setRenderPixelRatio } from '../engine/scene.js';
 import {
   animateDeepSpaceEffects,
   createDebrisField as createEngineDebrisField,
@@ -161,6 +163,7 @@ import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, up
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
+import { closeSettingsMenu, configureSettingsMenu, isSettingsMenuOpen, openSettingsMenu } from '../ui/settings-menu.js';
 import {
   activateConsoleMode as activateConsoleModeModule,
   configureConsoleUI,
@@ -508,6 +511,8 @@ const inspectTelemetry = document.getElementById('inspect-telemetry');
 let inspectHowLabel, inspectHowBody;
 
 function restoreCombatStateFromHash() {
+  const cfgMatch = location.hash.match(/:cfg:([A-Za-z0-9+/=]+)/);
+  if (cfgMatch) loadSettings(cfgMatch[1]);
   const hashMatch = location.hash.match(/#save:([A-Za-z0-9+/=]+)/);
   if (hashMatch) {
     deserializeCombatState(hashMatch[1]);
@@ -535,7 +540,43 @@ function saveCombatStateToHash() {
   const encoded = serializeCombatState();
   const reputationEncoded = btoa(JSON.stringify(reputationState.scores));
   const missionEncoded = btoa(JSON.stringify(serializeMissionProgress({ missionState, missionContracts, gameOrchestrator })));
-  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}:ms:${missionEncoded}`);
+  history.replaceState(null, '', `#save:${encoded}:cr:${traderState.credits}:rep:${reputationEncoded}:ms:${missionEncoded}:cfg:${saveSettings()}`);
+}
+
+function setMouseSensitivity(value) {
+  const next = Number(value);
+  if (Number.isFinite(next)) flightState.mouseSensitivity = next;
+}
+
+function setTTSEnabled(enabled) {
+  ttsEngine.enabled = Boolean(enabled);
+  if (!ttsEngine.enabled) ttsEngine.stop();
+  updateTtsStatusIndicator();
+}
+
+function setPixelRatio(value) {
+  setRenderPixelRatio(value);
+  onWindowResize();
+}
+
+function getSettingsDeps() {
+  return {
+    documentRef: document,
+    isFlightActive: () => isFlightActive,
+    releasePointerLock: () => document.exitPointerLock?.(),
+    requestPointerLock: requestFlightPointerLock,
+    setBloomRadius,
+    setBloomStrength,
+    setBloomThreshold,
+    setChatterVolume,
+    setMouseSensitivity,
+    setPixelRatio,
+    setRadioVolume,
+    setSfxVolume,
+    setTTSBackendEnabled,
+    setTTSEnabled,
+    speakTts: (text, options) => ttsEngine.speak(text, options)
+  };
 }
 
 function buildPersistentCombatState() {
@@ -689,6 +730,15 @@ export function init() {
     isFlightActive: () => isFlightActive,
     updateFlightHud
   });
+  configureTutorialOverlay({
+    documentRef: document,
+    isFlightActive: () => isFlightActive,
+    requestPointerLock: requestFlightPointerLock,
+    saveSettingsToHash: saveCombatStateToHash
+  });
+  const settingsDeps = getSettingsDeps();
+  configureSettingsMenu(settingsDeps);
+  applySettings(settingsDeps);
   configureMissionBoardUI({ documentRef: document });
   configureCombatScene({
     THREE,
@@ -888,6 +938,7 @@ export function init() {
     canvasContainer,
     coreOuterParticles,
     customCursor,
+    closeSettingsMenu,
     disableAutopilot,
     dismissGameMessage,
     documentRef: document,
@@ -895,8 +946,11 @@ export function init() {
     exitFlightMode,
     gameMessageState,
     handleGameMessageChoice,
+    hideTutorialOverlay,
     handleSurfaceEscape,
     isHelpMenuOpen,
+    isSettingsMenuOpen,
+    isTutorialOverlayVisible,
     heroContainer,
     isConsoleActive: () => isConsoleActive,
     isFlightActive: () => isFlightActive,
@@ -904,6 +958,7 @@ export function init() {
     mouse,
     openAudioSettingsMenu,
     openMissionBoard,
+    openSettingsMenu,
     openSkillTree,
     openStationMenu,
     playFireSfx: type => sfxEngine.playFlat(type, { volume: type === 'missile' ? 0.9 : 0.8 }),
@@ -927,6 +982,11 @@ export function init() {
     unlockAudio: () => sfxEngine.unlock(),
     updateFlightHud,
     windowRef: window
+  });
+  document.getElementById('hud-settings-btn')?.addEventListener('click', openSettingsMenu);
+  document.getElementById('hud-controls-bar')?.addEventListener('click', event => {
+    const action = event.target?.closest?.('[data-hud-action]')?.dataset?.hudAction;
+    if (action === 'settings') openSettingsMenu();
   });
   registerFlightAssistKeyCapture();
   registerNavigationPanelControls();
@@ -1536,13 +1596,19 @@ function enterFlightMode() {
     clearRunState();
     showFlightStartupChoice();
   }
+  if (!gameOrchestrator.tutorialComplete && !settingsState.tutorialOverlayDismissed) {
+    showTutorialOverlay();
+  }
   updateFlightHud(true);
   updateCockpitRadar(0, true);
-  if (!isCoarsePointer && renderer.domElement.requestPointerLock) {
-    const lockRequest = renderer.domElement.requestPointerLock();
-    if (lockRequest && typeof lockRequest.catch === 'function') {
-      lockRequest.catch(onPointerLockError);
-    }
+  if (!isTutorialOverlayVisible()) requestFlightPointerLock();
+}
+
+function requestFlightPointerLock() {
+  if (isCoarsePointer || !renderer?.domElement?.requestPointerLock) return;
+  const lockRequest = renderer.domElement.requestPointerLock();
+  if (lockRequest && typeof lockRequest.catch === 'function') {
+    lockRequest.catch(onPointerLockError);
   }
 }
 
@@ -3410,11 +3476,26 @@ function configurePostProcessing() {
   composer.addPass(new RenderPass(scene, camera));
   bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    prefersReducedMotion ? 0 : 0.55,
-    0.4,
-    0.82
+    (prefersReducedMotion || settingsState.reducedMotion) ? 0 : settingsState.bloomStrength,
+    settingsState.bloomRadius,
+    settingsState.bloomThreshold
   );
   composer.addPass(bloomPass);
+}
+
+export function setBloomStrength(value) {
+  const next = Number(value);
+  if (Number.isFinite(next) && bloomPass) bloomPass.strength = (prefersReducedMotion || settingsState.reducedMotion) ? 0 : next;
+}
+
+export function setBloomThreshold(value) {
+  const next = Number(value);
+  if (Number.isFinite(next) && bloomPass) bloomPass.threshold = next;
+}
+
+export function setBloomRadius(value) {
+  const next = Number(value);
+  if (Number.isFinite(next) && bloomPass) bloomPass.radius = next;
 }
 
 function handleVisibilityChange() {

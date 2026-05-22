@@ -1,9 +1,17 @@
 export let scene = null;
 export let camera = null;
 export let renderer = null;
+let renderPixelRatioSetting = 'auto';
 
 export function getRenderPixelRatio(isCoarsePointer = false, devicePixelRatio = window.devicePixelRatio || 1) {
+  if (renderPixelRatioSetting !== 'auto') return Number(renderPixelRatioSetting) || 1;
   return Math.min(devicePixelRatio, isCoarsePointer ? 1 : 1.25);
+}
+
+export function setRenderPixelRatio(value = 'auto') {
+  const setting = String(value);
+  renderPixelRatioSetting = ['auto', '1', '1.5', '2'].includes(setting) ? setting : 'auto';
+  return renderPixelRatioSetting;
 }
 
 export function initRendererScene(canvasContainer, { THREE: Three = THREE, isCoarsePointer = false, width = window.innerWidth, height = window.innerHeight } = {}) {
