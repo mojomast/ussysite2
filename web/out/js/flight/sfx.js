@@ -72,6 +72,8 @@ export const sfxEngine = {
   _engineHumRequested: false,
   _stationAmbientRequested: false,
   _lastPlay: null,
+  _playCount: 0,
+  _lastSkip: null,
 
   init() {
     if (this._initialized) return true;
@@ -161,7 +163,14 @@ export const sfxEngine = {
   },
 
   playPositional(type, mesh, options = {}) {
-    if (this._suspended || !this.init()) return false;
+    if (this._suspended) {
+      this._lastSkip = { type, reason: 'suspended', at: Date.now() };
+      return false;
+    }
+    if (!this.init()) {
+      this._lastSkip = { type, reason: 'init-failed', at: Date.now() };
+      return false;
+    }
     const pool = this.positionalPool[type];
     const buffer = this._buffers[type];
     if (!pool || !buffer) return this.playFlat(type, options);
@@ -203,10 +212,20 @@ export const sfxEngine = {
   },
 
   playFlat(type, options = {}) {
-    if (this._suspended || !this.init()) return false;
+    if (this._suspended) {
+      this._lastSkip = { type, reason: 'suspended', at: Date.now() };
+      return false;
+    }
+    if (!this.init()) {
+      this._lastSkip = { type, reason: 'init-failed', at: Date.now() };
+      return false;
+    }
     const pool = this.nonPositionalPool[type];
     const buffer = this._buffers[type];
-    if (!pool || !buffer) return false;
+    if (!pool || !buffer) {
+      this._lastSkip = { type, reason: !pool ? 'missing-pool' : 'missing-buffer', at: Date.now() };
+      return false;
+    }
     this._ensureContextRunning();
     this._updateMasterGain();
     const slot = pool.find(item => !item.busy);
@@ -220,16 +239,18 @@ export const sfxEngine = {
     const gain = this.ctx.createGain();
     const now = this.ctx.currentTime;
     const duck = ttsEngine.activePriority >= 0 ? 0.55 : 1;
+    const settingsVolume = Math.max(0.25, clampVolume(gameSettings.sfxVolume));
     source.buffer = buffer;
     source.playbackRate.setValueAtTime(pitch, now);
-    gain.gain.setValueAtTime(clampVolume(options.volume ?? 0.55) * clampVolume(gameSettings.sfxVolume) * 0.9 * duck, now);
+    gain.gain.setValueAtTime(clampVolume(options.volume ?? 0.55) * settingsVolume * 1.25 * duck, now);
     source.connect(gain);
     gain.connect(this.ctx.destination);
 
     slot.busy = true;
     slot.source = source;
     slot.gain = gain;
-    this._lastPlay = { type, at: Date.now(), contextState: this.ctx.state, volume: gain.gain.value };
+    this._playCount += 1;
+    this._lastPlay = { type, at: Date.now(), contextState: this.ctx.state, volume: gain.gain.value, sfxVolume: gameSettings.sfxVolume, playCount: this._playCount };
     source.onended = () => {
       try { source.disconnect(); } catch {}
       try { gain.disconnect(); } catch {}
@@ -239,6 +260,42 @@ export const sfxEngine = {
     };
     source.start(now);
     return true;
+  },
+
+  testTone() {
+    if (!this.init() || !this.ctx) return false;
+    this._ensureContextRunning();
+    const now = this.ctx.currentTime;
+    const oscillator = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, now);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    oscillator.connect(gain);
+    gain.connect(this.ctx.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.22);
+    this._playCount += 1;
+    this._lastPlay = { type: 'testTone', at: Date.now(), contextState: this.ctx.state, volume: 0.3, sfxVolume: gameSettings.sfxVolume, playCount: this._playCount };
+    oscillator.onended = () => {
+      try { oscillator.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    };
+    return true;
+  },
+
+  getDebugState() {
+    return {
+      initialized: this._initialized,
+      contextState: this.ctx?.state || null,
+      sfxVolume: gameSettings.sfxVolume,
+      suspended: this._suspended,
+      playCount: this._playCount,
+      lastPlay: this._lastPlay,
+      lastSkip: this._lastSkip,
+      flatPools: Object.fromEntries(Object.entries(this.nonPositionalPool).map(([type, pool]) => [type, pool.length]))
+    };
   },
 
   synthesizeBuffer(type) {

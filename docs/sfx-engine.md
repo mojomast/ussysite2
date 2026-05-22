@@ -10,7 +10,9 @@ Initialization calls `radioChain.buildChain()` only when the shared context does
 
 The SFX master bus is routed directly to `radioChain.ctx.destination`. It does not connect to `radioChain`'s highpass/lowpass/waveshaper radio chain, so weapon, UI, engine, and ambience sounds remain clean while TTS and combat chatter keep their radio treatment.
 
-Flat player weapon/UI sounds only require the shared Web Audio context and route to `ctx.destination` with their own effective gain so weapon fire remains audible even if the positional/master listener path is unavailable. If Three.js positional audio is unavailable, positional sounds fall back to capped flat Web Audio pools instead of disabling all SFX.
+Flat player weapon/UI sounds only require the shared Web Audio context and route to `ctx.destination` with their own effective gain so weapon fire remains audible even if the positional/master listener path is unavailable. Flat one-shots keep a small audible floor even if an old `sfxVolume` setting was persisted too low. If Three.js positional audio is unavailable, positional sounds fall back to capped flat Web Audio pools instead of disabling all SFX.
+
+For browser debugging, `window.__USSY_SFX__` exposes `testTone()` and `getDebugState()`.
 
 ## Public API
 
