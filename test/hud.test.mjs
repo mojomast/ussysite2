@@ -252,3 +252,32 @@ test('updateSurfaceHUD shows surface panel and service list', () => {
   assert.equal(elements['surface-planet'].textContent, 'CINDER');
   assert.equal(elements['surface-services'].textContent, 'Combat Encounter');
 });
+
+test('updateSurfaceHUD uses userData planet id before numeric three object id', () => {
+  const elements = {
+    'approach-hint': createElement(),
+    'orbital-panel': createElement(),
+    'surface-panel': createElement(),
+    'approach-planet': createElement(),
+    'approach-altitude': createElement(),
+    'orbital-planet': createElement(),
+    'orbital-altitude': createElement(),
+    'orbital-services': createElement(),
+    'surface-planet': createElement(),
+    'surface-services': createElement()
+  };
+  const state = {
+    pos: { x: 0, y: 0, z: 1200 },
+    surface: { state: 'APPROACH', planetId: 'nexus-prime' }
+  };
+  const planet = {
+    id: 784,
+    name: '',
+    position: { x: 0, y: 0, z: 0 },
+    userData: { planetId: 'nexus-prime', name: 'Nexus Prime', radius: 800, type: 'homeworld' }
+  };
+
+  updateSurfaceHUD(state, [planet], createDocument(elements));
+
+  assert.equal(elements['approach-planet'].textContent, 'NEXUS PRIME');
+});

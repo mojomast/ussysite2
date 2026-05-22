@@ -310,7 +310,7 @@ function getPlanetCoord(source, axis, index) {
 }
 
 function getPlanetId(planet) {
-  return planet?.id ?? planet?.userData?.planetId ?? null;
+  return planet?.userData?.planetId ?? planet?.id ?? null;
 }
 
 function getPlanetRadius(planet) {
@@ -340,7 +340,7 @@ export function updateSurfaceHUD(flightState, planets = [], documentRef = deps.d
   const surface = flightState?.surface;
   const state = surface?.state ?? SURFACE_STATES.NONE;
   const planet = findSurfacePlanet(surface, planets) ?? (surface?.planetId ? { id: surface.planetId, name: surface.planetId, radius: 0 } : null);
-  const name = planet?.name ?? planet?.userData?.name ?? planet?.id ?? surface?.planetId ?? '--';
+  const name = String(planet?.userData?.name ?? planet?.name ?? planet?.id ?? surface?.planetId ?? '--');
   const altitude = formatSurfaceAltitude(flightState, planet);
   const services = getSurfaceServices(planet);
   const serviceText = services.length ? services.filter(service => service.available !== false).map(service => service.label).join(' // ') : 'NO SERVICES';

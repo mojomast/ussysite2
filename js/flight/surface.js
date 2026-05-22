@@ -42,7 +42,7 @@ function distance(a, b) {
 }
 
 function planetId(planet) {
-  return planet?.id ?? planet?.userData?.planetId ?? null;
+  return planet?.userData?.planetId ?? planet?.id ?? null;
 }
 
 function planetRadius(planet) {

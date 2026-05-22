@@ -137,6 +137,10 @@ test('H opens/closes help and Escape closes open help first', () => {
   assert.equal(open, true);
   listeners.keydown({ code: 'KeyH', key: 'h', target: null, preventDefault() { this.prevented = true; } });
   assert.equal(open, false);
+  listeners.keydown({ code: '', key: 'H', target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(open, true);
+  listeners.keydown({ code: '', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(open, false);
   open = true;
   listeners.keydown({ code: 'Escape', key: 'Escape', target: null, preventDefault() { this.prevented = true; } });
   assert.equal(open, false);

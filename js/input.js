@@ -129,6 +129,11 @@ export function isBackOrCloseKey(event) {
   return event?.code === 'Escape' || event?.code === 'Backspace';
 }
 
+export function isHelpKey(event) {
+  const key = typeof event?.key === 'string' ? event.key.toLowerCase() : '';
+  return event?.code === 'KeyH' || event?.code === 'F1' || key === 'h' || key === 'f1';
+}
+
 export function clearFlightInput() {
   const { isFlightActive } = requireDeps();
   if (!isFlightActive()) return;
@@ -237,7 +242,7 @@ function onGlobalKeyDown(event) {
     }
   }
 
-  if (event.code === 'KeyH' || event.code === 'F1') {
+  if (isHelpKey(event)) {
     event.preventDefault();
     if (!event.repeat && typeof toggleHelpMenu === 'function') toggleHelpMenu();
     return;
