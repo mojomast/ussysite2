@@ -98,12 +98,12 @@ export function updateFlight(time = 0) {
     if (combatState.afterburnerActive && performance.now() >= combatState.afterburnerUntil) combatState.afterburnerActive = false;
     const boost = combatState.afterburnerActive ? 1.8 : 1;
     if (flightHud) flightHud.classList.toggle('afterburner-active', combatState.afterburnerActive);
-    const coldJumpKeyDown = flightState.keys.has('KeyE');
+    const coldJumpKeyDown = flightState.keys.has('KeyF');
     if (coldJumpKeyDown && !coldJumpKeyWasDown && skillTree.unlocked.has('eng_5') && combatState.coldJumpCooldown <= 0) {
       flightState.pos.addScaledVector(flightForward, 40);
       sfxEngine.playFlat('missile', { volume: 0.8 });
       combatState.coldJumpCooldown = 25000;
-      flightState.status = 'COLD JUMP EXECUTED';
+      flightState.status = 'F - COLD JUMP EXECUTED';
       flightState.statusUntil = performance.now() + 1400;
     }
     coldJumpKeyWasDown = coldJumpKeyDown;

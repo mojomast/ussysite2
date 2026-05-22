@@ -33,7 +33,7 @@ WEAPONS: weap_1 -> weap_3 -> weap_4 -> weap_5
 ENGINES: eng_1 -> eng_2 -> eng_3 -> eng_4 -> eng_5
 ```
 
-Tier 5 skills add build identity: Point Defense Grid blocks 20% of enemy bullets, Mirror Protocol reflects shielded hits into nearby enemies, Ghost Round bypasses evasion 15% of the time, and Cold Jump teleports 40 units forward on `E` with a 25s cooldown.
+Tier 5 skills add build identity: Point Defense Grid blocks 20% of enemy bullets, Mirror Protocol reflects shielded hits into nearby enemies, Ghost Round bypasses evasion 15% of the time, and Cold Jump teleports 40 units forward on `F` with a 25s cooldown.
 
 ## Heat And Overheat
 
@@ -53,7 +53,7 @@ Damage records `lastHitAt`, interrupts regen, and raises adrenaline. Shields abo
 | `< 3000` | 3 | Audit Probes, Swarm Specialists, DevPlan Enforcers, Nexussy Operators. |
 | `>= 3000` | 4 | All classes including HERMES-Dreadnoughts and Phantom Processes. |
 
-Past tier 4, `getDifficultyMultiplier(score)` scales enemy fire cooldown and accuracy from `1.0x` at 3000 score toward a `1.75x` cap, so high-score runs keep escalating instead of flattening out.
+Past tier 4, `getDifficultyMultiplier(score)` scales enemy fire cooldown and accuracy from `1.0x` at 3000 score toward a `2.0x` cap at 11000 score, so high-score runs keep escalating instead of flattening out.
 
 ## Station Equipment
 

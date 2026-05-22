@@ -19,6 +19,7 @@ const {
   getEnemyKillReward,
   getWeaponDef
 } = await import('../js/flight/combat-overhaul.js');
+const { combatState } = await import('../js/flight/combat-state.js');
 
 describe('combat damage and heat math', () => {
   it('bleeds low-shield damage into armor at the expected ratio', () => {
@@ -47,6 +48,10 @@ describe('combat damage and heat math', () => {
 });
 
 describe('combat class data', () => {
+  it('initializes cold jump cooldown state', () => {
+    assert.equal(combatState.coldJumpCooldown, 0, 'cold jump cooldown should be present on initial combat state');
+  });
+
   it('activates adrenaline state at the low-armor threshold', () => {
     assert.equal(getAdrenalineState({ armor: 25, maxArmor: 100 }).active, true, '25% armor should trigger adrenaline state');
     assert.equal(getAdrenalineState({ armor: 26, maxArmor: 100 }).active, false, 'above 25% armor should not trigger adrenaline state');

@@ -245,7 +245,7 @@ export const sfxEngine = {
     source.playbackRate.setValueAtTime(pitch, now);
     gain.gain.setValueAtTime(clampVolume(options.volume ?? 0.55) * settingsVolume * 1.25 * duck, now);
     source.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.masterGain);
 
     slot.busy = true;
     slot.source = source;
@@ -418,6 +418,7 @@ export const sfxEngine = {
         return [Math.tanh(saw * 0.62 * noteAmp + noise * noteAmp), nextPhase];
       });
     }
+    console.warn(`[sfx] synthesizeBuffer: unknown type "${type}" - returning silence`);
     return renderBuffer(this.ctx, 0.05, () => 0);
   },
 
@@ -499,7 +500,7 @@ export const sfxEngine = {
   },
 
   updateEngineHum(vel) {
-    if (!this.ctx || !this.engineHumSource || !this.engineHumGain || this._suspended) return;
+    if (!this.ctx || !this.engineHumSource || !this.engineHumGain || !this.engineHumLayerGains || this._suspended) return;
     this._updateMasterGain();
     const speed = typeof vel?.length === 'function' ? vel.length() : 0;
     const gainValue = clamp(0.04 + speed * 0.006, 0, 0.18);

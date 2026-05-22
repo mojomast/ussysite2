@@ -75,6 +75,8 @@ export function renderGameMessage() {
   const ui = gameMessageState.ui || null;
   root.classList.toggle('active', gameMessageState.active);
   root.classList.toggle('game-message-docked', ui?.layout === 'dock-grid');
+  if (ui?.colorClass) root.dataset.color = ui.colorClass;
+  else delete root.dataset.color;
   ['cyan', 'green', 'purple', 'pink', 'yellow'].forEach(color => root.classList.toggle(`lore-${color}`, ui?.colorClass === color));
   if (gameMessageSystem.type) gameMessageSystem.type.textContent = ui?.headerTitle || gameMessageState.type;
   if (gameMessageSystem.source) {

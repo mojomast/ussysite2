@@ -1447,10 +1447,10 @@ function addCombatCredits(value) {
   if (value > 0 && isFlightActive) showCreditGain(value);
 }
 
-function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], onDismiss = null, typeSpeed = 18, ttsPriority = 'high' }) {
+function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], ui = null, onDismiss = null, typeSpeed = 18, ttsPriority = 'high' }) {
   // Contract-preserved in messages.js: gameMessageState.ttsWaitUntil = ttsEngine.enabled ? performance.now() + 3500 : 0
   // Contract-preserved in messages.js: onStart: () => { gameMessageState.ttsWaitUntil = 0; priority: ttsPriority }
-  return showGameMessageModule({ type, source, text, choices, onDismiss, typeSpeed, ttsPriority });
+  return showGameMessageModule({ type, source, text, choices, ui, onDismiss, typeSpeed, ttsPriority });
 }
 
 function renderGameMessage() {
@@ -2186,14 +2186,22 @@ function getEnemyFireCooldown(pos, cls) {
 function openStationMenu(projectId) {
   if (!projectId) return;
   syncCombatCreditsFromTrader();
+  const lore = getStationLore(projectId);
+  const loreMissions = getStationMissions(projectId);
   showGameMessage({
     type: 'STATION SERVICES',
-    source: getStationLore(projectId).merchantName,
+    source: lore.merchantName,
     text: `DOCKED AT ${stationName(projectId).toUpperCase()}. CREDITS: ${traderState.credits}CR. SELECT SERVICE:`,
+    ui: {
+      headerTitle: lore.merchantName,
+      headerBadge: stationName(projectId).toUpperCase(),
+      colorClass: lore.colorClass || 'green'
+    },
     choices: [
       { key: '1', code: 'Digit1', label: 'RESTOCK', action: () => restockAtProject(USSY_PROJECTS.find(project => project.id === projectId) || { id: projectId, name: stationName(projectId) }) },
       { key: '2', code: 'Digit2', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
       { key: '3', code: 'Digit3', label: 'CARGO MARKET', action: () => openTradeMenu(projectId) },
+      { key: '4', code: 'Digit4', label: 'MISSION BOARD', hint: `${loreMissions.length} LORE CONTRACTS`, action: () => showFactionMission(projectId) },
       { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessage() }
     ],
     ttsPriority: 'normal'

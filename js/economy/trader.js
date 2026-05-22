@@ -9,7 +9,7 @@ import {
 import { combatState, buyWeapon, equipWeapon, reapplySkills, unlockSkillNode } from '../flight/combat-state.js';
 import { gainReputation, getReputation, getReputationPriceMultiplier, normalizeCategory } from './reputation.js';
 import { refreshInventoryIfOpen } from '../ui/inventory-panel.js';
-import { getStationGreeting, getStationLore, getStationMissions } from './lore.js';
+import { STATION_LORE, STATION_MISSIONS, getStationGreeting, getStationLore } from './lore.js';
 
 export const traderState = {
   credits: 1000,
@@ -154,7 +154,7 @@ function stationName(projectId) {
 }
 
 function stationSource(projectId) {
-  return getStationLore(projectId).merchantName;
+  return (STATION_LORE[projectId] || getStationLore(projectId)).merchantName;
 }
 
 function stationCategoryLabel(projectId) {
@@ -168,10 +168,6 @@ function hasBlackMarketAccess(projectId) {
 function hasMissionCargo(mission) {
   if (!mission.requiredCargo) return true;
   return (traderState.cargo[mission.requiredCargo.commodityId] || 0) >= mission.requiredCargo.qty;
-}
-
-function availableMissionCount(projectId) {
-  return getStationMissions(projectId).filter(hasMissionCargo).length;
 }
 
 function dockFooterStats() {
@@ -193,9 +189,10 @@ export function openTradeMenu(projectId) {
   traderState.docked = true;
   traderState.dockedStation = projectId;
   const projectName = stationName(projectId);
-  const lore = getStationLore(projectId);
+  const lore = STATION_LORE[projectId] || getStationLore(projectId);
   const marketCount = sortedMarket(projectId).length;
-  const missionCount = availableMissionCount(projectId);
+  const loreMissions = STATION_MISSIONS[projectId] || [];
+  const missionCount = loreMissions.filter(hasMissionCargo).length;
   showGameMessageRef({
     type: projectName.toUpperCase(),
     source: stationSource(projectId),

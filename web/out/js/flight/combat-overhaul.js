@@ -213,8 +213,7 @@ export function getDifficultyTier(score) {
 
 export function getDifficultyMultiplier(score) {
   if (score < 3000) return 1.0;
-  if (score < 6000) return 1.0 + (score - 3000) / 10000;
-  return Math.min(1.0 + (score - 3000) / 8000, 1.75);
+  return Math.min(2.0, 1.0 + (score - 3000) / 8000);
 }
 
 export function getEnemyClass(classId = 'scout') {

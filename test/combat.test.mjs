@@ -38,9 +38,11 @@ test('getDifficultyTier boundaries', () => {
 });
 
 test('getDifficultyMultiplier scales high score pressure', () => {
-  assert.equal(getDifficultyMultiplier(2999), 1);
-  assert.equal(getDifficultyMultiplier(6000), 1.375);
-  assert.equal(getDifficultyMultiplier(20000), 1.75);
+  assert.equal(getDifficultyMultiplier(2999), 1.0);
+  assert.equal(getDifficultyMultiplier(3000), 1.0);
+  assert.ok(getDifficultyMultiplier(6000) > 1.3 && getDifficultyMultiplier(6000) < 1.5);
+  assert.equal(getDifficultyMultiplier(11000), 2.0);
+  assert.equal(getDifficultyMultiplier(99999), 2.0);
 });
 
 test('applyPlayerDamage bleedthrough model', () => {

@@ -46,6 +46,7 @@ export function buildEnemyGeometry(classId) {
   const cls = getEnemyClass(classId);
   const group = new THREE.Group();
   const bodyMat = buildEnemyMaterial(cls.color, cls.geometry === 'phantom' ? 0.55 : 0.95);
+  group.userData.bodyMaterial = bodyMat;
   const wingMat = buildEnemyMaterial(cls.wingColor, 0.78);
   const accentMat = buildEnemyMaterial(0xffcc00, 0.65);
   const geometry = cls.geometry;
@@ -114,7 +115,6 @@ export function buildEnemyGeometry(classId) {
     group.add(body, leftWing, rightWing, strut, antenna);
   }
 
-  group.userData.bodyMaterial = bodyMat;
   return group;
 }
 
