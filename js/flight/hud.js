@@ -5,6 +5,8 @@ import { combatState } from './combat-state.js';
 
 let deps = {};
 let radarLastUpdate = 0;
+const RADAR_TRAJECTORY_SECONDS = 1.2;
+const RADAR_TRAJECTORY_MAX_PX = 14;
 
 export function configureHud(options = {}) {
   deps = { ...deps, ...options };
@@ -29,6 +31,24 @@ export function mapRadarPoint(targetPos, radius) {
     below: up < -8,
     edge: distance > activeRadarRange
   };
+}
+
+export function worldToRadar(pos, center, scale) {
+  return {
+    x: ((pos?.x ?? 0) - (center?.x ?? 0)) * scale,
+    y: -(((pos?.z ?? pos?.y ?? 0) - (center?.z ?? center?.y ?? 0)) * scale)
+  };
+}
+
+export function capRadarTrajectory(dx, dy, maxLength = RADAR_TRAJECTORY_MAX_PX) {
+  const length = Math.hypot(dx, dy);
+  if (length <= maxLength || length <= 0) return { x: dx, y: dy, length };
+  const scale = maxLength / length;
+  return { x: dx * scale, y: dy * scale, length: maxLength };
+}
+
+export function shouldDrawEnemyRadarContact(enemy, now = performance.now()) {
+  return Boolean(enemy?.userData?.active && enemy.visible && !(enemy.userData.stunUntil > now));
 }
 
 export function drawRadarContact(ctx, cx, cy, radius, targetPos, type, highlighted = false) {
@@ -64,6 +84,31 @@ export function drawRadarContact(ctx, cx, cy, radius, targetPos, type, highlight
   ctx.restore();
 }
 
+function drawEnemyRadarTrajectory(ctx, cx, cy, enemy, point, radarScale) {
+  const velocity = enemy.userData.velocity;
+  if (!velocity) return;
+  const { flightForward, flightRight } = deps;
+  const localVelocity = {
+    x: velocity.dot(flightRight) * RADAR_TRAJECTORY_SECONDS,
+    z: velocity.dot(flightForward) * RADAR_TRAJECTORY_SECONDS
+  };
+  const radarVelocity = worldToRadar(localVelocity, { x: 0, z: 0 }, radarScale);
+  const delta = capRadarTrajectory(radarVelocity.x, radarVelocity.y);
+  if (delta.length <= 0) return;
+  const x = cx + point.x;
+  const y = cy + point.y;
+  const isDreadnought = enemy.userData.classId === 'dreadnought';
+  ctx.save();
+  ctx.globalAlpha = isDreadnought ? 0.65 : 0.45;
+  ctx.strokeStyle = 'rgb(255, 51, 85)';
+  ctx.lineWidth = isDreadnought ? 2 : 1;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + delta.x, y + delta.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function updateCockpitRadar(time = performance.now(), force = false) {
   const { cockpitRadar, enemies = [], flightState, isCoarsePointer, isFlightActive, missionState, projectNodes = [], radarCtx, radarRange, activeUniverseScale } = deps;
   if (!radarCtx || !cockpitRadar || !isFlightActive?.()) return;
@@ -77,6 +122,8 @@ export function updateCockpitRadar(time = performance.now(), force = false) {
   const cx = width / 2;
   const cy = height / 2;
   const radius = Math.min(width, height) * 0.42;
+  const activeRadarRange = radarRange * activeUniverseScale();
+  const radarScale = radius / activeRadarRange;
 
   ctx.clearRect(0, 0, width, height);
   ctx.save();
@@ -102,7 +149,9 @@ export function updateCockpitRadar(time = performance.now(), force = false) {
     drawRadarContact(ctx, cx, cy, radius, node.position, 'project', highlighted);
   });
   enemies.forEach(enemy => {
-    if (!enemy.userData.active || !enemy.visible) return;
+    if (!shouldDrawEnemyRadarContact(enemy)) return;
+    const point = mapRadarPoint(enemy.position, radius);
+    drawEnemyRadarTrajectory(ctx, cx, cy, enemy, point, radarScale);
     drawRadarContact(ctx, cx, cy, radius, enemy.position, 'enemy');
   });
 
@@ -118,7 +167,7 @@ export function updateCockpitRadar(time = performance.now(), force = false) {
 
   ctx.font = '11px monospace';
   ctx.fillStyle = 'rgba(125, 252, 255, 0.78)';
-  ctx.fillText(`RANGE ${radarRange * activeUniverseScale()}`, 10, height - 12);
+  ctx.fillText(`RANGE ${activeRadarRange}`, 10, height - 12);
   ctx.restore();
 }
 
