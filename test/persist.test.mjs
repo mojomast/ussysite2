@@ -6,6 +6,7 @@ const {
   applyRunState,
   clearRunState,
   loadRunState,
+  migrateRunState,
   saveRunState
 } = await import('../js/flight/persist.js');
 
@@ -116,6 +117,52 @@ describe('run state session persistence', () => {
     assert.deepEqual(loaded.trader.completedMissionIds, []);
     assert.equal(loaded.trader.bountyLevel, 0);
     assert.deepEqual(loaded.flight.surface, { state: 'NONE', planetId: null });
+  });
+
+  it('returns null for malformed v2 data and leaves input unchanged', () => {
+    const malformedMission = { id: 'mission-1', type: 'DELIVERY', status: 'ACTIVE', failClone: () => {} };
+    const input = validState({
+      v: 2,
+      trader: {
+        activeMissions: [malformedMission]
+      }
+    });
+
+    const migrated = migrateRunState(input);
+
+    assert.equal(migrated, null);
+    assert.equal(input.v, 2);
+    assert.deepEqual(input.trader.activeMissions, [malformedMission]);
+  });
+
+  it('bumps schema version only after a successful migration', () => {
+    const input = validState({ v: 2 });
+
+    const migrated = migrateRunState(input);
+
+    assert.equal(input.v, 2);
+    assert.equal(migrated.v, 3);
+    assert.notEqual(migrated, input);
+  });
+
+  it('returns null or false without partial state when migration fails in callers', () => {
+    const originalStructuredClone = globalThis.structuredClone;
+    const combatState = { score: 1, ownedWeapons: new Set(), unlocked: new Set() };
+
+    globalThis.sessionStorage.setItem(RUN_STATE_KEY, JSON.stringify(validState({ v: 2 })));
+    globalThis.structuredClone = () => { throw new Error('clone failed'); };
+
+    try {
+      assert.equal(loadRunState(), null);
+      assert.equal(applyRunState(validState({ v: 2 }), combatState, {}, {}, { unlocked: new Set() }), false);
+      assert.equal(combatState.score, 1);
+    } finally {
+      if (originalStructuredClone === undefined) {
+        delete globalThis.structuredClone;
+      } else {
+        globalThis.structuredClone = originalStructuredClone;
+      }
+    }
   });
 
   it('returns null for schema v1 saves after schema bump', () => {

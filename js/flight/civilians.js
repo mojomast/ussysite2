@@ -4,6 +4,7 @@ import { LOD_FAR, SYSTEM_RADIUS } from './world.js';
 const THREE = globalThis.THREE;
 
 export const CIVILIAN_MAX = 6;
+export const MAX_CIVILIAN_POOL = CIVILIAN_MAX * 3;
 
 export const CIVILIAN_TYPES = Object.freeze({
   FREIGHTER: 'FREIGHTER',
@@ -98,6 +99,10 @@ function ensureTrafficState(flightState) {
   flightState.civilianTraffic.ships ??= [];
   flightState.civilianTraffic.mapContacts ??= [];
   return flightState.civilianTraffic;
+}
+
+function activeCivilianCount(ships = []) {
+  return ships.filter(ship => ship?.active && ship.state !== CIVILIAN_STATES.DESTROYED).length;
 }
 
 function buildFreighter(group, ThreeRef) {
@@ -287,6 +292,29 @@ function activateShipOnRoute(ship, ThreeRef, navGraph, routeIds, random = Math.r
   return ship;
 }
 
+function allocateCivilianShip(traffic, type, ThreeRef, options = {}) {
+  const reusableIndex = traffic.ships.findIndex(ship => !ship?.active || ship.state === CIVILIAN_STATES.DESTROYED);
+  if (reusableIndex >= 0) {
+    const reusable = traffic.ships[reusableIndex];
+    const ship = createCivilianShip(type.id, {
+      THREE: ThreeRef,
+      object: reusable.object,
+      now: options.now ?? 0,
+      dockedUntil: options.dockedUntil ?? 0
+    });
+    traffic.ships[reusableIndex] = ship;
+    return ship;
+  }
+  if (traffic.ships.length >= MAX_CIVILIAN_POOL) return null;
+  const ship = createCivilianShip(type.id, {
+    THREE: ThreeRef,
+    now: options.now ?? 0,
+    dockedUntil: options.dockedUntil ?? 0
+  });
+  traffic.ships.push(ship);
+  return ship;
+}
+
 export function spawnCivilianFleet(options = {}) {
   const ThreeRef = requireThree(options.THREE);
   const { gameRoot, navGraph, flightState, random = Math.random } = options;
@@ -295,13 +323,13 @@ export function spawnCivilianFleet(options = {}) {
   const hyperspeed = flightState?.autopilot?.hyperspeedMult ?? 1;
   const combatActive = Boolean(options.combatActive || options.enemies?.some?.(enemy => enemy?.userData?.active && !enemy.userData.isFriendly));
   const cap = Math.min(CIVILIAN_MAX, traffic.maxActive ?? CIVILIAN_MAX, (combatActive || hyperspeed > 5) ? 3 : CIVILIAN_MAX);
-  while (traffic.ships.filter(ship => ship.active && ship.state !== CIVILIAN_STATES.DESTROYED).length < cap) {
+  while (activeCivilianCount(traffic.ships) < cap) {
     const routeIds = chooseRoute(ThreeRef, navGraph, random);
     if (!routeIds) break;
     const type = TYPE_LIST[Math.floor(random() * TYPE_LIST.length) % TYPE_LIST.length];
-    const ship = createCivilianShip(type.id, { THREE: ThreeRef, now: options.now ?? 0, dockedUntil: random() < 0.35 ? DOCKED_SECONDS : 0 });
+    const ship = allocateCivilianShip(traffic, type, ThreeRef, { now: options.now ?? 0, dockedUntil: random() < 0.35 ? DOCKED_SECONDS : 0 });
+    if (!ship) break;
     activateShipOnRoute(ship, ThreeRef, navGraph, routeIds, random);
-    traffic.ships.push(ship);
     gameRoot?.add?.(ship.object);
   }
   return traffic.ships;

@@ -52,6 +52,7 @@ globalThis.THREE = {
 
 const {
   CIVILIAN_MAX,
+  MAX_CIVILIAN_POOL,
   CIVILIAN_TYPES,
   buildCivilianMesh,
   createCivilianShip,
@@ -113,6 +114,41 @@ test('spawnCivilianFleet caps active civilian ships at six', () => {
   assert.equal(state.civilianTraffic.ships, ships);
 });
 
+test('fleet cap: active count enforced, not array length', () => {
+  const root = new globalThis.THREE.Group();
+  const state = flightState();
+  const inactiveShips = Array.from({ length: CIVILIAN_MAX }, () => {
+    const ship = createCivilianShip('freighter', { THREE: globalThis.THREE, dockedUntil: 0, state: 'TRANSIT' });
+    ship.active = false;
+    ship.visible = false;
+    ship.object.visible = false;
+    return ship;
+  });
+  state.civilianTraffic = { enabled: true, ships: inactiveShips, maxActive: CIVILIAN_MAX, mapContacts: [] };
+
+  const ships = spawnCivilianFleet({ THREE: globalThis.THREE, gameRoot: root, navGraph: navGraph(), flightState: state, random: () => 0.1 });
+
+  assert.equal(ships.length, CIVILIAN_MAX);
+  assert.equal(ships.filter(ship => ship.active && ship.state !== 'DESTROYED').length, CIVILIAN_MAX);
+  assert.equal(root.children.length, CIVILIAN_MAX);
+});
+
+test('spawnCivilianFleet reuses inactive pool slots and stops at hard pool cap', () => {
+  const state = flightState();
+  const ships = Array.from({ length: MAX_CIVILIAN_POOL }, () => {
+    const ship = createCivilianShip('shuttle', { THREE: globalThis.THREE, dockedUntil: 0, state: 'TRANSIT' });
+    ship.active = false;
+    ship.visible = false;
+    return ship;
+  });
+  state.civilianTraffic = { enabled: true, ships, maxActive: CIVILIAN_MAX, mapContacts: [] };
+
+  spawnCivilianFleet({ THREE: globalThis.THREE, navGraph: navGraph(), flightState: state, random: () => 0.2 });
+
+  assert.equal(state.civilianTraffic.ships.length, MAX_CIVILIAN_POOL);
+  assert.equal(state.civilianTraffic.ships.filter(ship => ship.active && ship.state !== 'DESTROYED').length, CIVILIAN_MAX);
+});
+
 test('spawnCivilianFleet reduces cap during combat or hyperspeed', () => {
   const combatState = flightState();
   const ships = spawnCivilianFleet({
@@ -146,6 +182,23 @@ test('updateCivilians advances docked countdown into departure and transit movem
   assert.ok(ship.velocity.length() > 0);
 });
 
+test('dock timer: advances with dt, not wall clock', () => {
+  const state = flightState();
+  const graph = navGraph();
+  const ship = createCivilianShip('freighter', { THREE: globalThis.THREE, dockedUntil: 1, state: 'DOCKED' });
+  ship.route = { fromId: 'a', toId: 'b', nodeIds: ['a', 'b'], segmentIndex: 0, progress: 0.1 };
+  ship.position.set(100, 0, 0);
+  state.civilianTraffic = { enabled: true, ships: [ship], mapContacts: [] };
+
+  updateCivilians(0.25, { THREE: globalThis.THREE, flightState: state, navGraph: graph, now: 10_000 });
+  assert.equal(ship.state, 'DOCKED');
+  assert.equal(ship.dockedUntil, 0.75);
+
+  updateCivilians(0.75, { THREE: globalThis.THREE, flightState: state, navGraph: graph, now: 10_001 });
+  assert.equal(ship.state, 'DEPARTING');
+  assert.ok(ship.dockedUntil <= 0);
+});
+
 test('updateCivilians enters flee state near enemies without marking combatant', () => {
   const state = flightState();
   const ship = createCivilianShip('shuttle', { THREE: globalThis.THREE, dockedUntil: 0, state: 'TRANSIT' });
@@ -173,6 +226,7 @@ test('heavy combat destroys civilian and records kill feed event only', () => {
   const events = updateCivilians(0.2, { THREE: globalThis.THREE, gameRoot: root, flightState: state, navGraph: navGraph(), enemies, addKillFeedEntry: text => feed.push(text), now: 1000 });
   assert.equal(ship.state, 'DESTROYED');
   assert.equal(ship.active, false);
+  assert.equal(state.civilianTraffic.ships.length, 1);
   assert.deepEqual(events.map(event => event.type), ['CIVILIAN_DESTROYED']);
   assert.deepEqual(feed, ['CIVILIAN TRANSPORT DESTROYED']);
 });

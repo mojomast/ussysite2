@@ -35,6 +35,10 @@ function cloneMissions(value) {
   return typeof structuredClone === 'function' ? structuredClone(missions) : JSON.parse(JSON.stringify(missions));
 }
 
+function clonePersistedState(value) {
+  return typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value));
+}
+
 function missionArray(value) {
   return Array.isArray(value) && value.every(item => isObject(item) && typeof item.id === 'string' && typeof item.type === 'string' && typeof item.status === 'string');
 }
@@ -183,23 +187,27 @@ function normalizeSurface(surface) {
   };
 }
 
-function migrateRunState(data) {
-  if (!isObject(data) || data.v === 1) return null;
-  if (data.v !== 2 && data.v !== SCHEMA_VERSION) return null;
-  return {
-    ...data,
-    v: SCHEMA_VERSION,
-    trader: {
-      ...(isObject(data.trader) ? data.trader : {}),
-      activeMissions: cloneMissions(data.trader?.activeMissions),
-      completedMissionIds: Array.isArray(data.trader?.completedMissionIds) ? data.trader.completedMissionIds.filter(item => typeof item === 'string') : [],
-      bountyLevel: Math.max(0, Math.round(data.trader?.bountyLevel ?? data.combat?.bountyLevel ?? 0))
-    },
-    flight: {
-      ...(isObject(data.flight) ? data.flight : {}),
-      surface: normalizeSurface(data.flight?.surface)
-    }
-  };
+export function migrateRunState(data) {
+  try {
+    if (!isObject(data) || data.v === 1) return null;
+    if (data.v !== 2 && data.v !== SCHEMA_VERSION) return null;
+
+    const draft = data.v === 2 ? clonePersistedState(data) : { ...data };
+    draft.trader = {
+      ...(isObject(draft.trader) ? draft.trader : {}),
+      activeMissions: cloneMissions(draft.trader?.activeMissions),
+      completedMissionIds: Array.isArray(draft.trader?.completedMissionIds) ? draft.trader.completedMissionIds.filter(item => typeof item === 'string') : [],
+      bountyLevel: Math.max(0, Math.round(draft.trader?.bountyLevel ?? draft.combat?.bountyLevel ?? 0))
+    };
+    draft.flight = {
+      ...(isObject(draft.flight) ? draft.flight : {}),
+      surface: normalizeSurface(draft.flight?.surface)
+    };
+    draft.v = SCHEMA_VERSION;
+    return draft;
+  } catch {
+    return null;
+  }
 }
 
 export function clearRunState() {

@@ -75,6 +75,15 @@ describe('mission board core', () => {
     assert.ok(first.every(mission => [MISSION_TYPES.DELIVERY, MISSION_TYPES.ESCORT, MISSION_TYPES.SCAN].includes(mission.type)));
   });
 
+  it('generateMissions: two calls with same seed produce identical output', () => {
+    const navGraph = graph();
+    const station = STATIONS.find(item => item.id === 'hub-alpha');
+    const first = generateMissionsForStation(station, navGraph, 8675309);
+    const second = generateMissionsForStation(station, navGraph, 8675309);
+
+    assert.deepEqual(first, second);
+  });
+
   it('applies station type rules and reward/time ranges', () => {
     const navGraph = graph();
     const outpost = generateMissionsForStation(STATIONS.find(item => item.id === 'relay-7'), navGraph, 7);
