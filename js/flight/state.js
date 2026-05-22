@@ -1,5 +1,8 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { COMMODITIES, configureTrader, openTradeMenu, refuelAt, tickPriceDrift, traderState } from '../economy/trader.js';
 import { getStationLore, getStationMissions } from '../economy/lore.js';
 import { gainReputation, getEnemyAggressionMultiplier, loseReputation, normalizeCategory, reputationState } from '../economy/reputation.js';
@@ -172,7 +175,7 @@ import { configureNodesOverlay, renderProjectLabels, updateNodeHoverSelection } 
 const USSY_PROJECTS = window.USSY_PROJECTS || [];
 const USSY_CATEGORIES = window.USSY_CATEGORIES || {};
 
-let scene, camera, renderer;
+let scene, camera, renderer, composer, bloomPass;
 let coreGroup, nodesGroup, connectionsGroup;
 let coreMesh, coreOuterParticles;
 let raycaster, mouse;
@@ -627,6 +630,7 @@ export function init() {
 
   // Initialize Three.js Scene
   ({ scene, camera, renderer } = initEngineScene(canvasContainer, { THREE, isCoarsePointer }));
+  configurePostProcessing();
 
   // Groups
   ({ coreGroup, nodesGroup, connectionsGroup } = createSceneGroups(scene, { THREE }));
@@ -3341,6 +3345,19 @@ function updateDustField(dt) {
 
 function onWindowResize() {
   resizeScene({ camera, renderer, isCoarsePointer });
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function configurePostProcessing() {
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    prefersReducedMotion ? 0 : 0.55,
+    0.4,
+    0.82
+  );
+  composer.addPass(bloomPass);
 }
 
 function handleVisibilityChange() {
@@ -3494,7 +3511,8 @@ export function tick(time = 0) {
   updateFlightNavMarker();
 
   // Render WebGL
-  renderer.render(scene, camera);
+  if (prefersReducedMotion || !composer) renderer.render(scene, camera);
+  else composer.render();
 
   renderProjectLabels();
 
