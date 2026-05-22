@@ -68,32 +68,38 @@ export const sfxEngine = {
   ambientSources: [],
   ambientGain: null,
   _initialized: false,
+  _warnedNoPositional: false,
   _engineHumRequested: false,
   _stationAmbientRequested: false,
 
   init() {
     if (this._initialized) return true;
-    if (!THREE || !THREE.AudioListener || !THREE.PositionalAudio || !THREE.AudioContext?.setContext) return false;
 
     const chain = radioChain.ctx ? { ctx: radioChain.ctx } : radioChain.buildChain();
     if (!chain?.ctx) return false;
 
     this.ctx = radioChain.ctx;
+    this._ensureContextRunning();
     this.masterGain = this.ctx.createGain();
     this.masterGain.connect(this.ctx.destination);
     this.setMasterVolume(gameSettings.sfxVolume);
 
-    THREE.AudioContext.setContext(this.ctx);
-    this.listener = new THREE.AudioListener();
-    try {
-      this.listener.gain.disconnect();
-      this.listener.gain.connect(this.masterGain);
-    } catch {
-      // Three.js listener routing is best-effort; flat SFX still use masterGain directly.
-    }
+    if (THREE?.AudioListener && THREE?.PositionalAudio && THREE?.AudioContext?.setContext) {
+      THREE.AudioContext.setContext(this.ctx);
+      this.listener = new THREE.AudioListener();
+      try {
+        this.listener.gain.disconnect();
+        this.listener.gain.connect(this.masterGain);
+      } catch {
+        // Three.js listener routing is best-effort; flat SFX still use masterGain directly.
+      }
 
-    const camera = getCamera();
-    if (camera && !camera.children.includes(this.listener)) camera.add(this.listener);
+      const camera = getCamera();
+      if (camera && !camera.children.includes(this.listener)) camera.add(this.listener);
+    } else if (!this._warnedNoPositional) {
+      console.warn('Three.js positional audio unavailable; SFX will use flat Web Audio playback.');
+      this._warnedNoPositional = true;
+    }
 
     BUFFER_TYPES.forEach(type => {
       this._buffers[type] = this.synthesizeBuffer(type);
@@ -107,6 +113,13 @@ export const sfxEngine = {
     Object.entries(NON_POSITIONAL_POOL_SIZES).forEach(([type, size]) => {
       this.nonPositionalPool[type] = Array.from({ length: size }, () => ({ busy: false, buffer: this._buffers[type], timer: null }));
     });
+
+    if (!this.listener) {
+      Object.entries(POSITIONAL_POOL_SIZES).forEach(([type, size]) => {
+        this.nonPositionalPool[type] = Array.from({ length: size }, () => ({ busy: false, buffer: this._buffers[type], timer: null }));
+      });
+      return;
+    }
 
     const scene = getScene();
     Object.entries(POSITIONAL_POOL_SIZES).forEach(([type, size]) => {
@@ -129,7 +142,8 @@ export const sfxEngine = {
     if (this._suspended || !this.init()) return false;
     const pool = this.positionalPool[type];
     const buffer = this._buffers[type];
-    if (!pool || !buffer) return false;
+    if (!pool || !buffer) return this.playFlat(type, options);
+    this._ensureContextRunning();
     this._updateMasterGain();
     const slot = pool.find(item => !item.busy);
     if (!slot) {
@@ -171,6 +185,7 @@ export const sfxEngine = {
     const pool = this.nonPositionalPool[type];
     const buffer = this._buffers[type];
     if (!pool || !buffer) return false;
+    this._ensureContextRunning();
     this._updateMasterGain();
     const slot = pool.find(item => !item.busy);
     if (!slot) {
@@ -276,6 +291,7 @@ export const sfxEngine = {
   startEngineHum() {
     this._engineHumRequested = true;
     if (this._suspended || this.engineHumSource || !this.init()) return;
+    this._ensureContextRunning();
     const now = this.ctx.currentTime;
     const base = this.ctx.createOscillator();
     const harmonic = this.ctx.createOscillator();
@@ -379,6 +395,10 @@ export const sfxEngine = {
   setMasterVolume(value) {
     gameSettings.sfxVolume = clampVolume(value ?? gameSettings.sfxVolume ?? 0.55);
     this._updateMasterGain();
+  },
+
+  _ensureContextRunning() {
+    if (this.ctx?.state === 'suspended') this.ctx.resume().catch(() => {});
   },
 
   _updateMasterGain() {

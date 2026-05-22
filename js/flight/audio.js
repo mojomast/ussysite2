@@ -500,8 +500,12 @@ export const ttsConfig = {
   enabled: true
 };
 
+let ttsBackendRetryAfter = 0;
+let ttsBackendWarnedAt = 0;
+
 export function setTTSBackendEnabled(enabled = true) {
   ttsConfig.enabled = Boolean(enabled);
+  if (ttsConfig.enabled) ttsBackendRetryAfter = 0;
   return ttsConfig.enabled;
 }
 
@@ -527,11 +531,23 @@ export function buildBackendTTSRequest(text, persona = {}) {
 
 export async function fetchTTSSpeech(text, persona = {}, signal = null) {
   if (!ttsConfig.enabled) return null;
+  const now = Date.now();
+  if (now < ttsBackendRetryAfter) return null;
   try {
     const request = buildBackendTTSRequest(text, persona);
     if (signal) request.options.signal = signal;
     const response = await fetch(request.url, request.options);
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get('retry-after'));
+        ttsBackendRetryAfter = now + (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 60000);
+        if (now - ttsBackendWarnedAt > 10000) {
+          console.warn('Backend TTS rate limited; using browser speech until retry window clears.');
+          ttsBackendWarnedAt = now;
+        }
+      }
+      return null;
+    }
 
     const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
     if (contentType.startsWith('audio/') || contentType === 'application/octet-stream') {

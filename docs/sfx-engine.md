@@ -10,6 +10,8 @@ Initialization calls `radioChain.buildChain()` only when the shared context does
 
 The SFX master bus is routed directly to `radioChain.ctx.destination`. It does not connect to `radioChain`'s highpass/lowpass/waveshaper radio chain, so weapon, UI, engine, and ambience sounds remain clean while TTS and combat chatter keep their radio treatment.
 
+Flat player weapon/UI sounds only require the shared Web Audio bus. If Three.js positional audio is unavailable, positional sounds fall back to capped flat Web Audio pools instead of disabling all SFX.
+
 ## Public API
 
 - `sfxEngine.init()` creates the shared master gain, listener, procedural buffers, and fixed-size pools.

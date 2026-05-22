@@ -98,6 +98,8 @@ Open the in-flight audio settings menu with `M`. Use `Shift+M` for the quick TTS
 
 Backend AI voice is proxied through the same-origin `/api/tts` endpoint. Keep `OPENROUTER_API_KEY` on the server; do not expose it in browser code.
 
+If `/api/tts` returns `429 Too Many Requests`, the browser backs off backend TTS requests for the retry window and falls back to local browser speech. This avoids repeated failed network requests while preserving radio text playback.
+
 ## Kill Callouts
 
 The combat pool includes: SPLASH ONE, BOGEY DOWN, KILL CONFIRMED, TARGET ELIMINATED, FOX TWO AWAY, TALLY HO, GUNS GUNS GUNS, BANDIT DOWN, CLEARED HOT, WINCHESTER ACHIEVED, SPLASH ANOTHER, GOOD KILL, RADAR CONTACT LOST, BINGO BINGO, BREAKING RIGHT, ENGAGED.
