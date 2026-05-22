@@ -237,7 +237,29 @@ export function updateStarfieldWarp(starfield, flightDir, hyperspeedMult = 1) {
   return starfield;
 }
 
-export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null) {
+function drawMapTriangle(ctx, x, y, size) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size * 0.86, y + size * 0.72);
+  ctx.lineTo(x - size * 0.86, y + size * 0.72);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawCivilianContact(ctx, point, contact) {
+  const size = contact.size || 2;
+  const kind = String(contact.kind || contact.type || '').toLowerCase();
+  ctx.fillStyle = contact.color === 0xffcc66 ? '#ffcc66' : (contact.color === 0x44bbff ? '#44bbff' : '#66ccff');
+  if (kind === 'freighter') {
+    ctx.fillRect(point.x - size, point.y - size, size * 2, size * 2);
+  } else if (kind === 'courier') {
+    drawMapTriangle(ctx, point.x, point.y, size + 1);
+  } else {
+    ctx.beginPath(); ctx.arc(point.x, point.y, size, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null, activeIntercept = null, now = globalThis.performance?.now?.() ?? Date.now()) {
   const ctx = canvas?.getContext?.('2d');
   if (!ctx) return false;
   const w = canvas.width || 600;
@@ -272,8 +294,22 @@ export function renderSystemMap(canvas, navGraph, flightState, planets = [], sta
   }
   for (const contact of civilianContacts || flightState?.civilianTraffic?.mapContacts || []) {
     const p = project(contact.pos);
-    ctx.fillStyle = contact.color === 0xffcc66 ? '#ffcc66' : '#66ccff';
-    ctx.beginPath(); ctx.arc(p.x, p.y, contact.size || 2, 0, Math.PI * 2); ctx.fill();
+    drawCivilianContact(ctx, p, contact);
+  }
+  const intercept = activeIntercept || flightState?.activeIntercept || flightState?.combatState?.activeIntercept;
+  if (intercept?.hunters?.length) {
+    const blinkAlpha = Math.floor(now / 350) % 2 === 0 ? 1 : 0.38;
+    if (ctx.save) ctx.save();
+    ctx.globalAlpha = blinkAlpha;
+    ctx.fillStyle = '#ff2233';
+    for (const hunter of intercept.hunters) {
+      if (!(hunter?.userData?.active ?? hunter?.active ?? true)) continue;
+      const pos = hunter.position || hunter.pos;
+      if (!pos) continue;
+      const p = project(pos);
+      drawMapTriangle(ctx, p.x, p.y, hunter.userData?.tier === 'SQUADRON' ? 7 : 6);
+    }
+    if (ctx.restore) ctx.restore();
   }
   return true;
 }

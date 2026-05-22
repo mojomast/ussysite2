@@ -150,7 +150,7 @@ import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './sta
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { getCivilianMapData, spawnCivilianFleet, updateCivilians } from './civilians.js';
-import { checkHunterDestroyed, shouldTriggerIntercept, triggerIntercept } from './hunters.js';
+import { checkHunterDestroyed, checkHunterFlee, shouldTriggerIntercept, triggerIntercept } from './hunters.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
 import { bindMissionBoardControls, closeMissionBoard, configureMissionBoardUI, openMissionBoard as openMissionBoardOverlay, renderMissionBoard } from './missionUI.js';
 import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, updateSurface } from './surface.js';
@@ -1757,7 +1757,7 @@ function setSystemMapVisible(visible) {
   if (!overlay) return false;
   overlay.classList.toggle('hidden', !visible);
   overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
-  if (visible) renderSystemMap(canvas, navGraph, flightState, PLANETS, STATIONS, getCivilianMapData(flightState.civilianTraffic?.ships));
+  if (visible) renderSystemMap(canvas, navGraph, flightState, PLANETS, STATIONS, getCivilianMapData(flightState.civilianTraffic?.ships), combatState.activeIntercept);
   return true;
 }
 
@@ -3371,6 +3371,7 @@ export function tick(time = 0) {
       if (tier) triggerIntercept({ combatState, traderState, flightState, enemyPool: enemies, spawnEnemy, buildEnemyHealthPips, addKillFeedEntry, node: flightState.newNodeArrival, tier, now: time });
       flightState.newNodeArrival = null;
     }
+    enemies.forEach(enemy => checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now: time }));
     updateCivilians(frameDt, { THREE, gameRoot, flightState, navGraph, enemies, playerBullets, playerMissiles, addKillFeedEntry, now: time });
     spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState, enemies, now: time });
     updateMissionBoardProgress(time);

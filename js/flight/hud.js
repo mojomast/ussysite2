@@ -286,6 +286,20 @@ export function updateNavHUD(flightState, combatStateArg, force = false, documen
   return true;
 }
 
+export function updateBountyHUD(state = traderState, documentRef = deps.documentRef || document) {
+  const panel = documentRef?.getElementById?.('bounty-indicator');
+  const valueEl = documentRef?.getElementById?.('bounty-amount');
+  if (!panel) return false;
+  const bounty = Math.max(0, Math.round(state?.bountyLevel || state?.bounty || 0));
+  const active = bounty > 0;
+  panel.classList.toggle('active', active);
+  panel.classList.toggle('bounty-critical', bounty > 1500);
+  panel.setAttribute?.('aria-hidden', active ? 'false' : 'true');
+  panel.hidden = !active;
+  if (valueEl) valueEl.textContent = `${bounty}CR`;
+  return true;
+}
+
 function getPlanetCoord(source, axis, index) {
   if (!source) return 0;
   if (Array.isArray(source)) return source[index] ?? 0;
@@ -367,6 +381,7 @@ export function updateFlightHud(force = false) {
   if (!flightState || !skillTree) return traderState.fuel;
   const now = performance.now();
   updateKillFeed(now, documentRef);
+  updateBountyHUD(traderState, documentRef);
   if (!force && now - flightState.lastHudUpdate < 120) return traderState.fuel;
   flightState.lastHudUpdate = now;
   syncCombatCreditsFromTrader?.();

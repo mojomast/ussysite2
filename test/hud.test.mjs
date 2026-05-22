@@ -10,6 +10,7 @@ const {
   getRadarTrajectoryDelta,
   shouldDrawEnemyRadarContact,
   updateBossHealthBar,
+  updateBountyHUD,
   updateKillFeed,
   updateSurfaceHUD,
   worldToRadar
@@ -175,6 +176,25 @@ test('updateKillFeed prunes entries older than four seconds', () => {
   assert.equal(combatState.killFeed.length, 0);
   assert.equal(elements['kill-feed'].children.length, 0);
   assert.equal(combatState.killFeedDirty, false);
+});
+
+test('updateBountyHUD hides at zero and blinks above critical bounty', () => {
+  const elements = {
+    'bounty-indicator': createElement(),
+    'bounty-amount': createElement()
+  };
+  const doc = createDocument(elements);
+
+  assert.equal(updateBountyHUD({ bountyLevel: 0 }, doc), true);
+  assert.equal(elements['bounty-indicator'].hidden, true);
+  assert.equal(elements['bounty-indicator'].classList.contains('active'), false);
+  assert.equal(elements['bounty-indicator'].attributes['aria-hidden'], 'true');
+
+  updateBountyHUD({ bountyLevel: 1750 }, doc);
+  assert.equal(elements['bounty-indicator'].hidden, false);
+  assert.equal(elements['bounty-indicator'].classList.contains('active'), true);
+  assert.equal(elements['bounty-indicator'].classList.contains('bounty-critical'), true);
+  assert.equal(elements['bounty-amount'].textContent, '1750CR');
 });
 
 test('updateSurfaceHUD shows approach hint with planet name and altitude', () => {

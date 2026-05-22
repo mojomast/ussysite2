@@ -4418,6 +4418,48 @@ body.flight-active .cockpit-frame.cockpit-frame-left {
   opacity: 1;
   animation: hud-flash-warning 1s infinite steps(2, start);
 }
+
+.bounty-indicator {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 9600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  color: #ffcc00;
+  background: linear-gradient(90deg, rgba(80, 0, 18, 0.74), rgba(3, 8, 20, 0.9), rgba(80, 0, 18, 0.74));
+  border: 1px solid rgba(255, 204, 0, 0.58);
+  border-top: 3px solid rgba(255, 204, 0, 0.8);
+  font-family: var(--font-mono);
+  font-size: clamp(0.68rem, 1vw, 0.9rem);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(255, 204, 0, 0.2), inset 0 0 16px rgba(255, 204, 0, 0.08);
+  opacity: 0;
+}
+
+.bounty-indicator.active {
+  opacity: 1;
+}
+
+.bounty-indicator strong {
+  color: #ff3355;
+  font-family: var(--font-display);
+  text-shadow: 0 0 8px rgba(255, 51, 85, 0.75);
+}
+
+.bounty-indicator.bounty-critical {
+  animation: bounty-warning-blink 0.75s infinite steps(2, start);
+}
+
+@keyframes bounty-warning-blink {
+  0%, 100% { opacity: 1; border-color: rgba(255, 51, 85, 0.86); }
+  50% { opacity: 0.36; border-color: rgba(255, 204, 0, 0.4); }
+}
 @keyframes hud-flash-warning {
   0%, 100% {
     border-color: #ff3355;

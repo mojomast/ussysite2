@@ -197,13 +197,35 @@ test('disposeCivilians clears traffic arrays', () => {
   assert.deepEqual(state.civilianTraffic.mapContacts, []);
 });
 
-test('renderSystemMap accepts optional civilian dots', () => {
+test('renderSystemMap draws civilian dots by ship type', () => {
   const calls = [];
-  const ctx = ['clearRect', 'fillRect', 'beginPath', 'arc', 'fill', 'moveTo', 'lineTo', 'stroke'].reduce((obj, name) => {
+  const ctx = ['clearRect', 'fillRect', 'beginPath', 'arc', 'fill', 'moveTo', 'lineTo', 'stroke', 'closePath'].reduce((obj, name) => {
     obj[name] = (...args) => calls.push([name, ...args]);
     return obj;
   }, {});
   const canvas = { width: 400, height: 400, getContext: () => ctx };
-  assert.equal(renderSystemMap(canvas, navGraph(), flightState(), [], [], [{ id: 'civ', pos: new Vector3(500, 0, 0), size: 2, color: 0x66ccff }]), true);
+  const contacts = [
+    { id: 'frg', kind: 'freighter', pos: new Vector3(420, 0, 0), size: 3, color: 0x66ccff },
+    { id: 'sht', kind: 'shuttle', pos: new Vector3(500, 0, 0), size: 2, color: 0x88e6ff },
+    { id: 'cou', kind: 'courier', pos: new Vector3(580, 0, 0), size: 2, color: 0x44bbff }
+  ];
+
+  assert.equal(renderSystemMap(canvas, navGraph(), flightState(), [], [], contacts), true);
+  assert.ok(calls.some(call => call[0] === 'fillRect' && call[3] === 6 && call[4] === 6));
   assert.ok(calls.some(call => call[0] === 'arc' && call[3] === 2));
+  assert.ok(calls.some(call => call[0] === 'closePath'));
+});
+
+test('renderSystemMap draws active intercept hunters as red triangles', () => {
+  const calls = [];
+  const ctx = ['clearRect', 'fillRect', 'beginPath', 'arc', 'fill', 'moveTo', 'lineTo', 'stroke', 'closePath', 'save', 'restore'].reduce((obj, name) => {
+    obj[name] = (...args) => calls.push([name, ...args]);
+    return obj;
+  }, {});
+  const canvas = { width: 400, height: 400, getContext: () => ctx };
+  const intercept = { hunters: [{ position: new Vector3(500, 0, 0), userData: { active: true, tier: 'SCOUT' } }] };
+
+  assert.equal(renderSystemMap(canvas, navGraph(), flightState(), [], [], [], intercept, 0), true);
+  assert.equal(ctx.fillStyle, '#ff2233');
+  assert.ok(calls.some(call => call[0] === 'closePath'));
 });
