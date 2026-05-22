@@ -1,6 +1,9 @@
+import { PLANETS, STATIONS } from './world.js';
+
 export const RUN_STATE_KEY = 'ussysite2.runState.v1';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+const ACTIVE_AUTOPILOT_STATES = new Set(['PLOTTING', 'ENGAGED', 'DECELERATING']);
 
 function now() {
   return globalThis.performance?.now?.() ?? Date.now();
@@ -26,15 +29,78 @@ function stringArray(value) {
   return Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0);
 }
 
+function getCoord(source, axis, index) {
+  if (!source) return 0;
+  if (Array.isArray(source)) return source[index] ?? 0;
+  if (Array.isArray(source.pos)) return source.pos[index] ?? 0;
+  if (Array.isArray(source.position)) return source.position[index] ?? 0;
+  if (source.position && typeof source.position === 'object') return source.position[axis] ?? 0;
+  return source[axis] ?? 0;
+}
+
+function toFinitePositionArray(pos) {
+  if (!pos) return null;
+  const position = [getCoord(pos, 'x', 0), getCoord(pos, 'y', 1), getCoord(pos, 'z', 2)];
+  return position.every(finiteNumber) ? position : null;
+}
+
+function getBodyId(body) {
+  return body?.id ?? body?.userData?.planetId ?? body?.userData?.stationId ?? body?.userData?.bodyId ?? null;
+}
+
+function isValidPositionArray(position) {
+  return Array.isArray(position) && position.length === 3 && position.every(finiteNumber);
+}
+
+export function getNearestPersistedBody(playerPos, bodies = [...PLANETS, ...STATIONS], maxDist = Infinity) {
+  const origin = toFinitePositionArray(playerPos);
+  if (!origin) return null;
+  let nearest = null;
+
+  for (const body of bodies ?? []) {
+    const id = getBodyId(body);
+    if (!id) continue;
+    const position = toFinitePositionArray(body);
+    if (!position) continue;
+    const dx = position[0] - origin[0];
+    const dy = position[1] - origin[1];
+    const dz = position[2] - origin[2];
+    const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    if (dist <= maxDist && (!nearest || dist < nearest.dist)) nearest = { body: { ...body, id }, dist };
+  }
+
+  return nearest;
+}
+
+function getPersistableAutopilotTargetId(flightState) {
+  const autopilot = flightState?.autopilot;
+  if (!autopilot || typeof autopilot !== 'object' || typeof autopilot.targetId !== 'string' || autopilot.targetId.length === 0) return null;
+  if (autopilot.engaged === true || autopilot.active === true || ACTIVE_AUTOPILOT_STATES.has(autopilot.state)) return autopilot.targetId;
+  return null;
+}
+
+function buildFlightRunState(flightState, options = {}) {
+  const position = toFinitePositionArray(flightState?.pos);
+  const bodies = options.bodies ?? options.persistBodies ?? [...PLANETS, ...STATIONS];
+  const nearestBody = position ? getNearestPersistedBody(position, bodies, options.maxBodyDistance ?? Infinity) : null;
+  const autopilotTargetId = getPersistableAutopilotTargetId(flightState);
+  const flight = {};
+
+  if (position) flight.position = position;
+  if (nearestBody?.body?.id) flight.lastVisitedBodyId = nearestBody.body.id;
+  if (autopilotTargetId) flight.autopilotTargetId = autopilotTargetId;
+  return Object.keys(flight).length ? flight : null;
+}
+
 function cloneReputation(reputationState = {}) {
   const source = isObject(reputationState.scores) ? reputationState.scores : reputationState;
   return { ...source };
 }
 
-function buildRunState(combatState = {}, traderState = {}, reputationState = {}, skillTree = {}) {
+function buildRunState(combatState = {}, traderState = {}, reputationState = {}, skillTree = {}, options = {}) {
   const maxShieldHp = Math.max(1, Math.round(skillTree.getMaxShield?.() ?? 100));
   const maxHull = Math.max(1, Math.round(skillTree.getMaxArmor?.() ?? 100));
-  return {
+  const state = {
     v: SCHEMA_VERSION,
     ts: now(),
     combat: {
@@ -56,13 +122,16 @@ function buildRunState(combatState = {}, traderState = {}, reputationState = {},
     rep: cloneReputation(reputationState),
     skills: [...(skillTree.unlocked || combatState.unlocked || [])].filter(item => typeof item === 'string')
   };
+  const flight = buildFlightRunState(options.flightState, options);
+  if (flight) state.flight = flight;
+  return state;
 }
 
-export function saveRunState(combatState, traderState, reputationState, skillTree) {
+export function saveRunState(combatState, traderState, reputationState, skillTree, options = {}) {
   try {
     const storage = getStorage();
     if (!storage) return false;
-    storage.setItem(RUN_STATE_KEY, JSON.stringify(buildRunState(combatState, traderState, reputationState, skillTree)));
+    storage.setItem(RUN_STATE_KEY, JSON.stringify(buildRunState(combatState, traderState, reputationState, skillTree, options)));
     return true;
   } catch {
     return false;
@@ -76,6 +145,7 @@ export function loadRunState() {
     const raw = storage.getItem(RUN_STATE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
+    if (isObject(data) && data.v === 1) return null;
     return isObject(data) ? data : null;
   } catch {
     return null;
@@ -107,7 +177,43 @@ function validateRunState(data) {
   if (!nonNegativeInteger(combat.bossThresholdIdx) || !nonNegativeInteger(combat.killCount)) return false;
   if (typeof trader.equippedPrimary !== 'string' || typeof trader.equippedSecondary !== 'string') return false;
   if (!stringArray(trader.inventory) || !stringArray(data.skills)) return false;
-  return Object.values(data.rep).every(value => finiteNumber(value));
+  if (!Object.values(data.rep).every(value => finiteNumber(value))) return false;
+  if (data.flight !== undefined) {
+    if (!isObject(data.flight)) return false;
+    if (data.flight.position !== undefined && !isValidPositionArray(data.flight.position)) return false;
+    if (data.flight.lastVisitedBodyId !== undefined && typeof data.flight.lastVisitedBodyId !== 'string') return false;
+    if (data.flight.autopilotTargetId !== undefined && typeof data.flight.autopilotTargetId !== 'string') return false;
+  }
+  return true;
+}
+
+function applyPosition(target, position) {
+  if (!target || !isValidPositionArray(position)) return;
+  const [x, y, z] = position;
+  if (typeof target.copy === 'function') {
+    target.copy({ x, y, z });
+  } else if (typeof target.set === 'function') {
+    target.set(x, y, z);
+  } else {
+    target.x = x;
+    target.y = y;
+    target.z = z;
+  }
+}
+
+function applyFlightRunState(flight, options = {}) {
+  if (!isObject(flight)) return;
+  const flightState = options.flightState ?? options.state ?? null;
+  if (flightState?.pos && isValidPositionArray(flight.position)) applyPosition(flightState.pos, flight.position);
+
+  const lastVisitedTarget = options.lastVisitedState ?? flightState;
+  if (lastVisitedTarget && typeof flight.lastVisitedBodyId === 'string') {
+    lastVisitedTarget.lastVisitedBodyId = flight.lastVisitedBodyId;
+  }
+
+  if (typeof flight.autopilotTargetId === 'string' && options.navGraph && typeof options.plotCourse === 'function') {
+    options.plotCourse(flightState, options.navGraph, flight.autopilotTargetId);
+  }
 }
 
 function replaceSetContents(targetSet, values) {
@@ -116,7 +222,7 @@ function replaceSetContents(targetSet, values) {
   values.forEach(value => targetSet.add(value));
 }
 
-export function applyRunState(data, combatState = {}, traderState = {}, reputationState = {}, skillTree = {}) {
+export function applyRunState(data, combatState = {}, traderState = {}, reputationState = {}, skillTree = {}, options = {}) {
   if (!validateRunState(data)) return false;
   const { combat, trader, rep, skills } = data;
   combatState.score = combat.score;
@@ -145,5 +251,6 @@ export function applyRunState(data, combatState = {}, traderState = {}, reputati
   });
   replaceSetContents(skillTree.unlocked, skills);
   replaceSetContents(combatState.unlocked, skills);
+  applyFlightRunState(data.flight, options);
   return true;
 }

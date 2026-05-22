@@ -21,7 +21,7 @@ function createSessionStorageMock() {
 
 function validState(overrides = {}) {
   return {
-    v: 1,
+    v: 2,
     ts: 1234,
     combat: {
       score: 12,
@@ -57,7 +57,7 @@ beforeEach(() => {
 });
 
 describe('run state session persistence', () => {
-  it('saves schema v1 to sessionStorage only', () => {
+  it('saves schema v2 to sessionStorage only', () => {
     const combatState = {
       score: 9,
       waveNumber: 3,
@@ -77,7 +77,7 @@ describe('run state session persistence', () => {
     assert.equal(saveRunState(combatState, traderState, reputationState, skillTree), true);
     const saved = JSON.parse(globalThis.sessionStorage.getItem(RUN_STATE_KEY));
 
-    assert.equal(saved.v, 1);
+    assert.equal(saved.v, 2);
     assert.equal(saved.ts, 9876);
     assert.equal(saved.combat.score, 9);
     assert.equal(saved.combat.wave, 3);
@@ -86,6 +86,77 @@ describe('run state session persistence', () => {
     assert.equal(saved.combat.shieldHp, 66);
     assert.deepEqual(saved.trader.inventory, ['laser_mk1', 'laser_mk2', 'railgun']);
     assert.deepEqual(saved.skills, ['hull_1']);
+  });
+
+  it('returns null for schema v1 saves after schema bump', () => {
+    globalThis.sessionStorage.setItem(RUN_STATE_KEY, JSON.stringify({ ...validState(), v: 1 }));
+    assert.equal(loadRunState(), null);
+  });
+
+  it('round-trips player position through save and apply', () => {
+    const flightState = { pos: { x: 12, y: -3, z: 99 } };
+    const restoredFlightState = { pos: { x: 0, y: 0, z: 0 } };
+
+    assert.equal(saveRunState(
+      { primaryWeapon: 'laser_mk1', secondaryWeapon: 'missile_rack' },
+      {},
+      {},
+      {},
+      { flightState }
+    ), true);
+    const saved = loadRunState();
+
+    assert.deepEqual(saved.flight.position, [12, -3, 99]);
+    assert.equal(applyRunState(saved, { ownedWeapons: new Set(), unlocked: new Set() }, {}, {}, { unlocked: new Set() }, { flightState: restoredFlightState }), true);
+    assert.deepEqual(restoredFlightState.pos, { x: 12, y: -3, z: 99 });
+  });
+
+  it('saves and restores the last visited body id', () => {
+    const bodies = [
+      { id: 'far-station', pos: [100, 0, 0] },
+      { id: 'near-planet', pos: [8, 0, 0] }
+    ];
+    const flightState = { pos: { x: 10, y: 0, z: 0 } };
+    const restoredFlightState = { pos: { x: 0, y: 0, z: 0 } };
+
+    assert.equal(saveRunState(
+      { primaryWeapon: 'laser_mk1', secondaryWeapon: 'missile_rack' },
+      {},
+      {},
+      {},
+      { flightState, bodies }
+    ), true);
+    const saved = loadRunState();
+
+    assert.equal(saved.flight.lastVisitedBodyId, 'near-planet');
+    assert.equal(applyRunState(saved, { ownedWeapons: new Set(), unlocked: new Set() }, {}, {}, { unlocked: new Set() }, { flightState: restoredFlightState }), true);
+    assert.equal(restoredFlightState.lastVisitedBodyId, 'near-planet');
+  });
+
+  it('restores an active autopilot target by plotting a course when callbacks are provided', () => {
+    const flightState = {
+      pos: { x: 0, y: 0, z: 0 },
+      autopilot: { state: 'ENGAGED', targetId: 'hub-alpha' }
+    };
+    const plotted = [];
+
+    assert.equal(saveRunState(
+      { primaryWeapon: 'laser_mk1', secondaryWeapon: 'missile_rack' },
+      {},
+      {},
+      {},
+      { flightState }
+    ), true);
+    const saved = loadRunState();
+
+    assert.equal(saved.flight.autopilotTargetId, 'hub-alpha');
+    assert.equal(applyRunState(saved, { ownedWeapons: new Set(), unlocked: new Set() }, {}, {}, { unlocked: new Set() }, {
+      flightState: { pos: { x: 0, y: 0, z: 0 } },
+      navGraph: new Map(),
+      plotCourse: (_flightState, navGraph, targetId) => plotted.push({ navGraph, targetId })
+    }), true);
+    assert.equal(plotted.length, 1);
+    assert.equal(plotted[0].targetId, 'hub-alpha');
   });
 
   it('loads and clears saved state with storage errors contained', () => {

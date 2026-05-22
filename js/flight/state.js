@@ -540,13 +540,20 @@ function addKillFeedEntry(text, colorOrOptions = '#ffffff') {
 }
 
 function saveCurrentRunState({ manual = false } = {}) {
-  const saved = saveRunState(buildPersistentCombatState(), traderState, reputationState, skillTree);
+  const saved = saveRunState(buildPersistentCombatState(), traderState, reputationState, skillTree, {
+    flightState,
+    bodies: [...systemPlanets, ...systemStations, ...PLANETS, ...STATIONS]
+  });
   if (saved && manual) addKillFeedEntry('STATE SAVED', '#44ff88');
   return saved;
 }
 
 function applySavedRunState(data) {
-  if (!applyRunState(data, combatState, traderState, reputationState, skillTree)) return false;
+  if (!applyRunState(data, combatState, traderState, reputationState, skillTree, {
+    flightState,
+    navGraph,
+    plotCourse
+  })) return false;
   flightState.score = data.combat.score;
   flightState.armor = data.combat.hull;
   flightState.shield = data.combat.shieldHp;
