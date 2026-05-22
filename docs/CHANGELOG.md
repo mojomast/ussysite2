@@ -1,5 +1,17 @@
 # Changelog
 
+## [settings-tutorial-hud] - 2026-05-22
+### Added
+- Added hash-backed `js/flight/settings.js` as the canonical settings store and `js/ui/settings-menu.js` with Audio, Graphics, Gameplay, TTS, Controls, and Accessibility tabs.
+- Added `js/flight/tutorial-overlay.js`, a first-flight controls reference overlay with dismiss and don't-show-again behavior.
+
+### Changed
+- Redesigned the bottom-center HUD controls bar with larger key hints, a `Tab` settings shortcut, and touch-friendly controls.
+- Migrated flight audio volumes and TTS enabled state to `settingsState`, and wired settings into bloom, pixel ratio, HUD scale, mouse sensitivity, and pitch invert.
+
+### Fixed
+- Settings now close before lower-priority Escape handlers, and settings persist through the `:cfg:` save hash slot instead of `localStorage`.
+
 ## [visual-performance-pass] - 2026-05-22
 ### Added
 - Added ACESFilmic renderer tone mapping, SRGB output color space, and guarded UnrealBloom post-processing for the WebGL viewport.

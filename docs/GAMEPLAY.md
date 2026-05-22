@@ -4,23 +4,71 @@
 
 Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust and strafing. Dock at project nodes to refuel, trade, manage inventory, and accept contracts.
 
-## Controls
+## Controls Reference
+
+### Flight & Movement
 
 | Key | Action |
 | --- | --- |
-| `R` | Toggle static throttle |
-| `Z` / `X` | Increase / decrease throttle |
-| `G` | Match nearest enemy velocity, or brake if no target is available |
-| `C` | Evasion roll with cockpit flash and roll camera kick |
-| `F` | Cold jump when the engine skill is unlocked |
-| `M` | Toggle the system map overlay |
-| `V` | Set nav target from the crosshair |
+| Mouse Move | Look / aim ship (pointer locked) |
+| `W` / Arrow Up | Forward thrust |
+| `S` / Arrow Down | Reverse thrust / brake |
+| `A` / Arrow Left | Strafe left |
+| `D` / Arrow Right | Strafe right |
+| `Q` | Roll left |
+| `E` | Roll right |
+| `Shift` | Afterburner (when unlocked) |
+| `G` | Match speed / emergency brake |
+| `F` | Cold jump (when unlocked) |
+| `R` | Toggle throttle hold |
+| `Z` / `X` | Throttle level up / down (throttle hold active) |
+| `Shift+C` | Toggle cockpit / third-person view |
+
+### Combat
+
+| Key | Action |
+| --- | --- |
+| Left Mouse Button | Primary fire |
+| Right Mouse Button | Secondary fire / missile |
+| `C` | Evasion roll |
+
+### Navigation
+
+| Key | Action |
+| --- | --- |
+| `V` | Set nav target from crosshair |
 | `Y` | Toggle autopilot |
-| `L` | Begin landing when in orbital approach |
-| `B` | Open mission board while docked/landed at a station with missions |
-| `H` / `F1` | Toggle the pilot manual help overlay |
-| `Escape` | Close the active overlay, prioritizing help and mission board |
-| `Shift+C` | Toggle cockpit / third-person camera |
+| `M` | System map |
+| `L` | Surface approach / land |
+
+### HUD & Menus
+
+| Key | Action |
+| --- | --- |
+| `H` / `F1` | Help overlay |
+| `O` | Objectives panel |
+| `I` | Inventory / manifest |
+| `B` | Mission board (when docked or no modal active) |
+| `U` | Upgrades / skills (when landed) |
+| `Tab` | Settings menu |
+| `Escape` | Close topmost overlay / exit flight (pointer unlocked) |
+| `Space` | Dismiss message / activate focused UI |
+| `1`-`6` | Modal / menu choices |
+
+### System
+
+| Key | Action |
+| --- | --- |
+| `ussy` typed | Enter flight mode from console |
+| `Shift+M` | Toggle flight TTS |
+
+## Settings
+
+Press `Tab` in console or flight mode to open the six-tab settings menu: Audio, Graphics, Gameplay, TTS, Controls, and Accessibility. Settings persist in the URL hash `:cfg:` slot and are restored before flight resources are applied. The menu controls SFX/radio/chatter/TTS volume, TTS backend/rate/pitch, bloom strength/threshold/radius, pixel ratio, particle density, flight assist default, mouse invert, mouse sensitivity, crosshair style, reduced motion, and HUD scale.
+
+## Tutorial Overlay
+
+On first flight entry, the controls reference overlay appears when `gameOrchestrator.tutorialComplete` is false and `tutorialOverlayDismissed` is false. It can be dismissed for the run or marked `DON'T SHOW AGAIN`, which writes the setting through the hash-backed settings store. The overlay does not pause the game loop.
 
 ## Star System
 
@@ -149,4 +197,4 @@ When a combat wave clears, the game queues a debrief overlay for five seconds or
 
 Dogfight runs save to `sessionStorage` only. The game restores a valid previous run when flight mode starts, saves manually when docking, undocking, or buying a skill, and autosaves once per minute while enemies are active. Manual saves show `STATE SAVED`; autosaves stay silent.
 
-Run-state schema v3 persists active missions, completed mission ids, bounty level, player position, last visited body, active autopilot target, and the minimal surface restore fields `state` and `planetId`. Civilian traffic fleets and active bounty hunter intercepts remain runtime-only.
+Run-state schema v3 persists active missions, completed mission ids, bounty level, player position, last visited body, active autopilot target, and the minimal surface restore fields `state` and `planetId`. User settings persist separately in the shareable `:cfg:` hash slot. Civilian traffic fleets and active bounty hunter intercepts remain runtime-only.

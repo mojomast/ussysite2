@@ -60,6 +60,15 @@ js/flight/hunters.js
 js/flight/help.js
   -> four-tab pilot manual content, tab controls, pause integration
 
+js/flight/settings.js
+  -> canonical settings state, validation, hash cfg serialization, and live application hooks
+
+js/ui/settings-menu.js
+  -> injected six-tab settings overlay using configured runtime dependencies
+
+js/flight/tutorial-overlay.js
+  -> first-flight controls reference overlay and tutorialOverlayDismissed preference writes
+
 js/flight/enemies.js
   -> enemy pools, formation roles, movement, projectile collision, debrief trigger
 
@@ -101,7 +110,7 @@ Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStrea
 
 ## Space Visuals
 
-`js/engine/scene.js`, `js/engine/core.js`, `js/engine/starfield.js`, and `js/engine/nodes.js` own scene construction, holographic core visuals, deep-space backgrounds, and shared node registries. `js/engine/renderer.js` configures the WebGL renderer with ACESFilmic tone mapping and SRGB output. `state.js` adds a guarded `EffectComposer` pipeline with `RenderPass` and `UnrealBloomPass`; `prefersReducedMotion` keeps bloom strength at zero and renders through the direct renderer path. `main.js` still orchestrates flight-specific updates and project graph behavior. Project nodes now sit at the same fixed world-space coordinates as their project-backed planet definitions from `USSY_PROJECTS[].planet.pos`; flight mode changes visual scale and halos only, not node position. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
+`js/engine/scene.js`, `js/engine/core.js`, `js/engine/starfield.js`, and `js/engine/nodes.js` own scene construction, holographic core visuals, deep-space backgrounds, and shared node registries. `js/engine/renderer.js` configures the WebGL renderer with ACESFilmic tone mapping, SRGB output, and a settings-controlled pixel-ratio override. `state.js` adds a guarded `EffectComposer` pipeline with `RenderPass` and `UnrealBloomPass`; `prefersReducedMotion` or the manual reduced-motion setting keeps bloom strength at zero and renders through the direct renderer path. `main.js` still orchestrates flight-specific updates and project graph behavior. Project nodes now sit at the same fixed world-space coordinates as their project-backed planet definitions from `USSY_PROJECTS[].planet.pos`; flight mode changes visual scale and halos only, not node position. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
 
 The expanded system adds world objects from `js/flight/world.js`: 23 `PLANETS` entries backed by `USSY_PROJECTS`, three standalone `STATIONS`, and three `JUMP_POINTS` inside `SYSTEM_RADIUS = 50000`. `worldToThree(posArray, THREE)` is the authoritative coordinate converter; project nodes, planet meshes, surface proximity, nav graph nodes, starfield exclusion zones, station placement, HUD nearest-body lookup, and persisted position/nearest-body restore all share the same world-space coordinates. `createStarfield()` builds an 8,000-point static backdrop inside `STARFIELD_RADIUS = SYSTEM_RADIUS * 1.8`, with white/blue/warm brightness tiers and planet exclusion zones. `createAllPlanets()` creates `THREE.LOD` planet bodies plus additive atmosphere shells. `createAllStations()` builds three primitive station silhouettes: outpost, trading hub, and military base.
 
@@ -175,7 +184,15 @@ Board generation is deterministic by station/seed and filters completed or decli
 /api/tts audio -> ttsEngine.speak() or combatAudio.bark() -> Web Audio radio chain -> speakers
 ```
 
-Mission comms and short barks use separate scheduling channels, but both route through the same radio filter chain before playback. Backend TTS accepts `audio/*` and Kokoro-compatible `application/octet-stream` responses; combat barks fall back to browser speech synthesis if backend audio is unavailable or cannot be decoded. The system map now owns the in-flight `M` key; `Shift+M` keeps the quick TTS mute toggle.
+Mission comms and short barks use separate scheduling channels, but both route through the same radio filter chain before playback. `gameSettings` in `js/flight/audio.js` delegates to `settingsState`, so volume and TTS enabled values have one canonical store. Backend TTS accepts `audio/*` and Kokoro-compatible `application/octet-stream` responses; combat barks fall back to browser speech synthesis if backend audio is unavailable or cannot be decoded. The system map owns the in-flight `M` key; `Shift+M` keeps the quick TTS mute toggle.
+
+## Settings UI
+
+`js/flight/settings.js` exports `DEFAULT_SETTINGS`, mutable `settingsState`, `loadSettings(hashString)`, `saveSettings()`, `applySettings(deps)`, and `resetSettings()`. Settings are encoded as base64 JSON in the URL hash `:cfg:` slot and are not written to `localStorage`. `applySettings()` receives dependency-injected setters from `state.js` for audio volumes, backend TTS, bloom, pixel ratio, mouse sensitivity, and HUD scale.
+
+`js/ui/settings-menu.js` injects `#settings-menu` on configuration and exposes `configureSettingsMenu(deps)`, `openSettingsMenu()`, `closeSettingsMenu()`, and `isSettingsMenuOpen()`. The menu has Audio, Graphics, Gameplay, TTS, Controls, and Accessibility tabs. It uses capture-phase Escape handling so settings closes before lower-priority flight Escape behavior.
+
+`js/flight/tutorial-overlay.js` injects `#tutorial-overlay` and exposes `configureTutorialOverlay(deps)`, `showTutorialOverlay()`, `hideTutorialOverlay()`, and `isTutorialOverlayVisible()`. `enterFlightMode()` shows it after startup messages when `gameOrchestrator.tutorialComplete` is false and `settingsState.tutorialOverlayDismissed` is false. It does not pause the game loop.
 
 ## Objectives And Missions
 
@@ -187,7 +204,7 @@ Objective progression is browser-authoritative. Kills advance kill objectives, l
 
 ## Persistence
 
-The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions. Kill streaks, wave announcements, shot accuracy, and debrief data are runtime-only and are reset on new sorties or respawn.
+The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>:cfg:<settings>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions. The `:cfg:` slot stores settings from `js/flight/settings.js` as base64 JSON. Kill streaks, wave announcements, shot accuracy, and debrief data are runtime-only and are reset on new sorties or respawn.
 
 `js/flight/persist.js` owns session run-state persistence via `sessionStorage` key `ussysite2.runState.v1`. It exports `saveRunState(combatState, traderState, reputationState, skillTree, options)`, `loadRunState()`, `clearRunState()`, and `applyRunState(data, combatState, traderState, reputationState, skillTree, options)`. The storage key is unchanged, but the active payload schema is now `v: 3`; `loadRunState()` rejects old `v: 1` payloads and migrates `v: 2` payloads to v3 defaults.
 
@@ -252,24 +269,7 @@ Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/f
 
 ## Controls Reference
 
-| Key | Action |
-| --- | --- |
-| `W/S` | Forward/reverse thrust |
-| `A/D` | Strafe |
-| `Q/E` | Roll ship |
-| `R` | Toggle static throttle |
-| `Z/X` | Increase/decrease throttle setting |
-| `G` | Match nearest target velocity or emergency brake |
-| `C` | Evasion roll |
-| `Shift+C` | Toggle cockpit/third-person view |
-| `F` | Cold jump when unlocked |
-| `M` | Toggle system map overlay |
-| `V` | Set navigation from crosshair |
-| `Y` | Toggle autopilot |
-| `L` | Begin landing from orbital surface approach |
-| `B` | Open mission board at eligible docked/landed stations |
-| `H` / `F1` | Toggle help manual |
-| `Escape` | Close overlays |
+The canonical control list is exported as `KEY_MAP` in `js/input.js` and mirrored in the Settings Controls tab and Help Controls tab.
 
 ## Weapon Definitions
 

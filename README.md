@@ -20,24 +20,43 @@ Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, 
 
 | Control | Action |
 | --- | --- |
-| `W` / `S` or arrow up/down | Forward/reverse thrust, drains fuel |
-| `A` / `D` or arrow left/right | Strafe |
-| `Q` / `E` | Roll |
-| Mouse | Mouselook while pointer locked |
-| Left mouse | Fire lasers |
-| Right mouse | Fire missile |
-| `V` | Set nav target from crosshair project |
-| `Y` | Toggle autopilot |
-| `Shift+C` | Toggle cockpit/chase view |
-| `L` | Begin landing when in orbital approach |
-| `B` | Open mission board while landed and no modal is active |
+| Mouse Move | Look / aim ship while pointer locked |
+| `W` / Arrow Up | Forward thrust |
+| `S` / Arrow Down | Reverse thrust / brake |
+| `A` / Arrow Left | Strafe left |
+| `D` / Arrow Right | Strafe right |
+| `Q` / `E` | Roll left / right |
+| `Shift` | Afterburner when unlocked |
+| `G` | Match speed / emergency brake |
+| `F` | Cold jump when unlocked |
 | `R` | Toggle throttle hold |
-| `T` | Reserved target cycle |
+| `Z` / `X` | Throttle level up / down while throttle hold is active |
+| `Shift+C` | Toggle cockpit / third-person view |
+| Left Mouse Button | Primary fire |
+| Right Mouse Button | Secondary fire / missile |
+| `C` | Evasion roll |
+| `V` | Set nav target from crosshair |
+| `Y` | Toggle autopilot |
+| `M` | System map |
+| `L` | Surface approach / land |
+| `H` / `F1` | Help overlay |
+| `O` | Objectives panel |
+| `I` | Inventory / manifest |
+| `B` | Mission board when docked or no modal active |
 | `U` | Open skill tree while landed |
-| `Space` | Confirm/dismiss station and mission messages |
-| `M` | Toggle system map |
+| `Tab` | Settings menu |
+| `Escape` | Close topmost overlay / exit flight when pointer is unlocked |
+| `Space` | Dismiss message / activate focused UI |
+| `1`-`6` | Modal / menu choices |
 | `Shift+M` | Toggle TTS radio |
-| `Escape` / `Backspace` | Close overlays/back; Escape exits flight mode when pointer is unlocked |
+
+## Settings Menu
+
+Press `Tab` in console or flight mode to open the settings menu. It has Audio, Graphics, Gameplay, TTS, Controls, and Accessibility tabs. Settings live in `js/flight/settings.js`, are rendered by `js/ui/settings-menu.js`, and persist in shared save URLs through the `:cfg:` hash slot instead of `localStorage`.
+
+## Tutorial Overlay
+
+Flight mode can show a dismissable controls reference overlay on first entry when the tutorial has not been completed and `tutorialOverlayDismissed` is false. `DISMISS` hides it for the current run; `DON'T SHOW AGAIN` writes the setting into the `:cfg:` hash-backed settings payload.
 
 ## File Structure
 
@@ -80,6 +99,8 @@ docs/
 - `js/flight/combat.js` - Combat scene object creation plus combat API aggregation.
 - `js/flight/enemies.js` - Enemy pool construction, spawning, AI, damage, and projectile collision handling.
 - `js/flight/hud.js` - Flight HUD, cockpit radar, nav marker, camera, telemetry, and TTS indicators.
+- `js/flight/settings.js` - Canonical settings state, validation, hash serialization, and runtime application.
+- `js/flight/tutorial-overlay.js` - First-flight controls reference overlay with dismiss and don't-show-again actions.
 - `js/flight/messages.js` - Radio/game message rendering, typewriter flow, choices, and TTS persona routing.
 - `js/flight/mission.js` - Mission contracts, objective persistence, and orchestrator payload helpers.
 - `js/flight/navigation.js` - Crosshair targeting, nav targets, autopilot, landing target, and nav-line rendering.
@@ -94,6 +115,7 @@ docs/
 - `js/ui/cursor.js` - Custom neon cursor state and frame updates.
 - `js/ui/hero.js` - Hero scroll, wheel, touch, nav dots, and section camera/light reactions.
 - `js/ui/inventory-panel.js` - Inventory, station services, equipment, cargo, and skill-tree panel rendering.
+- `js/ui/settings-menu.js` - Six-tab settings panel for audio, graphics, gameplay, TTS, controls, and accessibility.
 - `js/ui/nodes-overlay.js` - Project label overlay, hover state, cursor hover feedback, and node selection visuals.
 - `js/ui/orbit.js` - Orbit camera drag, wheel zoom, and camera target synchronization.
 
@@ -132,7 +154,7 @@ The orchestrator now dispatches event types into contracts instead of only showi
 
 ## Audio Settings
 
-In flight, press `M` to open audio settings for radio volume, combat chatter volume, SFX volume, TTS mute, and quiet defaults. Radio transmissions default quieter than before, and all in-game voices are routed through the radio filter chain so clean and distorted voice paths do not mix.
+Press `Tab` and open the Audio or TTS tabs for radio volume, combat chatter volume, SFX volume, TTS mute, backend TTS, voice rate, and pitch. Radio transmissions and combat barks route through the radio filter chain so clean and distorted voice paths do not mix.
 
 ## SFX Engine
 
