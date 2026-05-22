@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Ussyverse // Interactive 3D Cybernetic Index</title>
+  
+  <!-- SEO Tags -->
+  <meta name="description" content="Explore The Ussyverse: an interactive 3D index of AI tooling, developer platforms, creative emulators, and weird-web projects built in public by Kyle Durepos.">
+  <meta property="og:title" content="The Ussyverse // Interactive 3D Cybernetic Index">
+  <meta property="og:description" content="Stateless planning agents, instant microVMs, collaborative live DAWs, and retro emulators orbiting a glowing holographic core.">
+  <meta name="theme-color" content="#03060f">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2303060f'/%3E%3Cpath d='M16 36 32 10l16 26-16 18z' fill='none' stroke='%2300f0ff' stroke-width='5'/%3E%3Ccircle cx='32' cy='36' r='7' fill='%23ffcc00'/%3E%3C/svg%3E">
+
+  <!-- Style Sheets -->
+  <link rel="stylesheet" href="index.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Screen overlays -->
+  <div class="scanlines"></div>
+  <div class="cyber-bg-grid"></div>
+  <div class="cyber-bg-gradient"></div>
+  <div id="adrenaline-vignette" aria-hidden="true"></div>
+
+  <!-- Custom neon interactive cursor -->
+  <div class="custom-cursor" id="custom-cursor"></div>
+
+  <!-- Three.js 3D Viewport container -->
+  <div id="canvas-container"></div>
+
+  <!-- Scroll-Snap Navigation Indicator Dots -->
+  <div id="hero-scroll-nav" class="hero-scroll-nav">
+    <div class="nav-dot active" data-index="0"><span>WELCOME</span></div>
+    <div class="nav-dot" data-index="1"><span>PHILOSOPHY</span></div>
+    <div class="nav-dot" data-index="2"><span>SECTORS</span></div>
+    <div class="nav-dot" data-index="3"><span>METHOD</span></div>
+    <div class="nav-dot" data-index="4"><span>GRAPH</span></div>
+    <div class="nav-dot" data-index="5"><span>PORTAL</span></div>
+  </div>
+
+  <!-- ==================== HERO SCROLLING OVERLAY ==================== -->
+  <div id="hero-container" class="hero-scrollable">
+    
+    <!-- SECTION 1: WELCOME SCREEN -->
+    <section class="hero-snap-section" id="hero-sec-welcome">
+      <div class="hero-content">
+        <div class="hero-logo-section">
+          <div class="cyber-badge-glow">SYS_STATUS: ONLINE // ADDR: USSY.HOST</div>
+          <div class="hero-brand">[ THE USSYVERSE ]</div>
+          <p class="hero-subtitle">A working map of Kyle Durepos projects: agent planners, microVM infrastructure, browser instruments, emulators, live-show tools, and intentionally weird software with real internals.</p>
+          <p class="hero-subtext">This is not a polished agency reel. It is a public machine room for experiments that ship: some stable, some research-grade, some funny on purpose, all built to expose the machinery instead of hiding it behind generic portfolio copy.</p>
+        </div>
+
+        <div class="terminal-ticker-bar">
+          <span class="ticker-signal">SIGNAL: ACTIVE</span>
+          <span class="ticker-text">// BUILD STYLE: VISIBLE INTERNALS // MATERIAL: AGENTS + VMS + BROWSER APIS // GRAPH: CLICKABLE</span>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL DOWN TO COMMENCE ORBITAL EXPLORATION</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: SYSTEM PHILOSOPHY -->
+    <section class="hero-snap-section" id="hero-sec-philosophy">
+      <div class="hero-content">
+        <div class="hero-section-title">01 // CONSTELLATION PHILOSOPHY</div>
+        <p class="hero-section-paragraph">
+          The Ussyverse is a long-running workshop for software that feels operated, not merely viewed. The projects share a taste for local-first control, traceable agent work, strange-but-usable interfaces, and browser experiences that treat WebGL, WebAudio, WebSockets, and WASM as raw creative material.
+        </p>
+
+        <!-- Stats Grid -->
+        <div class="hero-stats-grid">
+          <div class="hero-stat-card">
+            <div class="stat-num color-green" id="stat-projects-count">23</div>
+            <div class="stat-lbl">[ORBITING_NODES]</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="stat-num color-yellow">9</div>
+            <div class="stat-lbl">[PRODUCTION_RUNTIMES]</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="stat-num color-cyan">12</div>
+            <div class="stat-lbl">[VERIFIED_REPOS]</div>
+          </div>
+          <div class="hero-stat-card">
+            <div class="stat-num color-pink">MIT</div>
+            <div class="stat-lbl">[SOFTWARE_LICENSE]</div>
+          </div>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL FOR THE SYSTEM MAP</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: SYSTEM SECTORS -->
+    <section class="hero-snap-section" id="hero-sec-sectors">
+      <div class="hero-content">
+        <div class="hero-section-title">02 // SYSTEM SECTORS</div>
+        <p class="hero-section-paragraph" style="margin-bottom: 30px;">
+          Each sector is a different pressure test: can agents produce inspectable work, can small infrastructure stay understandable, can AI feel supervised, and can a browser still become a weird little computer instead of another landing page?
+        </p>
+        
+        <div class="hero-philosophy-grid">
+          <div class="philosophy-card border-green" data-category="core">
+            <div class="phil-header">
+              <h3>[ PLANNING & CORE ]</h3>
+              <span class="phil-status green">CYBER_GREEN</span>
+            </div>
+            <p class="phil-quote">"Pipelines, terminals, dashboards, and protocols for turning vague software intent into artifacts a human can review, interrupt, and hand off."</p>
+            <div class="phil-tags">Devussy • Swarmussy • Geoffrussy • Ralphussy • nexussy</div>
+          </div>
+
+          <div class="philosophy-card border-cyan" data-category="infra">
+            <div class="phil-header">
+              <h3>[ SYSTEMS & INFRA ]</h3>
+              <span class="phil-status cyan">CYBER_CYAN</span>
+            </div>
+            <p class="phil-quote">"Firecracker sandboxes, tiny control planes, routing glue, and static-web infrastructure that prefer legibility over cloud theatre."</p>
+            <div class="phil-tags">ussycode • fireslice • ussyring</div>
+          </div>
+
+          <div class="philosophy-card border-purple" data-category="ai">
+            <div class="phil-header">
+              <h3>[ AUTONOMOUS AI ]</h3>
+              <span class="phil-status purple">CYBER_PURPLE</span>
+            </div>
+            <p class="phil-quote">"Translation rooms, retrieval surfaces, policy gates, and cyber-range arenas where AI systems are watched as tools, not worshipped as magic."</p>
+            <div class="phil-tags">Openclawssy • Battlebussy • Tchaikovskussy • RAGussy</div>
+          </div>
+
+          <div class="philosophy-card border-pink" data-category="creative">
+            <div class="phil-header">
+              <h3>[ GAMES & CREATIVE ]</h3>
+              <span class="phil-status pink">CYBER_PINK</span>
+            </div>
+            <p class="phil-quote">"DAWs, emulated desktops, tabletop bots, horse genetics, improv scoreboards, and media studios built like toys that know they are systems."</p>
+            <div class="phil-tags">Strudelussy • Fruity Boofs • TempleOSsy • iMaCoMpUtERussy • RPG DM Bot</div>
+          </div>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL FOR HOW THE MACHINE WORKS</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: OPERATING METHOD -->
+    <section class="hero-snap-section" id="hero-sec-method">
+      <div class="hero-content">
+        <div class="hero-section-title">03 // OPERATING METHOD</div>
+        <p class="hero-section-paragraph">
+          Most projects here are built as small systems with visible seams. Instead of one giant platform, the work is split into tools that can be inspected independently: a planner writes artifacts, an agent runtime enforces policy, a dashboard shows state, a VM controller owns machines, and browser apps turn local APIs into playful interfaces.
+        </p>
+
+        <div class="hero-detail-grid">
+          <div class="hero-detail-card border-green">
+            <h3>TRACEABLE AGENT WORK</h3>
+            <p>Agent projects revolve around explicit plans, logs, permissions, and review points. The goal is not to make automation invisible; it is to make the handoff between human intent and machine execution legible enough to debug.</p>
+          </div>
+          <div class="hero-detail-card border-cyan">
+            <h3>SMALL INFRASTRUCTURE</h3>
+            <p>The infrastructure projects prefer primitive building blocks: Firecracker VMs, SQLite, SSH keys, static JSON, local disks, and simple routing. They are meant to be operated by a person who can still understand the whole shape.</p>
+          </div>
+          <div class="hero-detail-card border-purple">
+            <h3>BROWSER AS WORKBENCH</h3>
+            <p>Creative projects use the browser as a full workbench: WebAudio for instruments, WASM for emulation and DSP, WebSockets for live rooms, and canvas/WebGL for interfaces that feel more like control panels than templates.</p>
+          </div>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL FOR THE 3D GRAPH MODEL</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: GRAPH EXPLANATION -->
+    <section class="hero-snap-section" id="hero-sec-graph">
+      <div class="hero-content">
+        <div class="hero-section-title">04 // GRAPH INTERFACE</div>
+        <p class="hero-section-paragraph">
+          The console is not just decoration. Every node maps to a repository or deployed experiment. Edges connect projects that share infrastructure, research lineage, tags, or operating style. Selecting a node highlights nearby work, moves the camera to that project, and loads the inspector with source links, runtime links, technical specs, and implementation notes.
+        </p>
+
+        <div class="hero-detail-grid two-col">
+          <div class="hero-detail-card border-pink">
+            <h3>WHAT TO CLICK</h3>
+            <p>Use the left panel when you want a stable index. Use the graph when you want spatial relationships. Drag to rotate, wheel to zoom, click a node to inspect, and double-click the scene to reset the view.</p>
+          </div>
+          <div class="hero-detail-card border-cyan">
+            <h3>WHAT YOU GET</h3>
+            <p>The inspector shows what the project does, how it works, key technical specs, core capabilities, source links, live runtimes where available, and telemetry-flavored notes that match the project’s role in the constellation.</p>
+          </div>
+        </div>
+
+        <div class="hero-scroll-helper">
+          <span>SCROLL TO THE LINK DOCK</span>
+          <div class="scroll-arrow"><i data-lucide="chevron-down"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: PORTAL ACCESS -->
+    <section class="hero-snap-section" id="hero-sec-portal">
+      <div class="hero-content">
+        <div class="hero-section-title">05 // GATEWAY INITIALIZATION</div>
+        
+        <p class="hero-section-paragraph" style="max-width: 650px; text-align: center; margin-bottom: 40px;">
+          Open the graph for the spatial version, or jump directly to the source/community links. This final dock stays readable now; nothing auto-launches until you choose it.
+        </p>
+
+        <!-- CTA Button to enter console -->
+        <button class="hero-cta-btn" id="enter-console-btn" style="margin-bottom: 28px;">
+          <i data-lucide="terminal"></i> INITIALIZE GRAPH CONSOLE
+        </button>
+
+        <div class="portal-link-row hud-interactive">
+          <a href="https://github.com/mojomast" target="_blank" class="portal-link-btn github-link">
+            <i data-lucide="git-branch"></i> GitHub Profile
+          </a>
+          <a href="https://github.com/mojomast?tab=repositories" target="_blank" class="portal-link-btn">
+            <i data-lucide="folder-git-2"></i> Repository Index
+          </a>
+        </div>
+
+        <div class="portal-scroll-cue">
+          Scroll once more to enter the graph console
+        </div>
+
+        <!-- DISCORD CARD DIRECT EMBED FOR HIGH ACCESSIBILITY -->
+        <div class="portal-discord-card hud-interactive">
+          <div class="discord-card-glow"></div>
+          <div class="discord-header">
+            <i data-lucide="message-square"></i> JOIN THE USSYVERSE DOCK
+          </div>
+          <p class="discord-desc">
+            Bring weird systems, agent orchestration notes, local infrastructure questions, browser API experiments, and half-finished demos. The dock is for builders who like the strange parts of software as much as the finished screenshots.
+          </p>
+          <a href="https://discord.gg/6b2Ej3rS3q" target="_blank" class="discord-btn">
+            <i data-lucide="users"></i> Connect to Discord Server
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <div class="hero-console-scroll-through" aria-hidden="true"></div>
+
+  </div>
+
+  <!-- ==================== HUD INTERFACE OVERLAY ==================== -->
+  <div class="hud-layout" id="hud-layout-console">
+    
+    <!-- HEADER -->
+    <header class="hud-header hud-panel hud-interactive">
+      <div class="brand-section">
+        <div class="brand-title" id="hud-header-title" style="cursor: pointer;"><span>[</span>USSYVERSE<span>]</span></div>
+        <div class="system-status">
+          <div class="status-indicator"></div>
+          <span>SYS_SIGNAL: ACTIVE_CONSOLE</span>
+        </div>
+      </div>
+      <div class="system-status">
+        <button class="back-to-hero-btn hud-interactive" id="back-to-hero-btn">
+          <i data-lucide="arrow-left"></i> Home Info
+        </button>
+        <span id="telemetry-timer" style="margin-left: 15px;">TELEMETRY_LOAD: 0.00ms</span>
+      </div>
+    </header>
+
+    <!-- LEFT PANEL: PROJECT SELECTOR -->
+    <aside class="hud-left hud-panel hud-interactive">
+      <h3 class="panel-title">System Nodes</h3>
+      
+      <!-- Categories Filter -->
+      <div class="categories-container">
+        <div class="category-card active" data-category="all">
+          <h4 style="--accent-color: var(--cyber-cyan)">ALL_NODES</h4>
+          <p>Complete Ussyverse orbital map</p>
+        </div>
+        <div class="category-card" data-category="core" style="--accent-color: var(--cyber-green)">
+          <h4>PLANNING_&_CORE</h4>
+          <p>Devussy, Swarmussy, Geoffrussy orchestrators</p>
+        </div>
+        <div class="category-card" data-category="infra" style="--accent-color: var(--cyber-cyan)">
+          <h4>SYSTEMS_&_INFRA</h4>
+          <p>MicroVM platforms & webring hubs</p>
+        </div>
+        <div class="category-card" data-category="ai" style="--accent-color: var(--cyber-purple)">
+          <h4>AUTONOMOUS_AI</h4>
+          <p>Bilingual WebSocket translation & cyber-ranges</p>
+        </div>
+        <div class="category-card" data-category="creative" style="--accent-color: var(--cyber-pink)">
+          <h4>GAMES_&_CREATIVE</h4>
+          <p>DAWs, browser OS emulators & casino simulators</p>
+        </div>
+      </div>
+
+      <!-- Quick Node List -->
+      <h3 class="panel-title" style="margin-top: 10px;">Select Node</h3>
+      <div class="projects-scroll-container" id="projects-scroll-list">
+        <!-- JS populated projects list -->
+      </div>
+    </aside>
+
+    <!-- CENTER AREA: VIEWPORT INSTRUCTIONS -->
+    <div class="hud-center"></div>
+
+    <!-- RIGHT PANEL: INSPECTOR READOUT -->
+    <aside class="hud-right hud-interactive">
+      
+      <!-- INSPECTOR PANEL -->
+      <div class="hud-panel inspector-panel">
+        <h3 class="panel-title">Blueprint Inspector</h3>
+        
+        <div class="inspector-scroll-content">
+          <div class="inspector-header">
+            <div class="inspector-title" id="inspect-title">DEVUSSY</div>
+            <span class="inspector-category" id="inspect-category">Ussyverse Core</span>
+          </div>
+
+          <div class="inspector-body" id="inspect-desc">
+            Stateless multi-stage planning pipeline for human and AI handoffs. Seamlessly orchestrates task descriptions, coding specs, and code executions across environments.
+          </div>
+
+          <!-- Spec Grid -->
+          <div class="inspector-section-lbl">[TECHNICAL_SPECIFICATIONS]</div>
+          <div class="inspector-spec-grid" id="inspect-specs">
+            <!-- JS populated specifications -->
+          </div>
+
+          <!-- Features List -->
+          <div class="inspector-section-lbl">[CORE_CAPABILITIES]</div>
+          <ul class="inspector-features-list" id="inspect-features">
+            <!-- JS populated bullet features -->
+          </ul>
+
+          <!-- Telemetry Readout -->
+          <div class="inspector-section-lbl">[SYSTEM_TELEMETRY]</div>
+          <div class="inspector-telemetry-readout" id="inspect-telemetry">
+            <!-- JS populated diagnostic signals -->
+          </div>
+
+          <div class="inspector-tags" id="inspect-tags">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <div class="inspector-actions">
+          <a href="#" target="_blank" class="action-btn" id="btn-github">
+            <i data-lucide="git-branch"></i> View Source
+          </a>
+          <a href="#" target="_blank" class="action-btn secondary" id="btn-demo">
+            <i data-lucide="external-link"></i> Launch Runtime
+          </a>
+        </div>
+      </div>
+
+      <!-- DISCORD PANEL (VERY EASY TO FIND) -->
+      <div class="hud-panel discord-promo-panel">
+        <div class="discord-promo-header">
+          <i data-lucide="users"></i> JOIN THE OPERATOR RING
+        </div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; font-family: var(--font-sans);">
+          Discuss agent orchestration, deep-online experiments, and building weird things seriously with developers in the Ussyverse community.
+        </div>
+        <a href="https://discord.gg/6b2Ej3rS3q" target="_blank" class="discord-btn">
+          <i data-lucide="message-square"></i> Connect on Discord
+        </a>
+      </div>
+
+    </aside>
+
+    <!-- FOOTER -->
+    <footer class="hud-footer hud-panel hud-interactive">
+      <div>
+        <span>COORDINATES: <span id="telemetry-coord">X: 0.00 Y: 0.00 Z: 0.00</span></span>
+      </div>
+      <div class="footer-nav">
+        <a href="https://github.com/mojomast" target="_blank">GitHub Profile</a>
+        <a href="https://ussyco.de/hub" target="_blank">Ussy ring</a>
+      </div>
+      <div>
+        <span>OPERATOR: Kyle Durepos © 2026</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <div class="game-message-system" id="game-message-system" aria-live="polite">
+    <div class="game-message-header">
+      <span id="game-message-type">MISSION</span>
+      <span id="game-message-source">USSYVERSE CONTROL</span>
+    </div>
+    <div class="game-message-body" id="game-message-body"></div>
+    <div class="game-message-choices" id="game-message-choices"></div>
+    <div class="game-message-dismiss">PRESS <kbd>SPACE</kbd> TO DISMISS</div>
+  </div>
+
+  <div class="flight-nav-marker" id="flight-nav-marker" aria-hidden="true">NAV</div>
+
+  <div class="cockpit-overlay" id="cockpit-overlay">
+    <div id="hud-master-warning" class="hud-master-warning" aria-live="assertive"></div>
+    <div class="cockpit-vignette"></div>
+    <div class="cockpit-reticle-container">
+      <div class="cockpit-reticle"></div>
+      <svg class="cockpit-reticle-arches" viewBox="0 0 200 200" aria-hidden="true">
+        <!-- Left arch for Shields -->
+        <path id="reticle-shield-arch" d="M 65,35 A 70,70 0 0,0 65,165" fill="none" stroke="var(--cyber-cyan)" stroke-width="3" stroke-dasharray="220" stroke-dashoffset="0"/>
+        <!-- Right arch for Heat -->
+        <path id="reticle-heat-arch" d="M 135,35 A 70,70 0 0,1 135,165" fill="none" stroke="var(--cyber-pink)" stroke-width="3" stroke-dasharray="220" stroke-dashoffset="0"/>
+      </svg>
+    </div>
+
+    <!-- TOP LEFT: Radar -->
+    <div class="radar-panel hud-interactive" aria-live="polite">
+      <div class="radar-panel-inner">
+        <div class="radar-title">TACTICAL RADAR</div>
+        <canvas id="cockpit-radar" class="cockpit-radar" width="220" height="220" aria-hidden="true"></canvas>
+        <div class="radar-range" id="radar-range-label">RANGE 12KM</div>
+      </div>
+    </div>
+
+    <!-- TOP RIGHT: Objectives -->
+    <div class="objectives-panel hud-interactive" id="objectives-panel" aria-live="polite">
+      <div class="objectives-panel-inner">
+        <div class="objectives-panel-header">
+          <span>OBJECTIVES</span>
+          <div class="objectives-toggle" role="tablist" aria-label="Objectives view">
+            <button type="button" class="objective-view-btn active" data-objective-view="current" role="tab" aria-selected="true">Current</button>
+            <button type="button" class="objective-view-btn" data-objective-view="available" role="tab" aria-selected="false">Available</button>
+          </div>
+        </div>
+        <section id="current-objective-pane" class="objective-pane">
+          <div class="objective-kicker" id="objective-kicker">DIRECTOR IDLE</div>
+          <h4 id="objective-title">Free Roam</h4>
+          <p id="objective-body">Launch the ship, pick a project node, or accept a contract.</p>
+          <div class="objective-tracked-badge">TRACKED IN HUD</div>
+          <div class="objective-progress" id="objective-progress">NO ACTIVE OBJECTIVE</div>
+        </section>
+        <section id="available-objectives-pane" class="objective-pane" hidden>
+          <div id="available-objectives-list" class="available-objectives-list"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- BOTTOM LEFT: Ship Status -->
+    <div class="cockpit-frame cockpit-frame-left">
+      <div class="cockpit-frame-content">
+        <div class="flight-resource-panel flight-resource-left" aria-live="polite">
+          <div class="resource-panel-title">SHIP STATUS</div>
+          <div class="resource-bar"><span class="resource-bar-label">SPEED</span><strong id="flight-speed" class="resource-bar-value">0</strong></div>
+          <div class="resource-meter"><span id="flight-speed-bar"></span></div>
+          <div class="resource-bar"><span class="resource-bar-label">SHIELDS</span><strong id="flight-shields-detail" class="resource-bar-value">100</strong></div>
+          <div class="resource-meter shield"><span id="flight-shield-bar"></span></div>
+          <div class="resource-bar"><span class="resource-bar-label">ARMOR</span><strong id="flight-armor" class="resource-bar-value">100%</strong></div>
+          <div class="resource-meter armor"><span id="flight-armor-bar"></span></div>
+          <div class="resource-bar"><span class="resource-bar-label">ENERGY</span><strong id="flight-energy" class="resource-bar-value">100</strong></div>
+          <div class="resource-meter energy"><span id="flight-energy-bar"></span></div>
+          <div class="resource-bar"><span class="resource-bar-label">HEAT</span><strong id="flight-heat-cockpit" class="resource-bar-value">0</strong></div>
+          <div class="resource-meter heat"><span id="flight-heat-bar-cockpit" class="heat-bar-fill"></span></div>
+          <div class="resource-bar"><span class="resource-bar-label">FUEL</span><strong id="flight-fuel" class="resource-bar-value">100</strong></div>
+          <div class="resource-meter fuel"><span id="flight-fuel-bar"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM CENTER: Weapons / Targeting / Nav -->
+    <div class="cockpit-dash-center" id="cockpit-dash-center" aria-live="polite">
+      <div class="cockpit-dash-center-inner">
+        <div class="dash-center-title">COMBAT // NAV</div>
+        <div class="dash-center-grid">
+          <!-- Column 1 (WEAPON SYSTEMS) -->
+          <div class="dash-column">
+            <div class="dash-cell">
+              <span class="dash-label">PRIMARY WPN</span>
+              <strong id="flight-weapon-primary-c">LASER Mk.I</strong>
+            </div>
+            <div class="dash-cell">
+              <span class="dash-label">SECONDARY WPN</span>
+              <strong id="flight-weapon-secondary-c">MISSILE RACK</strong>
+            </div>
+          </div>
+          
+          <!-- Column 2 (TARGET SYSTEM) -->
+          <div class="dash-column dash-column-center">
+            <div class="dash-cell">
+              <span class="dash-label">CROSSHAIR TARGET</span>
+              <strong id="flight-crosshair-c">NO PROJECT</strong>
+            </div>
+            <div class="dash-cell">
+              <span class="dash-label">LOCKED THREAT</span>
+              <strong id="flight-threat-c">NO THREAT</strong>
+            </div>
+          </div>
+          
+          <!-- Column 3 (NAV & TELEMETRY) -->
+          <div class="dash-column">
+            <div class="dash-cell">
+              <span class="dash-label">NAV TARGET</span>
+              <strong id="flight-nav-target-c">NONE</strong>
+            </div>
+            <div class="dash-cell">
+              <span class="dash-label">AUTOPILOT / ETA</span>
+              <strong id="flight-nav-telemetry-c">OFF // --</strong>
+            </div>
+          </div>
+        </div>
+        <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // C CAM // T TRADE // I INVENTORY</div>
+      </div>
+    </div>
+
+    <!-- BOTTOM RIGHT: Economy / Status -->
+    <div class="flight-hud hud-interactive" id="flight-hud" aria-live="polite">
+      <div class="flight-hud-inner">
+        <div id="tts-status" class="tts-status-indicator" aria-live="polite" aria-label="TTS status"></div>
+        <div class="flight-hud-header">
+          <span>ECON / STATUS</span>
+          <span id="flight-status" class="hud-status-pill">ARMED</span>
+        </div>
+        <div class="flight-hud-grid">
+          <div>
+            <span class="flight-hud-label">CREDITS</span>
+            <strong id="flight-credits">1000CR</strong>
+            <span id="flight-credit-gain" class="credit-gain-indicator"></span>
+          </div>
+          <div class="hud-peace-only">
+            <span class="flight-hud-label">XP</span>
+            <div class="hud-xp-row">
+              <span id="flight-sp">SP: 3</span>
+              <div class="hud-xp-bar-track"><div id="flight-xp-bar" class="hud-xp-bar-fill"></div></div>
+              <span id="flight-xp-label">XP 0/100</span>
+            </div>
+          </div>
+          <div class="hud-peace-only">
+            <span class="flight-hud-label">NEAREST PROJECT</span>
+            <strong id="flight-target">NONE</strong>
+          </div>
+          <div class="hud-combat-only">
+            <span class="flight-hud-label">AMMO</span>
+            <strong id="flight-ammo">240</strong>
+            <div class="resource-meter ammo"><span id="flight-ammo-bar"></span></div>
+          </div>
+          <div class="hud-combat-only">
+            <span class="flight-hud-label">MISSILES</span>
+            <strong id="flight-missiles">8</strong>
+            <div class="resource-meter missile"><span id="flight-missile-bar"></span></div>
+          </div>
+        </div>
+        <div class="hud-hidden-telemetry" aria-hidden="true">
+          <strong id="flight-score">0</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-hidden-telemetry" aria-hidden="true">
+      <strong id="flight-weapon-primary">LASER Mk.I</strong>
+      <strong id="flight-crosshair-target">NO PROJECT</strong>
+      <strong id="flight-nav-target">NONE</strong>
+      <strong id="flight-nav-eta">--</strong>
+      <strong id="flight-autopilot">OFF</strong>
+      <strong id="flight-weapon-secondary">MISSILE RACK</strong>
+    </div>
+  </div>
+
+  <div id="inventory-panel" class="inventory-panel" hidden
+       role="dialog" aria-modal="true" aria-label="Ship Manifest">
+    <div class="inv-header">
+      <span class="inv-title">SHIP MANIFEST // USSY-1</span>
+      <div class="inv-meta">
+        <span id="inv-sp">SP: 3</span>
+        <span id="inv-credits-display">1000CR</span>
+        <button class="inv-close-btn" aria-label="Close inventory"
+                onclick="document.getElementById('inventory-panel').hidden=true">
+          [ESC]
+        </button>
+      </div>
+    </div>
+    <div class="inv-body">
+      <div class="inv-cargo-col" id="inv-cargo-grid">
+        <div class="inv-col-title">CARGO HOLD</div>
+      </div>
+      <div class="inv-weapons-col" id="inv-weapons-grid">
+        <div class="inv-col-title">WEAPONS</div>
+      </div>
+      <div class="inv-skills-col" id="inv-skills-grid">
+        <div class="inv-col-title">SKILL TREE</div>
+      </div>
+    </div>
+    <div class="inv-footer">
+      <span id="inv-cargo-used">CARGO: 0/20</span>
+      <span id="inv-upgrades-count">SKILLS: 0/16</span>
+    </div>
+  </div>
+
+  <!-- Dynamic floating HTML labels for 3D scene overlays -->
+  <div id="labels-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: hidden;"></div>
+
+  <!-- Include ThreeJS via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <!-- App JavaScript files -->
+  <script src="projects.js"></script>
+  <script type="module" src="js/main.js"></script>
+
+  <!-- Lucide Icon Renderer -->
+  <script>
+    lucide.createIcons();
+  </script>
+  <script>
+    // Mirror cockpit center panel IDs from engine-updated source IDs.
+    (function syncCockpitCenter() {
+      const map = {
+        'flight-weapon-primary': 'flight-weapon-primary-c',
+        'flight-crosshair-target': 'flight-crosshair-c',
+        'flight-nav-target': 'flight-nav-target-c',
+        'flight-weapon-secondary': 'flight-weapon-secondary-c',
+      };
+
+      const sync = () => {
+        for (const [srcId, dstId] of Object.entries(map)) {
+          const src = document.getElementById(srcId);
+          const dst = document.getElementById(dstId);
+          if (src && dst && src.textContent !== dst.textContent) {
+            dst.textContent = src.textContent;
+          }
+        }
+      };
+
+      const observer = new MutationObserver(sync);
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const targets = document.querySelectorAll('.hud-hidden-telemetry, #flight-hud');
+        targets.forEach((target) => observer.observe(target, { subtree: true, characterData: true, childList: true }));
+        sync();
+      });
+    })();
+  </script>
+</body>
+</html>
