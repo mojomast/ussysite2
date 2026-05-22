@@ -484,6 +484,35 @@
     </div>
   </div>
 
+  <div id="help-menu" class="help-menu" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="help-menu-title">
+    <div class="help-menu-shell hud-interactive">
+      <header class="help-menu-header">
+        <div>
+          <span class="help-menu-kicker">OPERATOR REFERENCE</span>
+          <h2 id="help-menu-title">HELP MENU</h2>
+        </div>
+        <button id="help-menu-close" class="help-menu-close" type="button" aria-label="Close help menu">[ESC]</button>
+      </header>
+      <nav class="help-tabs" role="tablist" aria-label="Help sections">
+        <button id="help-tab-controls" class="help-tab active" type="button" role="tab" aria-selected="true" aria-controls="help-panel-controls" data-help-tab="controls">CONTROLS</button>
+        <button id="help-tab-how" class="help-tab" type="button" role="tab" aria-selected="false" aria-controls="help-panel-how" data-help-tab="how">HOW TO PLAY</button>
+        <button id="help-tab-universe" class="help-tab" type="button" role="tab" aria-selected="false" aria-controls="help-panel-universe" data-help-tab="universe">UNIVERSE</button>
+        <button id="help-tab-tips" class="help-tab" type="button" role="tab" aria-selected="false" aria-controls="help-panel-tips" data-help-tab="tips">TIPS &amp; TRICKS</button>
+      </nav>
+      <div class="help-menu-body">
+        <section id="help-panel-controls" class="help-panel active" role="tabpanel" aria-labelledby="help-tab-controls"></section>
+        <section id="help-panel-how" class="help-panel" role="tabpanel" aria-labelledby="help-tab-how" hidden></section>
+        <section id="help-panel-universe" class="help-panel" role="tabpanel" aria-labelledby="help-tab-universe" hidden></section>
+        <section id="help-panel-tips" class="help-panel" role="tabpanel" aria-labelledby="help-tab-tips" hidden></section>
+      </div>
+      <footer class="help-menu-footer">
+        <span><kbd>H</kbd>/<kbd>F1</kbd> CLOSE HELP</span>
+        <span><kbd>ESC</kbd> BACK</span>
+        <span><kbd>P</kbd> PAUSE RESERVED</span>
+      </footer>
+    </div>
+  </div>
+
   <div class="cockpit-overlay" id="cockpit-overlay">
     <div id="hud-master-warning" class="hud-master-warning" aria-live="assertive"></div>
     <div id="bounty-indicator" class="bounty-indicator" aria-live="polite" aria-hidden="true" hidden>

@@ -81,6 +81,7 @@ import {
   updateGameMessage as updateGameMessageModule
 } from './messages.js';
 import { showDebrief } from './debrief.js';
+import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, toggleHelpMenu } from './help.js';
 import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
 import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
@@ -679,6 +680,12 @@ export function init() {
     gameMessageType,
     ttsEngine
   });
+  configureHelpMenu({
+    documentRef: document,
+    flightState,
+    isFlightActive: () => isFlightActive,
+    updateFlightHud
+  });
   configureMissionBoardUI({ documentRef: document });
   configureCombatScene({
     THREE,
@@ -887,6 +894,7 @@ export function init() {
     gameMessageState,
     handleGameMessageChoice,
     handleSurfaceEscape,
+    isHelpMenuOpen,
     heroContainer,
     isConsoleActive: () => isConsoleActive,
     isFlightActive: () => isFlightActive,
@@ -911,6 +919,7 @@ export function init() {
     toggleAutopilot,
     toggleFlightTts,
     toggleFlightView,
+    toggleHelpMenu,
     toggleObjectivesView,
     traderState,
     unlockAudio: () => sfxEngine.unlock(),
@@ -1405,6 +1414,8 @@ function enterFlightMode() {
   applyFlightUniverseScale(flightUniverseScale);
   flightState.keys.clear();
   flightState.mouseButtons.clear();
+  flightState.pauseReasons.clear();
+  flightState.paused = false;
   flightState.vel.set(0, 0, 0);
   flightState.score = 0;
   flightState.shield = 100;
@@ -1516,6 +1527,8 @@ function exitFlightMode(releasePointer = true) {
   flightState.pointerLocked = false;
   flightState.keys.clear();
   flightState.mouseButtons.clear();
+  flightState.pauseReasons.clear();
+  flightState.paused = false;
   flightState.crosshairNode = null;
   flightState.navNode = null;
   flightState.navDistance = Infinity;
@@ -1534,6 +1547,7 @@ function exitFlightMode(releasePointer = true) {
   if (gameRoot) gameRoot.visible = false;
   setSystemWorldVisible(false);
   setSystemMapVisible(false);
+  closeHelpMenu();
   if (debrisField) debrisField.visible = false;
   if (dustField) dustField.visible = false;
   if (scene.fog) scene.fog.density = 0.02;
@@ -3361,42 +3375,45 @@ export function tick(time = 0) {
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
-    updateFlight(time);
+    const simulationPaused = Boolean(flightState.paused);
+    if (!simulationPaused) updateFlight(time);
     updateSystemMapInput();
     updatePlanetLOD(systemPlanets, camera);
     updateStationRotations(systemStations, frameDt);
-    updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
-    if (flightState.newNodeArrival) {
-      const tier = shouldTriggerIntercept({ combatState, traderState, node: flightState.newNodeArrival, now: time });
-      if (tier) triggerIntercept({ combatState, traderState, flightState, enemyPool: enemies, spawnEnemy, buildEnemyHealthPips, addKillFeedEntry, node: flightState.newNodeArrival, tier, now: time });
-      flightState.newNodeArrival = null;
+    if (!simulationPaused) {
+      updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+      if (flightState.newNodeArrival) {
+        const tier = shouldTriggerIntercept({ combatState, traderState, node: flightState.newNodeArrival, now: time });
+        if (tier) triggerIntercept({ combatState, traderState, flightState, enemyPool: enemies, spawnEnemy, buildEnemyHealthPips, addKillFeedEntry, node: flightState.newNodeArrival, tier, now: time });
+        flightState.newNodeArrival = null;
+      }
+      enemies.forEach(enemy => checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now: time }));
+      updateCivilians(frameDt, { THREE, gameRoot, flightState, navGraph, enemies, playerBullets, playerMissiles, addKillFeedEntry, now: time });
+      spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState, enemies, now: time });
+      updateMissionBoardProgress(time);
+      updateSurface(flightState, systemPlanets, frameDt);
     }
-    enemies.forEach(enemy => checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now: time }));
-    updateCivilians(frameDt, { THREE, gameRoot, flightState, navGraph, enemies, playerBullets, playerMissiles, addKillFeedEntry, now: time });
-    spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState, enemies, now: time });
-    updateMissionBoardProgress(time);
-    updateSurface(flightState, systemPlanets, frameDt);
     updateSurfaceVisuals();
     updateStarfieldWarp(systemStarfield, flightForward, ensureAutopilotState(flightState).hyperspeedMult ?? 1);
     updateNavHUDModule(flightState, combatState);
     updateSurfaceHUDModule(flightState, getSurfacePlanetsForHUD());
-    updateSystemDocking();
+    if (!simulationPaused) updateSystemDocking();
     updateFlightHud(false);
     if (combatState.debriefPending) {
       const data = consumeCombatDebrief(combatState);
       if (data) showDebrief(data);
     }
-    sfxEngine.updateEngineHum(flightState.vel);
+    if (!simulationPaused) sfxEngine.updateEngineHum(flightState.vel);
     updateSpaceEnvironment(frameDt);
-    if (time - lastPriceDriftTick > 30000) {
+    if (!simulationPaused && time - lastPriceDriftTick > 30000) {
       tickPriceDrift();
       lastPriceDriftTick = time;
     }
-    if (enemies.some(enemy => enemy.userData.active) && time - lastAutoSave > 60000) {
+    if (!simulationPaused && enemies.some(enemy => enemy.userData.active) && time - lastAutoSave > 60000) {
       saveCurrentRunState();
       lastAutoSave = time;
     }
-    if (time - gameOrchestrator._lastCheck > 1000) {
+    if (!simulationPaused && time - gameOrchestrator._lastCheck > 1000) {
       gameOrchestrator._lastCheck = time;
       pollOrchestrator();
     }

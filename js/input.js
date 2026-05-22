@@ -35,6 +35,8 @@ export const orbitState = {
 export const flightState = {
   keys: new Set(),
   mouseButtons: new Set(),
+  paused: false,
+  pauseReasons: new Set(),
   pos: new THREE.Vector3(0, 2.2, 16),
   vel: new THREE.Vector3(),
   orientation: new THREE.Quaternion(),
@@ -201,6 +203,7 @@ function onGlobalKeyDown(event) {
     gameMessageState,
     handleGameMessageChoice,
     handleSurfaceEscape,
+    isHelpMenuOpen,
     isFlightActive,
     landOnNearestProject,
     openAudioSettingsMenu,
@@ -213,6 +216,7 @@ function onGlobalKeyDown(event) {
     toggleAutopilot,
     toggleFlightTts,
     toggleFlightView,
+    toggleHelpMenu,
     toggleObjectivesView,
     traderState,
     unlockAudio
@@ -233,8 +237,25 @@ function onGlobalKeyDown(event) {
     }
   }
 
+  if (event.code === 'KeyH' || event.code === 'F1') {
+    event.preventDefault();
+    if (!event.repeat && typeof toggleHelpMenu === 'function') toggleHelpMenu();
+    return;
+  }
+
+  if (event.code === 'Escape' && typeof isHelpMenuOpen === 'function' && isHelpMenuOpen()) {
+    event.preventDefault();
+    if (typeof toggleHelpMenu === 'function') toggleHelpMenu();
+    return;
+  }
+
   if (!isFlightActive()) return;
   if (typeof unlockAudio === 'function') unlockAudio();
+
+  if (flightState.paused) {
+    event.preventDefault();
+    return;
+  }
 
   if (isBackOrCloseKey(event)) {
     const loadoutPanel = documentRef.getElementById('loadout-panel');
@@ -319,14 +340,6 @@ function onGlobalKeyDown(event) {
     event.preventDefault();
     return;
   }
-  if (event.code === 'KeyH' || event.code === 'F1') {
-    event.preventDefault();
-    if (!event.repeat) {
-      flightState.status = 'HELP MENU RESERVED';
-      flightState.statusUntil = performance.now() + 1200;
-    }
-    return;
-  }
   if (event.code === 'KeyI') {
     event.preventDefault();
     if (!event.repeat) toggleInventoryPanel();
@@ -364,6 +377,7 @@ function onPointerDown(event) {
   const { documentRef = document, isConsoleActive, isFlightActive, playFireSfx, radioChain, renderer, unlockAudio } = requireDeps();
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
   if (isFlightActive()) {
+    if (flightState.paused) return;
     if (typeof unlockAudio === 'function') unlockAudio();
     if (event.button === 0 || event.button === 2) {
       event.preventDefault();
@@ -407,6 +421,7 @@ function onSceneWheel(event) {
 function onMouseMove(event) {
   const { disableAutopilot, isFlightActive } = requireDeps();
   if (isFlightActive() && flightState.pointerLocked) {
+    if (flightState.paused) return;
     if (Math.abs(event.movementX) + Math.abs(event.movementY) > 4) disableAutopilot('AUTOPILOT MANUAL OVERRIDE');
     applyLocalFlightRotation(0, 1, 0, -event.movementX * flightState.mouseSensitivity);
     applyLocalFlightRotation(1, 0, 0, -event.movementY * flightState.mouseSensitivity);

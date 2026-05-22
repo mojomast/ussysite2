@@ -393,7 +393,7 @@ export function updateFlightHud(force = false) {
 
   const el = id => documentRef.getElementById(id);
   const flightStatus = el('flight-status');
-  if (flightStatus) flightStatus.textContent = isFlightActive?.() ? flightState.status : 'TYPE USSY TO LAUNCH';
+  if (flightStatus) flightStatus.textContent = isFlightActive?.() ? (flightState.paused ? 'PAUSED' : flightState.status) : 'TYPE USSY TO LAUNCH';
   const text = (id, value) => { const node = el(id); if (node) node.textContent = value; };
   const width = (id, value) => { const node = el(id); if (node) node.style.width = value; return node; };
   text('flight-score', String(flightState.score));
@@ -412,7 +412,7 @@ export function updateFlightHud(force = false) {
   text('flight-nav-target', flightState.navNode ? `${getProjectNodeName(flightState.navNode)} ${Math.round(flightState.navDistance)}u` : 'NONE');
   text('flight-nav-eta', flightState.navEta);
   const autopilotActive = isAutopilotActive(flightState);
-  text('flight-autopilot', autopilotActive ? 'P: ON' : 'P: OFF');
+  text('flight-autopilot', autopilotActive ? 'Y: ON' : 'Y: OFF');
   updateNavHUD(flightState, combatState, force, documentRef);
   text('flight-speed', `${speed.toFixed(1)}u/s`);
   width('flight-speed-bar', `${Math.min(100, (speed / 38) * 100).toFixed(1)}%`);

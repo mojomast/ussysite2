@@ -1,9 +1,21 @@
 import { acceptMission, declineMission, generateMissionsForStation } from './missions.js';
 
 const ACTIVE_LIMIT = 3;
+const MISSION_BOARD_PAUSE_REASON = 'mission-board';
 
 let deps = {};
 let selectedMissionId = null;
+
+function setMissionBoardPaused(flightState, active) {
+  if (!flightState || !('paused' in flightState)) return;
+  if (flightState.pauseReasons instanceof Set) {
+    if (active) flightState.pauseReasons.add(MISSION_BOARD_PAUSE_REASON);
+    else flightState.pauseReasons.delete(MISSION_BOARD_PAUSE_REASON);
+    flightState.paused = flightState.pauseReasons.size > 0;
+  } else {
+    flightState.paused = active;
+  }
+}
 
 export function configureMissionBoardUI(options = {}) {
   deps = { ...deps, ...options };
@@ -126,7 +138,7 @@ export function openMissionBoard({ stationDef, navGraph, flightState, traderStat
   if (!overlay) return { ok: false, reason: 'NO_DOM' };
   flightState.missionBoardOpen = true;
   flightState.missionBoardStationId = stationDef.id;
-  if ('paused' in flightState) flightState.paused = true;
+  setMissionBoardPaused(flightState, true);
   overlay.hidden = false;
   overlay.setAttribute('aria-hidden', 'false');
   renderMissionBoard({ stationDef, navGraph, flightState, traderState, now, documentRef });
@@ -143,7 +155,7 @@ export function closeMissionBoard({ flightState, documentRef = deps.documentRef 
     flightState.missionBoardOpen = false;
     flightState.missionBoardStationId = null;
     flightState.selectedMissionId = null;
-    if ('paused' in flightState) flightState.paused = false;
+    setMissionBoardPaused(flightState, false);
   }
   selectedMissionId = null;
   return true;
