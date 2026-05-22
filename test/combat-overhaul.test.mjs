@@ -45,11 +45,25 @@ describe('combat damage and heat math', () => {
     coolHeat(state, 20, 12);
     assert.equal(canFireWeapon(state), true, 'weapon should fire again after cooling to zero');
   });
+
+  it('clears overheated state after cooling to zero', () => {
+    const state = { heat: 100, maxHeat: 100, overheated: true, heatCoolRate: 12 };
+    coolHeat(state, 20, 12);
+    assert.equal(state.overheated, false, 'overheated should clear once heat reaches 0');
+    assert.equal(canFireWeapon(state), true, 'weapon should be fireable again after cooling');
+  });
 });
 
 describe('combat class data', () => {
   it('initializes cold jump cooldown state', () => {
     assert.equal(combatState.coldJumpCooldown, 0, 'cold jump cooldown should be present on initial combat state');
+  });
+
+  it('combatState exports coldJumpCooldown initialized to 0', () => {
+    assert.equal(typeof combatState.coldJumpCooldown, 'number',
+      'coldJumpCooldown should be a number');
+    assert.ok(combatState.coldJumpCooldown >= 0,
+      'coldJumpCooldown should not be negative at init');
   });
 
   it('activates adrenaline state at the low-armor threshold', () => {

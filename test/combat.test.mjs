@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ENEMY_CLASSES,
@@ -37,12 +37,29 @@ test('getDifficultyTier boundaries', () => {
   assert.deepEqual([0, 1, 199, 200, 799, 800, 2999, 3000].map(getDifficultyTier), [0, 1, 1, 2, 2, 3, 3, 4]);
 });
 
-test('getDifficultyMultiplier scales high score pressure', () => {
-  assert.equal(getDifficultyMultiplier(2999), 1.0);
-  assert.equal(getDifficultyMultiplier(3000), 1.0);
-  assert.ok(getDifficultyMultiplier(6000) > 1.3 && getDifficultyMultiplier(6000) < 1.5);
-  assert.equal(getDifficultyMultiplier(11000), 2.0);
-  assert.equal(getDifficultyMultiplier(99999), 2.0);
+describe('getDifficultyMultiplier', () => {
+  it('returns 1.0 below score 3000', () => {
+    assert.equal(getDifficultyMultiplier(0), 1.0);
+    assert.equal(getDifficultyMultiplier(2999), 1.0);
+  });
+
+  it('returns exactly 1.0 at the ramp start', () => {
+    assert.equal(getDifficultyMultiplier(3000), 1.0);
+  });
+
+  it('ramps smoothly between 3000 and 11000', () => {
+    const at6000 = getDifficultyMultiplier(6000);
+    assert.ok(at6000 > 1.3 && at6000 < 1.5,
+      `expected multiplier at 6000 to be between 1.3 and 1.5, got ${at6000}`);
+  });
+
+  it('reaches the hard cap of 2.0 at score 11000', () => {
+    assert.equal(getDifficultyMultiplier(11000), 2.0);
+  });
+
+  it('does not exceed 2.0 at extreme scores', () => {
+    assert.equal(getDifficultyMultiplier(99999), 2.0);
+  });
 });
 
 test('applyPlayerDamage bleedthrough model', () => {

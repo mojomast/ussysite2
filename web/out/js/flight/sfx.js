@@ -274,7 +274,7 @@ export const sfxEngine = {
     gain.gain.setValueAtTime(0.3, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
     oscillator.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(this.ctx.destination); // intentional: bypasses masterGain for diagnostic isolation
     oscillator.start(now);
     oscillator.stop(now + 0.22);
     this._playCount += 1;
@@ -500,7 +500,8 @@ export const sfxEngine = {
   },
 
   updateEngineHum(vel) {
-    if (!this.ctx || !this.engineHumSource || !this.engineHumGain || !this.engineHumLayerGains || this._suspended) return;
+    if (!this.ctx || !this.engineHumSource || !this.engineHumGain
+        || !this.engineHumLayerGains || this._suspended) return;
     this._updateMasterGain();
     const speed = typeof vel?.length === 'function' ? vel.length() : 0;
     const gainValue = clamp(0.04 + speed * 0.006, 0, 0.18);

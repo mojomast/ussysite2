@@ -1810,6 +1810,10 @@ function stationMissionCargoText(mission) {
   return `${held}/${mission.requiredCargo.qty} ${commodity?.name || mission.requiredCargo.commodityId.toUpperCase()}`;
 }
 
+function stationMissionRewardText(mission) {
+  return `${mission.reward?.credits || 0}CR + ${mission.reward?.rep || 0} REP + ${mission.reward?.fuelBonus || 0} FUEL`;
+}
+
 function buildStationMissionSteps(projectId, mission) {
   const destinationName = stationName(mission.deliverTo);
   if (mission.type === 'ESCORT') {
@@ -1849,23 +1853,37 @@ function upsertStationMissionContract(projectId, mission) {
   return contract;
 }
 
+function acceptLoreMission(projectId, mission) {
+  if (!mission?.id) return;
+  if (missionState.active || !gameOrchestrator.tutorialComplete || !stationMissionAvailable(mission)) {
+    showStationMissionDetail(projectId, mission);
+    return;
+  }
+  const contract = upsertStationMissionContract(projectId, mission);
+  startMissionContract(contract);
+  sfxEngine.playFlat('ui_confirm', { volume: 0.55 });
+  flightState.status = `CONTRACT ACCEPTED: ${mission.title}`;
+  flightState.statusUntil = performance.now() + 2000;
+  openStationMenu(projectId);
+}
+
 function showStationMissionDetail(projectId, mission) {
   const available = stationMissionAvailable(mission);
-  const contract = upsertStationMissionContract(projectId, mission);
   const choices = [{ key: '2', code: 'Digit2', label: 'MISSION BOARD', action: () => showFactionMission(projectId) }];
   if (!missionState.active && gameOrchestrator.tutorialComplete && available) {
-    choices.unshift({ key: '1', code: 'Digit1', label: 'ACCEPT MISSION', action: () => startMissionContract(contract.id) });
+    choices.unshift({ key: '1', code: 'Digit1', label: 'ACCEPT MISSION', action: () => acceptLoreMission(projectId, mission) });
   }
   showGameMessage({
     type: available ? 'MISSION DETAIL' : 'MISSION LOCKED',
     source: `${stationName(projectId).toUpperCase()} CONTRACT BOARD`,
-    text: `${mission.title.toUpperCase()}. ${available ? 'AVAILABLE' : 'LOCKED'} // CARGO ${stationMissionCargoText(mission)}. ${mission.description} REWARD ${mission.reward.credits}CR + ${mission.reward.rep} REP + ${mission.reward.fuelBonus} FUEL.`,
+    text: `${mission.title.toUpperCase()}. TYPE ${mission.type} // ${available ? 'AVAILABLE' : 'LOCKED'} // CARGO ${stationMissionCargoText(mission)}. ${mission.description} REWARD ${stationMissionRewardText(mission)}.`,
     choices,
     ttsPriority: 'normal'
   });
 }
 
 function showFactionMission(projectId) {
+  const lore = getStationLore(projectId);
   const stationMissions = getStationMissions(projectId);
   if (!stationMissions.length) {
     const contract = upsertFactionMissionContract(projectId);
@@ -1881,6 +1899,11 @@ function showFactionMission(projectId) {
       text: missionState.active
         ? 'MISSION BOARD LOCKED. COMPLETE CURRENT OBJECTIVE FIRST.'
         : `${contract.title.toUpperCase()}. ${contract.description}`,
+      ui: {
+        headerTitle: 'MISSION BOARD',
+        headerBadge: stationName(projectId).toUpperCase(),
+        colorClass: lore.colorClass || 'green'
+      },
       choices,
       ttsPriority: 'normal'
     });
@@ -1888,17 +1911,21 @@ function showFactionMission(projectId) {
   }
   const choices = stationMissions.map((mission, idx) => {
     const available = stationMissionAvailable(mission);
+    const disabled = missionState.active || !gameOrchestrator.tutorialComplete || !available;
     return {
       key: String(idx + 1),
       code: `Digit${idx + 1}`,
-      label: `${available ? 'AVAILABLE' : 'LOCKED'} // ${mission.title}`,
-      action: () => showStationMissionDetail(projectId, mission)
+      label: `ACCEPT // ${mission.title}`,
+      hint: `${mission.type} // ${mission.description} // REWARD ${stationMissionRewardText(mission)}`,
+      tone: available ? 'confirm' : 'deny',
+      disabled,
+      action: () => acceptLoreMission(projectId, mission)
     };
   });
-  choices.push({ key: 'b', code: 'KeyB', label: 'STATION MENU', action: () => openTradeMenu(projectId) });
+  const backChoice = { key: 'b', code: 'KeyB', label: 'STATION MENU', action: () => openStationMenu(projectId) };
   const rows = stationMissions.map((mission, idx) => {
     const status = stationMissionAvailable(mission) ? 'AVAILABLE' : 'LOCKED';
-    return `[${idx + 1}] ${status}: ${mission.title} TO ${stationName(mission.deliverTo).toUpperCase()} // ${stationMissionCargoText(mission)}`;
+    return `[${idx + 1}] ${status}: ${mission.type} // ${mission.title} TO ${stationName(mission.deliverTo).toUpperCase()} // ${mission.description} // REWARD ${stationMissionRewardText(mission)} // ${stationMissionCargoText(mission)}`;
   });
   showGameMessage({
     type: 'MISSION BOARD',
@@ -1907,6 +1934,14 @@ function showFactionMission(projectId) {
       ? 'MISSION BOARD LOCKED. COMPLETE CURRENT OBJECTIVE FIRST.'
       : rows.join(' // '),
     choices,
+    ui: {
+      headerTitle: 'MISSION BOARD',
+      headerBadge: stationName(projectId).toUpperCase(),
+      colorClass: lore.colorClass || 'green',
+      layout: 'dock-grid',
+      footerStats: [`${stationMissions.length} CONTRACTS`, `${traderState.credits}CR`],
+      footerChoices: [backChoice]
+    },
     ttsPriority: 'normal'
   });
 }

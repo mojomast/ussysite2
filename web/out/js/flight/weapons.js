@@ -318,15 +318,24 @@ export function findNearestEnemy() {
 export function applyEmpBurst(origin, weapon) {
   const { enemies, flightState, applyEnemyHit } = requireDeps();
   let hitCount = 0;
+  let stunApplied = false;
   enemies.forEach(enemy => {
     if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0) return;
     if (enemy.position.distanceTo(origin) > weapon.aoeRadius) return;
-    enemy.userData.stunUntil = performance.now() + (weapon.stunDuration ?? 1200);
     applyEnemyHit(enemy, weapon.damage);
+    if (weapon.stunDuration && weapon.stunDuration > 0) {
+      enemy.userData.stunUntil = performance.now() + weapon.stunDuration;
+      stunApplied = true;
+    }
     hitCount += 1;
   });
-  flightState.status = hitCount ? `EMP BURST - ${hitCount} CONTACTS STUNNED` : 'EMP BURST - NO CONTACTS';
-  flightState.statusUntil = performance.now() + 1600;
+  if (stunApplied) {
+    flightState.status = 'SYSTEM DISRUPTOR — ENEMIES STUNNED';
+    flightState.statusUntil = performance.now() + 1800;
+  } else {
+    flightState.status = hitCount ? `EMP BURST - ${hitCount} CONTACTS HIT` : 'EMP BURST - NO CONTACTS';
+    flightState.statusUntil = performance.now() + 1600;
+  }
   return true;
 }
 
