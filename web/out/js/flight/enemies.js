@@ -13,6 +13,7 @@ import {
   updateWeaponVfxPools
 } from './weapons.js';
 import { COMBAT_ZONE_RADIUS } from './world.js';
+import { checkHunterFlee } from './hunters.js';
 
 const THREE = globalThis.THREE;
 
@@ -809,7 +810,7 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
 }
 
 export function updateCombatObjects(dt) {
-  const { flightRight, flightState, flightTempVec, flightTempVec2, flightUp, getEnemyFireCooldown, reputationState, showGameMessage } = requireDeps();
+  const { addKillFeedEntry, flightRight, flightState, flightTempVec, flightTempVec2, flightUp, getEnemyFireCooldown, reputationState, showGameMessage, traderState } = requireDeps();
   checkBossSpawnThreshold(combatState, enemies, flightState);
   checkBountyHunterSpawn(reputationState, combatState, enemies, flightState);
   checkFriendlyEscortSpawn(reputationState, combatState, enemies, flightState);
@@ -837,6 +838,7 @@ export function updateCombatObjects(dt) {
       updateFriendlyEscort(enemy, flightState, now, dt);
       return;
     }
+    if (checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now })) return;
     const bossPhase = updateBossAttackPhase(enemy, cls, combatState, now);
     if (enemy.userData.bossPhaseChanged) {
       enemy.userData.bossPhaseChanged = false;

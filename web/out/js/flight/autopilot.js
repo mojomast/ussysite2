@@ -195,6 +195,7 @@ export function updateAutopilot(flightState, combatState, dt, navGraph) {
 
   const dist = distance(flightState.pos, waypoint);
   if (dist <= (autopilot.arrivalThreshold ?? 200)) {
+    flightState.newNodeArrival = { id: waypointId, nodeId: waypointId, type: getNavNode(navGraph, waypointId)?.type, at: nowSeconds() };
     if ((autopilot.routeIndex ?? 1) < autopilot.route.length - 1) {
       autopilot.routeIndex += 1;
     } else {

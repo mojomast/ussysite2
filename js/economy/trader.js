@@ -23,6 +23,8 @@ export const traderState = {
   cargoUsed: 0,
   lastTrade: null,
   tradeLog: [],
+  bountyLevel: 0,
+  interceptCooldown: 0,
   docked: false,
   dockedStation: null,
   activeMissions: [],

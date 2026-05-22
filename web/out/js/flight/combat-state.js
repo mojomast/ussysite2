@@ -64,6 +64,8 @@ export const combatState = {
   bossEnemyRef: null,
   bossThresholdIdx: 0,
   activeBountyHunter: null,
+  activeIntercept: null,
+  lastNodeArrival: null,
   activeFriendlyEscort: null,
   bountyPending: 0,
   activeTurrets: [],
@@ -82,6 +84,8 @@ export function reset(state = combatState) {
   state.bossActive = false;
   state.bossEnemyRef = null;
   state.bossThresholdIdx = 0;
+  state.activeIntercept = null;
+  state.lastNodeArrival = null;
   return state;
 }
 
@@ -164,6 +168,7 @@ export function resetCombatSessionStats(state = combatState) {
   state.shotsHit = 0;
   state.peakKillStreak = 0;
   state.activeBountyHunter = null;
+  state.activeIntercept = null;
   state.activeFriendlyEscort = null;
   state.activeTurrets ??= [];
   state.activeTurrets.length = 0;

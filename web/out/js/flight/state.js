@@ -100,6 +100,7 @@ import {
 import {
   applyEnemyHit,
   applyPlayerDamage,
+  buildEnemyHealthPips,
   configureCombatScene,
   configureEnemies,
   configureWeapons,
@@ -149,6 +150,7 @@ import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './sta
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { getCivilianMapData, spawnCivilianFleet, updateCivilians } from './civilians.js';
+import { checkHunterDestroyed, shouldTriggerIntercept, triggerIntercept } from './hunters.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
 import { bindMissionBoardControls, closeMissionBoard, configureMissionBoardUI, openMissionBoard as openMissionBoardOverlay, renderMissionBoard } from './missionUI.js';
 import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, updateSurface } from './surface.js';
@@ -805,6 +807,7 @@ export function init() {
     reputationState,
     showGameMessage,
     skillTree,
+    traderState,
     ttsEngine,
     windowRef: window
   });
@@ -2575,6 +2578,7 @@ function handleEnemyDestroyed(enemy) {
   combatState.lastKilledAt = performance.now();
   const bountyReward = enemy?.userData?.isBountyHunter ? (enemy.userData.reward || 220) : 0;
   if (bountyReward && combatState.activeBountyHunter === enemy) combatState.activeBountyHunter = null;
+  checkHunterDestroyed(enemy, { combatState, traderState, enemies, addKillFeedEntry });
   const pointsBefore = combatState.skillPoints;
   const multiplier = recordKillStreak(combatState, performance.now());
   const baseCreditReward = Number.isFinite(enemy?.userData?.creditReward) ? enemy.userData.creditReward : cls.creditReward;
@@ -3362,6 +3366,11 @@ export function tick(time = 0) {
     updatePlanetLOD(systemPlanets, camera);
     updateStationRotations(systemStations, frameDt);
     updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+    if (flightState.newNodeArrival) {
+      const tier = shouldTriggerIntercept({ combatState, traderState, node: flightState.newNodeArrival, now: time });
+      if (tier) triggerIntercept({ combatState, traderState, flightState, enemyPool: enemies, spawnEnemy, buildEnemyHealthPips, addKillFeedEntry, node: flightState.newNodeArrival, tier, now: time });
+      flightState.newNodeArrival = null;
+    }
     updateCivilians(frameDt, { THREE, gameRoot, flightState, navGraph, enemies, playerBullets, playerMissiles, addKillFeedEntry, now: time });
     spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState, enemies, now: time });
     updateMissionBoardProgress(time);
