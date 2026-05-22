@@ -30,7 +30,7 @@ js/engine/*, js/flight/*, js/ui/*
 user input -> updateFlight physics -> combat objects -> objective/mission state -> orchestrator poll -> game messages -> TTS
 ```
 
-Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, landing checks, objective progression, HUD updates, and radio messages.
+Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, landing checks, objective progression, HUD updates, and radio messages. Flight assists are stateful: static throttle stores `throttleEnabled` and `throttleLevel`, match-speed stores a temporary velocity target, and combat evasion uses a cooldown tracked by combat state.
 
 ## Space Visuals
 
@@ -38,7 +38,7 @@ Keyboard and mouse events mutate `flightState`. The animation loop applies physi
 
 Flight mode adds camera-relative depth cues only while `isFlightActive` is true: three existing `THREE.Points` star layers use different parallax factors, one `InstancedMesh` debris field recycles up to 300 low-poly rocks around the ship, and one `BufferGeometry` dust stream recycles up to 600 particles ahead of the camera. Nebula sprites are static additive canvas-gradient backdrops.
 
-Weapon VFX use fixed pools: four muzzle lights, six impact rings, four death explosions, long sci-fi laser trail line buffers, and missile exhaust particle buffers. Pool exhaustion logs a warning instead of allocating or throwing, and frame-lifetime updates return objects to the pool automatically.
+Weapon VFX use fixed pools: four muzzle lights, six impact rings, four death explosions, long sci-fi laser trail line buffers, and missile exhaust particle buffers. Pool exhaustion logs a warning instead of allocating or throwing, and frame-lifetime updates return objects to the pool automatically. Enemy movement also records per-tick velocity on `enemy.userData.velocity` so HUD lead prediction and match-speed assist can use the same combat-object data.
 
 ## Economy Data Flow
 
@@ -96,7 +96,7 @@ Choice resolution dismisses the current message, applies any choice-1 credit/fue
 
 | State | Purpose |
 | --- | --- |
-| `flightState` | Ship resources, position, velocity, input, nav, landing, view state |
+| `flightState` | Ship resources, position, velocity, input, nav, landing, view state, throttle and match-speed assist state |
 | `missionState` | Current objective, tutorial/free-roam state, multi-step contract progress |
 | `gameMessageState` | Active message, typed text, choices, dismissal handler |
 | `traderState` | Credits, fuel, cargo, docked station, trade log |

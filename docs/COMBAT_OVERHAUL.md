@@ -78,6 +78,24 @@ Enemy kills add the destroyed class' `xpReward`, so scouts and dreadnoughts no l
 
 `hull_4` adds slow armor regeneration while landed and grants a small dock bonus, capped above the normal hull maximum. `shield_4` overcharge is reset on launch, so it can fire once per flight session instead of every immediate re-dock. Strafe thrust is 15% stronger, and fuel drain scales by `1 + speed * 0.012` while burning.
 
+## Flight Assists
+
+Dogfight mode has optional assist controls layered on top of direct WASD flight:
+
+| Key | Assist | Behavior |
+| --- | --- | --- |
+| `T` | Static throttle | Toggles throttle hold at the current throttle level. |
+| `Z` / `X` | Throttle up/down | Raises or lowers static throttle in 10% steps while throttle is engaged. |
+| `G` | Match speed | LERPs the ship velocity toward the nearest active enemy; without a target it emergency-brakes toward zero velocity. |
+| `C` | Evasion roll | Applies a lateral/upward barrel-roll burst with a short cooldown. |
+| `F` | Cold Jump | Teleports 40 units forward when `eng_5` is unlocked and its 25s cooldown is ready. |
+
+Throttle mode keeps applying forward thrust at the selected percentage even when `W` is not held. `W` and `S` still bias the continuous thrust forward or reverse while throttle is enabled, and `A`/`D` strafe remains direct.
+
+Enemy ships now publish their current velocity every combat tick. Match speed and the lead indicator use that velocity, while weakened-player pressure tightens enemy engagement distance when shields fall below 40%.
+
 ## HUD Feedback
 
 Combat credit gains update the canonical trader credits balance and flash a short `+CR` indicator on the cockpit HUD when the player is actively flying.
+
+The cockpit reticle now includes a yellow throttle arc and label while static throttle is engaged. A pink lead pip predicts the nearest active enemy's future position at close combat ranges, and up to four bogey arrows sit on the reticle edge to point toward active off-center enemies.
