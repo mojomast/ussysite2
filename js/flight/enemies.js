@@ -247,6 +247,8 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
     flightState.pos.z + Math.sin(angle) * radius
   );
   enemy.userData.active = true;
+  enemy.userData.velocity = new THREE.Vector3();
+  enemy.userData._prevPos = null;
   enemy.userData.health = cls.health;
   enemy.userData.maxHealth = cls.health;
   enemy.userData.classId = cls.id;
@@ -289,8 +291,6 @@ export function updateCombatObjects(dt) {
       enemy.userData.flashUntil = 0;
     }
     updateEnemyHealthPips(enemy, now);
-    if (!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
-    enemy.userData.velocity.copy(enemy.position);
     flightTempVec.copy(flightState.pos).sub(enemy.position);
     const dist = flightTempVec.length();
     if (dist > 0.001) flightTempVec.multiplyScalar(1 / dist);
@@ -307,10 +307,13 @@ export function updateCombatObjects(dt) {
         enemy.userData.evasionTimer = 800 + Math.random() * 400;
       }
     }
+    if (!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
+    if (!enemy.userData._prevPos) enemy.userData._prevPos = enemy.position.clone();
     enemy.userData.velocity
       .copy(enemy.position)
-      .sub(enemy.userData.velocity)
-      .multiplyScalar(dt > 0 ? 1 / dt : 0);
+      .sub(enemy.userData._prevPos)
+      .divideScalar(dt > 0 ? dt : 0.016);
+    enemy.userData._prevPos.copy(enemy.position);
     enemy.lookAt(flightState.pos);
     if (now < (enemy.userData.stunUntil || 0)) return;
     enemy.userData.cooldown -= dt * 1000;

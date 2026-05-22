@@ -1,6 +1,6 @@
 import { maxPlayerAmmo, maxPlayerMissilesStored } from '../constants.js';
 import { traderState } from '../economy/trader.js';
-import { WEAPON_DEFS } from './combat-overhaul.js';
+import { WEAPON_DEFS, getWeaponDef } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
 
 let deps = {};
@@ -216,7 +216,8 @@ export function updateFlightHud(force = false) {
   if (leadPip) {
     const nearestEnemy = typeof findNearestEnemy === 'function' ? findNearestEnemy() : null;
     if (nearestEnemy?.userData?.active && nearestEnemy.userData.velocity && camera) {
-      const bulletSpeed = 130;
+      const primaryDef = getWeaponDef(combatState.primaryWeapon);
+      const bulletSpeed = primaryDef?.projectileSpeed > 0 ? primaryDef.projectileSpeed : 130;
       const toEnemy = nearestEnemy.position.clone().sub(flightState.pos);
       const dist = toEnemy.length();
       const tof = dist / bulletSpeed;

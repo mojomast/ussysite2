@@ -41,6 +41,7 @@ export const combatState = {
   afterburnerUntil: 0,
   afterburnerCooldownUntil: 0,
   coldJumpCooldown: 0,
+  evasionCooldown: 0,
   bountyPending: 0,
   overchargeUsed: false,
   lastAdrenalineBarkAt: 0,
@@ -74,6 +75,7 @@ export function respawnFlightState(state, base = {}) {
   state.fuel = base.fuel ?? state.maxFuel ?? 100;
   state.fuelDepleted = false;
   state.combatPhase = base.combatPhase ?? COMBAT_PHASES.IDLE;
+  combatState.evasionCooldown = 0;
   return state;
 }
 
