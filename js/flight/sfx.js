@@ -302,24 +302,32 @@ export const sfxEngine = {
     if (!this.ctx) return null;
     if (type === 'laser' || type === 'enemy_laser') {
       const enemy = type === 'enemy_laser';
-      const duration = enemy ? 0.075 : 0.09;
-      const start = enemy ? 1400 : 1800;
-      const end = enemy ? 220 : 280;
-      const primaryAmp = enemy ? 0.65 : 0.70;
-      const harmonicAmp = enemy ? 0.14 : 0.18;
-      const noiseAmp = enemy ? 0.45 : 0.55;
-      const noiseDuration = enemy ? 0.007 : 0.008;
-      const decayPower = enemy ? 2.0 : 2.4;
+      const duration = enemy ? 0.12 : 0.17;
+      const start = enemy ? 2700 : 5200;
+      const end = enemy ? 260 : 170;
+      const primaryAmp = enemy ? 0.7 : 0.82;
+      const harmonicAmp = enemy ? 0.28 : 0.36;
+      const gritAmp = enemy ? 0.18 : 0.28;
+      const snapAmp = enemy ? 0.62 : 0.78;
+      const snapDuration = enemy ? 0.01 : 0.014;
       let phase2 = 0;
+      let phase3 = 0;
+      let grit = 0;
       return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
         const progress = t / duration;
-        const freq = end + (start - end) * Math.pow(1 - progress, 2.2);
+        const sweep = Math.pow(1 - progress, enemy ? 2.1 : 3.4);
+        const wobble = 1 + Math.sin(progress * Math.PI * 18) * 0.035;
+        const freq = (end + (start - end) * sweep) * wobble;
         const nextPhase = phase + (Math.PI * 2 * freq) / sampleRate;
         phase2 += (Math.PI * 2 * freq * 1.5) / sampleRate;
-        const amp = envelope(t, duration, 0.0015, decayPower);
-        const tone = Math.sin(nextPhase) * primaryAmp + Math.sin(phase2) * harmonicAmp;
-        const noise = t < noiseDuration ? (Math.random() * 2 - 1) * noiseAmp * (1 - t / noiseDuration) : 0;
-        return [(tone * amp) + noise, nextPhase];
+        phase3 += (Math.PI * 2 * freq * 0.5) / sampleRate;
+        grit = grit * 0.55 + (Math.random() * 2 - 1) * 0.45;
+        const amp = envelope(t, duration, 0.001, enemy ? 2.0 : 1.65);
+        const saw = 2 * (nextPhase / (Math.PI * 2) - Math.floor(0.5 + nextPhase / (Math.PI * 2)));
+        const tone = Math.sin(nextPhase) * primaryAmp + Math.sin(phase2) * harmonicAmp + saw * gritAmp + Math.sin(phase3) * 0.22;
+        const snap = t < snapDuration ? (Math.random() * 2 - 1) * snapAmp * Math.pow(1 - t / snapDuration, 2) : 0;
+        const scream = Math.tanh(tone * (enemy ? 1.7 : 2.35)) * amp;
+        return [(scream * (enemy ? 0.78 : 0.92)) + snap + grit * amp * 0.12, nextPhase];
       });
     }
     if (type === 'missile') {
@@ -334,14 +342,27 @@ export const sfxEngine = {
       });
     }
     if (type === 'explosion') {
-      const duration = 0.6;
-      let last = 0;
-      return renderBuffer(this.ctx, duration, t => {
+      const duration = 1.05;
+      let body = 0;
+      let rumblePhase = 0;
+      let boomPhase = 0;
+      let crackle = 0;
+      return renderBuffer(this.ctx, duration, (t, i, sampleRate) => {
         const progress = t / duration;
         const white = Math.random() * 2 - 1;
-        last = last * 0.84 + white * 0.16;
-        const thump = Math.sin(Math.PI * 2 * (74 - 32 * progress) * t) * Math.max(0, 1 - progress * 1.7);
-        return (last * 0.85 + thump * 0.48) * envelope(t, duration, 0.001, 2.8);
+        body = body * 0.935 + white * 0.065;
+        crackle = Math.random() > 0.945 - progress * 0.03 ? (Math.random() * 2 - 1) : crackle * 0.72;
+        const boomFreq = 92 - 54 * Math.min(1, progress * 1.3);
+        const rumbleFreq = 42 - 16 * progress;
+        boomPhase += (Math.PI * 2 * boomFreq) / sampleRate;
+        rumblePhase += (Math.PI * 2 * rumbleFreq) / sampleRate;
+        const pressure = Math.sin(boomPhase) * Math.exp(-t * 5.2) * 1.6;
+        const tail = Math.sin(rumblePhase) * Math.exp(-t * 1.45) * 0.9;
+        const blast = body * Math.exp(-t * 3.1) * 1.45;
+        const secondThump = Math.sin(Math.PI * 2 * 58 * Math.max(0, t - 0.08)) * Math.exp(-Math.max(0, t - 0.08) * 7) * 0.55;
+        const snap = t < 0.018 ? white * Math.pow(1 - t / 0.018, 2) * 2.2 : 0;
+        const debris = crackle * Math.exp(-t * 2.7) * 0.42;
+        return Math.tanh(snap + pressure + secondThump + tail + blast + debris) * envelope(t, duration, 0.0005, 0.55);
       });
     }
     if (type === 'shield_hit') {
