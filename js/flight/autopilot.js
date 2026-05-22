@@ -236,7 +236,7 @@ export function updateStarfieldWarp(starfield, flightDir, hyperspeedMult = 1) {
   return starfield;
 }
 
-export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = []) {
+export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null) {
   const ctx = canvas?.getContext?.('2d');
   if (!ctx) return false;
   const w = canvas.width || 600;
@@ -268,6 +268,11 @@ export function renderSystemMap(canvas, navGraph, flightState, planets = [], sta
     const p = project(flightState.pos);
     ctx.fillStyle = '#ffffff';
     ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const contact of civilianContacts || flightState?.civilianTraffic?.mapContacts || []) {
+    const p = project(contact.pos);
+    ctx.fillStyle = contact.color === 0xffcc66 ? '#ffcc66' : '#66ccff';
+    ctx.beginPath(); ctx.arc(p.x, p.y, contact.size || 2, 0, Math.PI * 2); ctx.fill();
   }
   return true;
 }

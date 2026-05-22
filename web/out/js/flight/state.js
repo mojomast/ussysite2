@@ -148,6 +148,7 @@ import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js'
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
+import { getCivilianMapData, spawnCivilianFleet, updateCivilians } from './civilians.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
 import { bindMissionBoardControls, closeMissionBoard, configureMissionBoardUI, openMissionBoard as openMissionBoardOverlay, renderMissionBoard } from './missionUI.js';
 import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, updateSurface } from './surface.js';
@@ -1738,6 +1739,7 @@ function createSystemWorldObjects() {
   systemPlanets = createAllPlanets(scene, THREE);
   systemStations = createAllStations(scene, THREE);
   navGraph = buildNavGraph(PLANETS, STATIONS);
+  spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState });
   setSystemWorldVisible(false);
 }
 
@@ -1752,7 +1754,7 @@ function setSystemMapVisible(visible) {
   if (!overlay) return false;
   overlay.classList.toggle('hidden', !visible);
   overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
-  if (visible) renderSystemMap(canvas, navGraph, flightState, PLANETS, STATIONS);
+  if (visible) renderSystemMap(canvas, navGraph, flightState, PLANETS, STATIONS, getCivilianMapData(flightState.civilianTraffic?.ships));
   return true;
 }
 
@@ -3360,6 +3362,8 @@ export function tick(time = 0) {
     updatePlanetLOD(systemPlanets, camera);
     updateStationRotations(systemStations, frameDt);
     updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+    updateCivilians(frameDt, { THREE, gameRoot, flightState, navGraph, enemies, playerBullets, playerMissiles, addKillFeedEntry, now: time });
+    spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState, enemies, now: time });
     updateMissionBoardProgress(time);
     updateSurface(flightState, systemPlanets, frameDt);
     updateSurfaceVisuals();
