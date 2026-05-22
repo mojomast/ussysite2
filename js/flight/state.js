@@ -1246,7 +1246,16 @@ function createPlanetNodeLOD(hexColor) {
     });
   }
   const lod = new THREE.LOD();
-  const highMat = new THREE.MeshBasicMaterial({ color: hexColor, wireframe: true, transparent: true, opacity: 0.92 });
+  const highMat = new THREE.MeshStandardMaterial({
+    color: hexColor,
+    emissive: hexColor,
+    emissiveIntensity: 0.45,
+    wireframe: true,
+    roughness: 0.0,
+    metalness: 0.7,
+    transparent: true,
+    opacity: 0.92
+  });
   const midMat = new THREE.MeshBasicMaterial({ color: hexColor, wireframe: true, transparent: true, opacity: 0.78 });
   const glowMat = new THREE.MeshBasicMaterial({
     color: hexColor,
