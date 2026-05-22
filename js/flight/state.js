@@ -195,6 +195,7 @@ let systemMapKeyWasDown = false;
 let navigationPanelControlsRegistered = false;
 let surfacePanelControlsRegistered = false;
 let missionBoardControlsRegistered = false;
+let canvasResizeObserver = null;
 let telemetryLastUpdate = 0;
 let gameRoot, playerShip, flightNavLine;
 let flightAssistKeyCaptureRegistered = false;
@@ -941,7 +942,8 @@ export function init() {
   selectProject('devussy', false);
 
   // Event Listeners
-  window.addEventListener('resize', onWindowResize);
+  canvasResizeObserver = new ResizeObserver(() => onWindowResize());
+  canvasResizeObserver.observe(canvasContainer);
   registerInputListeners();
   document.addEventListener('visibilitychange', handleVisibilityChange);
   window.setInterval(saveCombatStateToHash, 30000);
