@@ -761,9 +761,11 @@ export function init() {
     flightUp,
     getEnemyFireCooldown,
     getVoicePersona,
+    addKillFeedEntry,
     handleEnemyDestroyed,
     missionState,
     onWaveComplete: () => saveCurrentRunState(),
+    reputationState,
     showGameMessage,
     skillTree,
     ttsEngine,
@@ -2230,17 +2232,25 @@ function handleTradeCompleted(trade) {
 
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
+  if (enemy?.userData?.isFriendly) {
+    if (combatState.activeFriendlyEscort === enemy) combatState.activeFriendlyEscort = null;
+    deactivateCombatObject(enemy);
+    addKillFeedEntry('FRIENDLY ESCORT LOST', '#ffcc00');
+    return;
+  }
   if (handleBossDeath(combatState, enemy, flightState, { addCombatCredits, addKillFeedEntry, showGameMessage })) {
     flightState.status = 'DREADNOUGHT DESTROYED +1200CR';
     flightState.statusUntil = performance.now() + 3000;
     updateFlightHud(true);
     return;
   }
+  const bountyReward = enemy?.userData?.isBountyHunter ? (enemy.userData.reward || 220) : 0;
+  if (bountyReward && combatState.activeBountyHunter === enemy) combatState.activeBountyHunter = null;
   const pointsBefore = combatState.skillPoints;
   const multiplier = recordKillStreak(combatState, performance.now());
   const baseCreditReward = Number.isFinite(enemy?.userData?.creditReward) ? enemy.userData.creditReward : cls.creditReward;
   const baseXpReward = Number.isFinite(enemy?.userData?.xpReward) ? enemy.userData.xpReward : cls.xpReward;
-  const creditReward = Math.round(baseCreditReward * multiplier);
+  const creditReward = bountyReward || Math.round(baseCreditReward * multiplier);
   const xpReward = Math.round(baseXpReward * multiplier);
   const isBountyKill = gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId;
   recordCombatKillStats({ creditsEarned: isBountyKill ? 0 : creditReward, xpEarned: xpReward }, combatState);
@@ -2248,6 +2258,10 @@ function handleEnemyDestroyed(enemy) {
   triggerEnemyDeathFeedback(enemy, cls);
   sfxEngine.playPositional('explosion', enemy, { volume: 0.9 });
   emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position, xpReward });
+  if (bountyReward) {
+    reputationState.scores.security = Math.max(-100, Math.min(100, Math.min((reputationState.scores.security ?? 0) + 8, -30)));
+    addKillFeedEntry('BOUNTY HUNTER ELIMINATED // SECURITY PRESSURE EASED', '#44ff88');
+  }
   registerMissionKill(enemy);
   if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
     deactivateCombatObject(enemy);
@@ -2288,7 +2302,8 @@ function handleEnemyDestroyed(enemy) {
   } else if (missionState.active && missionState.step !== 'killTutorialBogeys') {
     deactivateCombatObject(enemy);
   } else {
-    spawnEnemy(enemy, flightState.score, 1.2 + Math.random() * 2.2);
+    if (bountyReward) deactivateCombatObject(enemy);
+    else spawnEnemy(enemy, flightState.score, 1.2 + Math.random() * 2.2);
   }
 }
 

@@ -669,7 +669,7 @@ export function checkBountyHunterSpawn(reputationState, state = combatState, ene
   enemy.userData.label = 'BOUNTY HUNTER';
   buildEnemyHealthPips(enemy);
   state.activeBountyHunter = enemy;
-  addKillFeedEntry?.('WARNING // SECURITY BOUNTY HUNTER INBOUND', { type: 'warning' });
+  addKillFeedEntry?.('WARNING // SECURITY BOUNTY HUNTER INBOUND', '#ffcc00');
   showGameMessage?.({
     type: 'FACTION CONSEQUENCE',
     source: 'SECURITY DIRECTORATE',
@@ -701,7 +701,7 @@ export function checkFriendlyEscortSpawn(reputationState, state = combatState, e
   applyFriendlyVisuals(enemy);
   buildEnemyHealthPips(enemy);
   state.activeFriendlyEscort = enemy;
-  addKillFeedEntry?.('SECURITY ESCORT ONLINE // ALLIED SCOUT COVERING YOU', { type: 'success' });
+  addKillFeedEntry?.('SECURITY ESCORT ONLINE // ALLIED SCOUT COVERING YOU', '#44ff88');
   showGameMessage?.({
     type: 'FACTION SUPPORT',
     source: 'SECURITY DIRECTORATE',
@@ -720,13 +720,14 @@ export function assignFormationRole(activeCount, random = Math.random) {
 }
 
 export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
-  const { flightState, getEnemyFireCooldown, getVoicePersona, missionState, showGameMessage, ttsEngine } = requireDeps();
+  const { addKillFeedEntry, flightState, getEnemyFireCooldown, getVoicePersona, missionState, showGameMessage, ttsEngine } = requireDeps();
   if (!enemy) return;
   const resolvedClassId = missionState.step === 'killTutorialBogeys'
     ? 'scout'
     : (classId || getRandomClassForTier(getDifficultyTier(flightState.score)));
   const cls = getEnemyClass(resolvedClassId);
   if (cls.id === 'dreadnought') {
+    addKillFeedEntry?.('DREADNOUGHT SPAWNED', 'var(--cyber-pink)');
     showGameMessage?.({
       type: 'THREAT LEVEL CRITICAL',
       source: 'USSYVERSE CONTROL',
@@ -770,6 +771,8 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.health = cls.health;
   enemy.userData.maxHealth = cls.health;
   enemy.userData.isBoss = false;
+  enemy.userData.isBountyHunter = false;
+  enemy.userData.isFriendly = false;
   enemy.userData.reward = cls.creditReward;
   enemy.userData.classId = cls.id;
   enemy.userData.burstRemaining = 0;
@@ -996,14 +999,16 @@ export function updateCombatObjects(dt) {
   const activeAtFrameEnd = enemies.some(enemy => enemy.userData.active && !enemy.userData.isFriendly);
   if ((combatWasActive || activeAtFrameStart) && !activeAtFrameEnd && !combatState.debriefPending) {
     queueCombatDebrief(combatState);
+    requireDeps().addKillFeedEntry?.('WAVE CLEARED', 'var(--cyber-green)');
     requireDeps().onWaveComplete?.();
   }
   combatWasActive = activeAtFrameEnd;
 }
 
 export function applyPlayerDamage(amount) {
-  const { combatAudio, flightHud, flightState, getVoicePersona, skillTree, windowRef } = requireDeps();
+  const { addKillFeedEntry, combatAudio, flightHud, flightState, getVoicePersona, skillTree, windowRef } = requireDeps();
   const shieldBefore = flightState.shield;
+  const armorBefore = flightState.armor;
   const { emitCombatPlayerHit } = requireDeps();
   emitCombatPlayerHit({ amount });
   triggerImpactFlash(flightState.pos);
@@ -1030,6 +1035,11 @@ export function applyPlayerDamage(amount) {
   }
   if (flightState.shield < 25 && !flightState.shieldCriticalSpoken) {
     flightState.shieldCriticalSpoken = true;
+    addKillFeedEntry?.('SHIELDS CRITICAL', 'var(--cyber-yellow)');
     windowRef.setTimeout(() => combatAudio.bark('SHIELDS CRITICAL', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' }), shieldDrop > 15 ? 450 : 0);
+  }
+  if (armorBefore >= 40 && flightState.armor < 40 && !flightState.hullCriticalLogged) {
+    flightState.hullCriticalLogged = true;
+    addKillFeedEntry?.('HULL BELOW 40%', 'var(--cyber-pink)');
   }
 }

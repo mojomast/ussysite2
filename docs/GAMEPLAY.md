@@ -21,11 +21,15 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 
 Enemies spawn with formation roles. `aggressor` units push directly toward the player, `flanker` units steer toward a 90-degree side orbit, and `support` units hold around 60 units and only close or retreat outside their preferred band.
 
+Security reputation now has combat consequences. At `security < -30`, the faction can dispatch one elite `BOUNTY HUNTER` at a time; destroying it pays a 220cr reward and raises security reputation back toward the hostile floor. At `security > 40`, a friendly scout escort can join for 25 seconds, orbiting the player and firing at the weakest hostile before fading out.
+
 ## Radar
 
 The cockpit minimap plots active targets within radar range. Active, non-stunned enemies also show a short red velocity projection line from their contact dot, capped to 14px, with dreadnoughts using a thicker/brighter projection.
 
 Kill streaks chain within a four-second window. Rewards scale to `1.5x` at two kills, `2x` at three kills, and `3x` at five kills. The HUD flashes the active streak near the economy/status panel.
+
+The cockpit economy/status panel includes a four-line kill feed. It logs enemy kills with class and credit reward, shield and hull critical warnings, bounty wave clears, and dreadnought spawns. Entries render newest-first, fade the fourth slot, and expire after four seconds.
 
 ## Loadout Screen
 
@@ -45,6 +49,8 @@ Destroying the boss clears the boss HUD/state, plays the large explosion at full
 
 Delayed enemy spawns now enter with a short approach burst once their delay expires, so waves lunge into the arena instead of drifting in from their spawn point. Elite aggressors and flankers add a side-to-side strafe relative to the player's current right vector, while support elites keep the longer-range support behavior.
 
+Gunboats can deploy up to two stationary turrets when opening a burst. Elites cloak once when reduced to half health, fading almost invisible for 2.2 seconds before restoring their class opacity. Phantoms split on first death into two one-health child phantoms that cannot split again.
+
 ## Enemy Visual Design
 
 Enemy visuals are class-driven in `js/flight/enemies.js`. Every pooled enemy owns a small engine `PointLight` that is created with the pool, recolored on spawn, pulsed while active, boosted during burst fire, and turned off when inactive or recycled.
@@ -54,9 +60,9 @@ Enemy visuals are class-driven in `js/flight/enemies.js`. Every pooled enemy own
 | Scout | Fast drone-like tumble around a tilted axis with the class engine glow color. |
 | Interceptor | Moderate pure-roll rotation that reads like a fast approach craft. |
 | Gunboat | Slow yaw-only rotation with deliberate heavy-ship motion. |
-| Elite | Sharp diagonal spins plus non-support strafe oscillation for a harder target profile. |
+| Elite | Sharp diagonal spins plus non-support strafe oscillation for a harder target profile; once per spawn, a half-health cloak drops opacity to near invisible. |
 | Dreadnought | No tumble, `2.4x` pooled group scale, brighter engine glow, critical spawn alert, longer death flash, and large explosion SFX. |
-| Phantom | Fast disorienting spin with randomized opacity flicker across body and wing materials. |
+| Phantom | Fast disorienting spin with randomized opacity flicker across body and wing materials; first death splits into two weak child phantoms. |
 
 Enemy death flashes the cockpit overlay using the destroyed class color. Standard enemies use a short 180ms flash and engine glow spike; dreadnought kills use a 400ms flash and stronger glow/audio burst.
 

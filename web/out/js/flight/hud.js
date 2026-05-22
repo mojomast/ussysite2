@@ -23,7 +23,9 @@ export function addKillFeedEntry(text, colorOrOptions = 'var(--cyber-cyan)') {
   if (!text) return combatState.killFeed;
   const options = typeof colorOrOptions === 'object' && colorOrOptions !== null ? colorOrOptions : {};
   const now = options.now ?? performance.now();
-  const color = typeof colorOrOptions === 'string' ? colorOrOptions : (options.color || 'var(--cyber-cyan)');
+  const color = typeof colorOrOptions === 'string'
+    ? colorOrOptions
+    : (options.color || (options.type === 'warning' ? 'var(--cyber-yellow)' : (options.type === 'success' ? 'var(--cyber-green)' : 'var(--cyber-cyan)')));
   const latest = combatState.killFeed[combatState.killFeed.length - 1];
   if (latest?.text === text && now - latest.ts < 650) return combatState.killFeed;
   combatState.killFeed.push({ text, color, ts: now });

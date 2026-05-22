@@ -18,6 +18,10 @@
   --cyber-purple-glow: rgba(176, 38, 255, 0.4);
   --cyber-yellow: #ffcc00;
   --cyber-yellow-glow: rgba(255, 204, 0, 0.4);
+  --kill-feed-bg: rgba(3, 8, 20, 0.72);
+  --kill-feed-border: rgba(0, 240, 255, 0.18);
+  --kill-feed-shadow: rgba(0, 240, 255, 0.18);
+  --kill-feed-text: var(--text-primary);
   
   --border-cyan: rgba(0, 240, 255, 0.25);
   --border-pink: rgba(255, 0, 85, 0.25);
@@ -140,6 +144,11 @@ body {
 }
 
 .hud-hit { animation: hudHitFlash 0.18s ease-out forwards; }
+
+.enemy-cloaked {
+  opacity: 0.04;
+  filter: saturate(0.45) drop-shadow(0 0 10px rgba(204, 68, 255, 0.42));
+}
 
 .combat-debrief {
   position: fixed;
@@ -3038,6 +3047,58 @@ body.flight-active:not(.flight-third-person) .cockpit-dash-center {
   overflow: hidden;
 }
 
+.boss-health-hud {
+  display: none;
+  margin-top: clamp(6px, 0.8vh, 10px);
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 51, 85, 0.42);
+  background: linear-gradient(90deg, rgba(80, 0, 18, 0.38), rgba(3, 8, 20, 0.78));
+  box-shadow: inset 0 0 18px rgba(255, 51, 85, 0.08), 0 0 18px rgba(255, 51, 85, 0.12);
+}
+
+.boss-health-hud.active {
+  display: block;
+}
+
+.boss-health-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 0.58vw, 9px);
+  letter-spacing: 0.08em;
+  color: rgba(255, 180, 190, 0.86);
+  text-transform: uppercase;
+}
+
+.boss-health-topline strong {
+  color: var(--cyber-yellow);
+  white-space: nowrap;
+}
+
+.boss-meter {
+  height: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.boss-meter span {
+  display: block;
+  height: 100%;
+  transition: width 0.22s ease;
+}
+
+.boss-meter.boss-shield span {
+  background: var(--cyber-cyan);
+  box-shadow: 0 0 8px var(--cyber-cyan);
+}
+
+.boss-meter.boss-hull span {
+  background: #ff3355;
+  box-shadow: 0 0 10px rgba(255, 51, 85, 0.85);
+}
+
 .dash-cell {
   display: flex;
   flex-direction: column;
@@ -3311,6 +3372,32 @@ body.flight-active #flight-hud {
   opacity: 0.42;
 }
 
+.kill-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 58px;
+  margin: 0 0 clamp(6px, 0.8vh, 10px);
+  padding: 6px 7px;
+  border: 1px solid var(--kill-feed-border);
+  background: linear-gradient(180deg, var(--kill-feed-bg), rgba(0, 0, 0, 0.18));
+  box-shadow: inset 0 0 14px var(--kill-feed-shadow);
+  overflow: hidden;
+}
+
+.kill-feed-entry {
+  color: var(--kill-feed-entry-color, var(--kill-feed-text));
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 0.58vw, 9px);
+  line-height: 1.22;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 8px currentColor;
+}
+
 @keyframes credit-pop {
   0% { opacity: 1; transform: translateY(0); }
   60% { opacity: 1; transform: translateY(-10px); }
@@ -3337,6 +3424,168 @@ body.flight-active #flight-hud {
 
 .inventory-panel[hidden] {
   display: none !important;
+}
+
+:root {
+  --loadout-bg: rgba(2, 6, 18, 0.97);
+  --loadout-border: rgba(0, 240, 255, 0.34);
+  --loadout-card: rgba(0, 240, 255, 0.055);
+  --loadout-warn: #ff3355;
+}
+
+.loadout-panel {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  width: min(1040px, 95vw);
+  max-height: 84vh;
+  overflow-y: auto;
+  z-index: 9450;
+  padding: clamp(14px, 2vw, 24px);
+  background: var(--loadout-bg);
+  border: 1px solid var(--loadout-border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  box-shadow: 0 0 44px rgba(0, 240, 255, 0.2), 0 28px 80px rgba(0, 0, 0, 0.76);
+}
+
+.loadout-panel[hidden] {
+  display: none !important;
+}
+
+.loadout-header,
+.loadout-meta,
+.loadout-stat-grid,
+.loadout-options {
+  display: flex;
+}
+
+.loadout-header {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.18);
+  padding-bottom: 12px;
+}
+
+.loadout-header h2 {
+  margin: 2px 0 0;
+  color: var(--cyber-cyan);
+  font-family: var(--font-display);
+  letter-spacing: 0.16em;
+}
+
+.loadout-meta {
+  align-items: center;
+  gap: 12px;
+  color: var(--cyber-green);
+}
+
+.loadout-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(12px, 1.6vw, 18px);
+  margin-top: 16px;
+}
+
+.loadout-slot-card,
+.loadout-upgrade-card {
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  background: var(--loadout-card);
+  padding: clamp(12px, 1.6vw, 18px);
+}
+
+.loadout-kicker {
+  display: block;
+  color: var(--text-muted);
+  font-size: clamp(8px, 0.62vw, 10px);
+  letter-spacing: 0.14em;
+}
+
+.loadout-slot-card > strong,
+.loadout-upgrade-card > strong {
+  display: block;
+  margin: 5px 0 10px;
+  color: var(--cyber-yellow);
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+.loadout-stat-grid {
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--cyber-green);
+  font-size: clamp(9px, 0.7vw, 11px);
+}
+
+.loadout-options {
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.loadout-option-btn,
+.loadout-upgrade-btn,
+.loadout-close-btn {
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--cyber-cyan);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.loadout-option-btn,
+.loadout-upgrade-btn {
+  padding: 9px 10px;
+}
+
+.loadout-option-btn span,
+.loadout-option-btn small,
+.loadout-option-btn strong {
+  display: block;
+}
+
+.loadout-option-btn small,
+.loadout-upgrade-card p,
+.loadout-empty {
+  color: rgba(203, 213, 225, 0.72);
+  font-size: clamp(9px, 0.68vw, 11px);
+}
+
+.loadout-option-btn strong {
+  margin-top: 4px;
+  color: var(--cyber-yellow);
+}
+
+.loadout-option-btn.locked strong {
+  color: var(--cyber-purple);
+}
+
+.loadout-close-btn {
+  padding: 5px 8px;
+}
+
+.loadout-upgrade-btn.insufficient,
+.loadout-option-btn.insufficient {
+  animation: loadout-insufficient 600ms ease;
+  border-color: var(--loadout-warn);
+  color: var(--loadout-warn);
+}
+
+@keyframes loadout-insufficient {
+  0%, 100% { box-shadow: none; }
+  25%, 75% { box-shadow: 0 0 22px rgba(255, 51, 85, 0.45); }
+}
+
+@media (max-width: 760px) {
+  .loadout-body {
+    grid-template-columns: 1fr;
+  }
+
+  .loadout-header {
+    flex-direction: column;
+  }
 }
 
 .inv-header,
