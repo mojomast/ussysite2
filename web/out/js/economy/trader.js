@@ -24,7 +24,12 @@ export const traderState = {
   lastTrade: null,
   tradeLog: [],
   docked: false,
-  dockedStation: null
+  dockedStation: null,
+  activeMissions: [],
+  completedMissionIds: [],
+  missionBoard: {
+    declinedMissionIds: []
+  }
 };
 
 export const COMMODITIES = [

@@ -148,6 +148,7 @@ import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js'
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
+import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
 import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, updateSurface } from './surface.js';
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
@@ -188,6 +189,7 @@ let surfacePanelControlsRegistered = false;
 let telemetryLastUpdate = 0;
 let gameRoot, playerShip, flightNavLine;
 let flightAssistKeyCaptureRegistered = false;
+let lastMissionAutopilotState = 'IDLE';
 
 const projectHitTargets = engineProjectHitTargets;
 const projectNodeById = engineProjectNodeById;
@@ -549,6 +551,13 @@ function saveCurrentRunState({ manual = false } = {}) {
   });
   if (saved && manual) addKillFeedEntry('STATE SAVED', '#44ff88');
   return saved;
+}
+
+function ensureTraderMissionState() {
+  traderState.activeMissions ??= [];
+  traderState.completedMissionIds ??= [];
+  traderState.missionBoard ??= { declinedMissionIds: [] };
+  traderState.missionBoard.declinedMissionIds ??= [];
 }
 
 function applySavedRunState(data) {
@@ -1415,6 +1424,7 @@ function enterFlightMode() {
   applyPersistedFlightResources();
   traderState.docked = false;
   traderState.dockedStation = null;
+  ensureTraderMissionState();
   gameOrchestrator.tutorialComplete = false;
   gameOrchestrator.pendingEvent = null;
   gameOrchestrator.bountyPendingReward = 0;
@@ -1558,6 +1568,33 @@ function setCombatCredits(value) {
 function addCombatCredits(value) {
   setCombatCredits(traderState.credits + value);
   if (value > 0 && isFlightActive) showCreditGain(value);
+}
+
+function completeReadyBoardMissions() {
+  ensureTraderMissionState();
+  for (const mission of [...traderState.activeMissions]) {
+    if (mission.status !== 'ACTIVE' || mission.objective.current < mission.objective.required) continue;
+    const before = traderState.credits;
+    const result = completeBoardMission(traderState, mission.id, { gainReputation });
+    if (!result.success) continue;
+    const gain = traderState.credits - before;
+    if (gain > 0 && isFlightActive) showCreditGain(gain);
+    addKillFeedEntry(`MISSION COMPLETE: ${mission.title.toUpperCase()} +${gain}CR`, 'var(--cyber-green)');
+    flightState.status = `MISSION COMPLETE: +${gain}CR`;
+    flightState.statusUntil = performance.now() + 2600;
+    saveCurrentRunState();
+  }
+}
+
+function updateMissionBoardProgress(time) {
+  ensureTraderMissionState();
+  const autopilot = ensureAutopilotState(flightState);
+  const arrivalState = autopilot.state === 'ARRIVED' && lastMissionAutopilotState !== 'ARRIVED'
+    ? flightState
+    : { ...flightState, autopilot: { ...autopilot, state: lastMissionAutopilotState === 'ARRIVED' ? 'IDLE' : autopilot.state } };
+  const changed = checkMissionProgress(traderState, arrivalState, combatState, navGraph, time);
+  lastMissionAutopilotState = autopilot.state;
+  if (changed.length) completeReadyBoardMissions();
 }
 
 function triggerEnemyDeathFeedback(enemy, cls) {
@@ -2457,6 +2494,8 @@ function handleEnemyDestroyed(enemy) {
     updateFlightHud(true);
     return;
   }
+  combatState.lastKilledType = cls.id;
+  combatState.lastKilledAt = performance.now();
   const bountyReward = enemy?.userData?.isBountyHunter ? (enemy.userData.reward || 220) : 0;
   if (bountyReward && combatState.activeBountyHunter === enemy) combatState.activeBountyHunter = null;
   const pointsBefore = combatState.skillPoints;
@@ -2476,6 +2515,8 @@ function handleEnemyDestroyed(enemy) {
     addKillFeedEntry('BOUNTY HUNTER ELIMINATED // SECURITY PRESSURE EASED', '#44ff88');
   }
   registerMissionKill(enemy);
+  checkMissionProgress(traderState, flightState, combatState, navGraph, performance.now());
+  completeReadyBoardMissions();
   if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
     deactivateCombatObject(enemy);
     if (enemies.every(item => !item.userData.active)) {
@@ -3244,6 +3285,7 @@ export function tick(time = 0) {
     updatePlanetLOD(systemPlanets, camera);
     updateStationRotations(systemStations, frameDt);
     updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+    updateMissionBoardProgress(time);
     updateSurface(flightState, systemPlanets, frameDt);
     updateSurfaceVisuals();
     updateStarfieldWarp(systemStarfield, flightForward, ensureAutopilotState(flightState).hyperspeedMult ?? 1);

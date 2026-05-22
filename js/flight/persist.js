@@ -29,6 +29,10 @@ function stringArray(value) {
   return Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0);
 }
 
+function missionArray(value) {
+  return Array.isArray(value) && value.every(item => isObject(item) && typeof item.id === 'string' && typeof item.type === 'string' && typeof item.status === 'string');
+}
+
 function getCoord(source, axis, index) {
   if (!source) return 0;
   if (Array.isArray(source)) return source[index] ?? 0;
@@ -117,7 +121,9 @@ function buildRunState(combatState = {}, traderState = {}, reputationState = {},
     trader: {
       equippedPrimary: combatState.primaryWeapon ?? traderState.equippedPrimary ?? null,
       equippedSecondary: combatState.secondaryWeapon ?? traderState.equippedSecondary ?? null,
-      inventory: [...(combatState.ownedWeapons || traderState.inventory || [])].filter(item => typeof item === 'string')
+      inventory: [...(combatState.ownedWeapons || traderState.inventory || [])].filter(item => typeof item === 'string'),
+      activeMissions: Array.isArray(traderState.activeMissions) ? traderState.activeMissions : [],
+      completedMissionIds: Array.isArray(traderState.completedMissionIds) ? traderState.completedMissionIds.filter(item => typeof item === 'string') : []
     },
     rep: cloneReputation(reputationState),
     skills: [...(skillTree.unlocked || combatState.unlocked || [])].filter(item => typeof item === 'string')
@@ -177,6 +183,8 @@ function validateRunState(data) {
   if (!nonNegativeInteger(combat.bossThresholdIdx) || !nonNegativeInteger(combat.killCount)) return false;
   if (typeof trader.equippedPrimary !== 'string' || typeof trader.equippedSecondary !== 'string') return false;
   if (!stringArray(trader.inventory) || !stringArray(data.skills)) return false;
+  if (trader.activeMissions !== undefined && !missionArray(trader.activeMissions)) return false;
+  if (trader.completedMissionIds !== undefined && !stringArray(trader.completedMissionIds)) return false;
   if (!Object.values(data.rep).every(value => finiteNumber(value))) return false;
   if (data.flight !== undefined) {
     if (!isObject(data.flight)) return false;
@@ -244,6 +252,11 @@ export function applyRunState(data, combatState = {}, traderState = {}, reputati
   traderState.equippedPrimary = trader.equippedPrimary;
   traderState.equippedSecondary = trader.equippedSecondary;
   traderState.inventory = [...trader.inventory];
+  traderState.activeMissions = trader.activeMissions
+    ? (typeof structuredClone === 'function' ? structuredClone(trader.activeMissions) : JSON.parse(JSON.stringify(trader.activeMissions)))
+    : [];
+  traderState.completedMissionIds = trader.completedMissionIds ? [...trader.completedMissionIds] : [];
+  traderState.missionBoard ??= { declinedMissionIds: [] };
   replaceSetContents(combatState.ownedWeapons, trader.inventory);
   const scores = isObject(reputationState.scores) ? reputationState.scores : reputationState;
   Object.keys(rep).forEach(faction => {
