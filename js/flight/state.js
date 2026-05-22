@@ -3463,6 +3463,10 @@ export function tick(time = 0) {
     updateRelationshipEdges();
     _edgesNeedUpdate = false;
   }
+  const _t = performance.now() * 0.001;
+  if (relationshipEdgesMesh) {
+    relationshipEdgesMesh.material.opacity = 0.07 + 0.04 * Math.sin(_t * 0.8);
+  }
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
