@@ -270,6 +270,7 @@ let lastPriceDriftTick = 0;
 let lastAutoSave = 0;
 let pendingRunState = null;
 let activeUniverseScale = 1;
+let _edgesNeedUpdate = false;
 
 const loadoutState = {
   get primary() {
@@ -789,7 +790,7 @@ export function init() {
     setProjectNodeOpacity,
     setSelectedNode: value => { selectedNode = value; },
     syncOrbitFromCamera,
-    updateRelationshipEdges,
+    updateRelationshipEdges: markEdgesDirty,
     updateSelectedRelationEdges
   });
   configureInventoryPanel({ flightState });
@@ -1178,6 +1179,11 @@ function buildRelatedProjectEdges() {
   );
   selectedEdgesMesh.geometry.setDrawRange(0, 0);
   connectionsGroup.add(selectedEdgesMesh);
+  markEdgesDirty();
+}
+
+function markEdgesDirty() {
+  _edgesNeedUpdate = true;
 }
 
 function applyFlightUniverseScale(scale) {
@@ -1190,7 +1196,7 @@ function applyFlightUniverseScale(scale) {
     if (node.userData.distantHalo) node.userData.distantHalo.visible = flightScaleActive;
   });
   updateCoreConnectionLines();
-  updateRelationshipEdges();
+  markEdgesDirty();
   if (selectedNode && selectionRing) selectionRing.position.copy(selectedNode.position);
 }
 
@@ -1397,7 +1403,9 @@ function setupUIEventListeners() {
 
 // Select project by ID
 function selectProject(projId, triggerFly = true) {
-  return selectProjectModule(projId, triggerFly);
+  const result = selectProjectModule(projId, triggerFly);
+  markEdgesDirty();
+  return result;
 }
 
 // Mode Transitions
@@ -3451,7 +3459,10 @@ export function tick(time = 0) {
     }
   });
   if (nodesMoved) updateCoreConnectionLines();
-  if (nodesMoved || isConsoleActive) updateRelationshipEdges();
+  if (_edgesNeedUpdate) {
+    updateRelationshipEdges();
+    _edgesNeedUpdate = false;
+  }
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
