@@ -759,6 +759,7 @@ export function init() {
     openAudioSettingsMenu,
     openSkillTree,
     openStationMenu,
+    playFireSfx: type => sfxEngine.playFlat(type, { volume: type === 'missile' ? 0.9 : 0.8 }),
     projectHitTargets,
     radioChain,
     raycaster,

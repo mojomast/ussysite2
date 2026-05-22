@@ -295,13 +295,14 @@ function onGlobalKeyUp(event) {
 }
 
 function onPointerDown(event) {
-  const { documentRef = document, isConsoleActive, isFlightActive, radioChain, renderer, unlockAudio } = requireDeps();
+  const { documentRef = document, isConsoleActive, isFlightActive, playFireSfx, radioChain, renderer, unlockAudio } = requireDeps();
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
   if (isFlightActive()) {
     if (typeof unlockAudio === 'function') unlockAudio();
     if (event.button === 0 || event.button === 2) {
       event.preventDefault();
       flightState.mouseButtons.add(event.button);
+      if (typeof playFireSfx === 'function') playFireSfx(event.button === 0 ? 'laser' : 'missile');
     }
     if (!flightState.pointerLocked && renderer.domElement.requestPointerLock && !(event.target.closest && event.target.closest('.hud-panel, .hud-interactive'))) {
       renderer.domElement.requestPointerLock();
