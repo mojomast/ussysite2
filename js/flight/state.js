@@ -185,7 +185,7 @@ let activeCategory = 'all';
 let isConsoleActive = false; // Hero state by default
 let isFlightActive = false;
 let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
-let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, relationshipEdgesMesh, selectedEdgesMesh;
+let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, coreLinesMesh, relationshipEdgesMesh, selectedEdgesMesh;
 let debrisField, dustField;
 let systemStarfield = null;
 let systemPlanets = [];
@@ -1053,20 +1053,6 @@ function buildProjectNodes() {
     projectNodes.push(nodeMesh);
     projectNodeById.set(proj.id, nodeMesh);
     
-    // Add dynamic connection lines to core
-    const lineMat = new THREE.LineBasicMaterial({
-      color: hexColor,
-      transparent: true,
-      opacity: 0.15
-    });
-    const lineGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      nodeMesh.position
-    ]);
-    const connectionLine = new THREE.Line(lineGeo, lineMat);
-    connectionsGroup.add(connectionLine);
-    nodeMesh.userData.connectionLine = connectionLine;
-
     // Create 2D Overlay Label
     const label = document.createElement('div');
     label.className = 'floating-node-label';
@@ -1075,6 +1061,39 @@ function buildProjectNodes() {
     labelsContainer.appendChild(label);
     projectLabels.push({ element: label, object3d: nodeMesh });
   });
+
+  const positions = new Float32Array(USSY_PROJECTS.length * 6);
+  const coreLineGeo = new THREE.BufferGeometry();
+  coreLineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  coreLinesMesh = new THREE.LineSegments(
+    coreLineGeo,
+    new THREE.LineBasicMaterial({
+      color: 0x00f0ff,
+      transparent: true,
+      opacity: 0.12,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  updateCoreConnectionLines();
+  connectionsGroup.add(coreLinesMesh);
+}
+
+function updateCoreConnectionLines() {
+  if (!coreLinesMesh) return;
+  const position = coreLinesMesh.geometry.attributes.position;
+  const positions = position.array;
+  projectNodes.forEach((node, idx) => {
+    const offset = idx * 6;
+    positions[offset] = 0;
+    positions[offset + 1] = 0;
+    positions[offset + 2] = 0;
+    positions[offset + 3] = node.position.x;
+    positions[offset + 4] = node.position.y;
+    positions[offset + 5] = node.position.z;
+  });
+  position.needsUpdate = true;
+  coreLinesMesh.geometry.computeBoundingSphere();
 }
 
 function buildRelatedProjectEdges() {
@@ -1169,14 +1188,8 @@ function applyFlightUniverseScale(scale) {
   projectNodes.forEach(node => {
     node.scale.setScalar((node.userData.baseScale ?? nodeBaseScale) * visualScale);
     if (node.userData.distantHalo) node.userData.distantHalo.visible = flightScaleActive;
-    const line = node.userData.connectionLine;
-    if (line && line.geometry && line.geometry.attributes.position) {
-      const position = line.geometry.attributes.position;
-      position.setXYZ(1, node.position.x, node.position.y, node.position.z);
-      position.needsUpdate = true;
-      line.geometry.computeBoundingSphere();
-    }
   });
+  updateCoreConnectionLines();
   updateRelationshipEdges();
   if (selectedNode && selectionRing) selectionRing.position.copy(selectedNode.position);
 }
@@ -3244,8 +3257,8 @@ function resetCameraView() {
   projectNodes.forEach(node => {
     node.scale.setScalar(node.userData.baseScale);
     setProjectNodeOpacity(node, 0.85);
-    node.userData.connectionLine.material.opacity = 0.15;
   });
+  if (coreLinesMesh) coreLinesMesh.material.opacity = 0.12;
   updateSelectedRelationEdges();
   
   document.querySelectorAll('.project-item').forEach(item => item.classList.remove('active'));
@@ -3434,13 +3447,10 @@ export function tick(time = 0) {
       pos.x = x;
       pos.z = z;
       
-      const positions = node.userData.connectionLine.geometry.attributes.position.array;
-      positions[3] = x;
-      positions[5] = z;
-      node.userData.connectionLine.geometry.attributes.position.needsUpdate = true;
       nodesMoved = true;
     }
   });
+  if (nodesMoved) updateCoreConnectionLines();
   if (nodesMoved || isConsoleActive) updateRelationshipEdges();
 
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
