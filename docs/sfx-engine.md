@@ -35,6 +35,10 @@ The SFX master bus is routed directly to `radioChain.ctx.destination`. It does n
 - `ui_confirm`: ascending two-tone UI acknowledgement.
 - `ui_deny`: descending two-tone UI dismiss/reject cue.
 
+## Sound Design
+
+Laser buffers use a Star Wars-style energy bolt shape: a near-instant attack, exponential downward frequency sweep, harmonic fifth shimmer, and a sub-10ms white-noise transient for the initial crack. Player `laser` is brighter and longer at 1800Hz to 280Hz over 90ms, while positional `enemy_laser` is lower and shorter at 1400Hz to 220Hz over 75ms so it reads as distant hostile fire in the spatial mix.
+
 ## Pools
 
 Buffers are pre-synthesized once in `init()`. `AudioBufferSourceNode` instances are intentionally created per playback because the Web Audio spec makes them one-shot.

@@ -205,15 +205,25 @@ export const sfxEngine = {
   synthesizeBuffer(type) {
     if (!this.ctx) return null;
     if (type === 'laser' || type === 'enemy_laser') {
-      const duration = type === 'enemy_laser' ? 0.075 : 0.085;
-      const start = type === 'enemy_laser' ? 940 : 1220;
-      const end = type === 'enemy_laser' ? 260 : 330;
+      const enemy = type === 'enemy_laser';
+      const duration = enemy ? 0.075 : 0.09;
+      const start = enemy ? 1400 : 1800;
+      const end = enemy ? 220 : 280;
+      const primaryAmp = enemy ? 0.65 : 0.70;
+      const harmonicAmp = enemy ? 0.14 : 0.18;
+      const noiseAmp = enemy ? 0.45 : 0.55;
+      const noiseDuration = enemy ? 0.007 : 0.008;
+      const decayPower = enemy ? 2.0 : 2.4;
+      let phase2 = 0;
       return renderBuffer(this.ctx, duration, (t, i, sampleRate, phase) => {
         const progress = t / duration;
-        const freq = start + (end - start) * progress;
+        const freq = end + (start - end) * Math.pow(1 - progress, 2.2);
         const nextPhase = phase + (Math.PI * 2 * freq) / sampleRate;
-        const wave = Math.sin(nextPhase) * 0.78 + Math.sign(Math.sin(nextPhase * 0.5)) * 0.16;
-        return [wave * envelope(t, duration, 0.002, 2.1), nextPhase];
+        phase2 += (Math.PI * 2 * freq * 1.5) / sampleRate;
+        const amp = envelope(t, duration, 0.0015, decayPower);
+        const tone = Math.sin(nextPhase) * primaryAmp + Math.sin(phase2) * harmonicAmp;
+        const noise = t < noiseDuration ? (Math.random() * 2 - 1) * noiseAmp * (1 - t / noiseDuration) : 0;
+        return [(tone * amp) + noise, nextPhase];
       });
     }
     if (type === 'missile') {
