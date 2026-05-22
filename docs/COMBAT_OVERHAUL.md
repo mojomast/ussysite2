@@ -4,33 +4,36 @@
 
 | Class | HP | Shield Pips | Fire Rate | Burst | Reward | Role |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Scout | 1 | 0 | 1500ms | 1 | 50CR / 10XP | Tutorial and baseline harassment. |
-| Interceptor | 2 | 0 | 900ms | 1 | 120CR / 25XP | Fast flanker with light evasion. |
-| Gunboat | 5 | 4 | 700ms | 3 | 280CR / 60XP | Slow burst-fire pressure target. |
-| Elite Ace | 3 | 2 | 600ms | 2 | 450CR / 100XP | Accurate evasive ace. |
-| Dreadnought | 12 | 11 | 500ms | 5 | 900CR / 200XP | Heavy late-tier cruiser. |
+| Audit Probe | 1 | 0 | 2200ms | 1 | 40CR / 8XP | OPENCLAWSSY policy chaff. Bad aim, low threat. |
+| Swarm Specialist | 2 | 0 | 750ms | 2 | 140CR / 28XP | Fast SWARMUSSY tunnel-vision attacker. |
+| DevPlan Enforcer | 5 | 4 | 700ms | 4 | 320CR / 70XP | Slow checklist siege platform with precise bursts. |
+| Nexussy Operator | 3 | 2 | 520ms | 3 | 520CR / 120XP | Sanctioned ace with high accuracy and evasion. |
+| HERMES-Dreadnought | 15 | 14 | 420ms | 6 | 1100CR / 250XP | End-game telemetry cruiser. |
+| Phantom Process | 2 | 0 | 1100ms | 1 | 380CR / 85XP | Semi-transparent orphan process with top-tier evasion. |
 
 ## Weapon Loadout
 
 | Weapon | Slot | Damage | Cooldown | Energy | Heat | Notes |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
-| LASER Mk.I | Primary | 12 | 140ms | 2.5 | 8 | Standard pulse laser. |
-| LASER Mk.II | Primary | 20 | 200ms | 4 | 14 | Stronger laser, hotter. |
-| SCATTER CANNON | Primary | 8 x4 | 380ms | 6 | 22 | Wide spread. |
-| RAILGUN | Primary | 55 | 1800ms | 22 | 45 | High damage precision shot. |
-| MISSILE RACK | Secondary | 60 | 900ms | 18 | 0 | Single homing missile. |
-| DUAL RACK | Secondary | 55 x2 | 1400ms | 30 | 0 | Twin homing launch. |
-| EMP BURST | Secondary | 5 AoE | 4500ms | 35 | 0 | Stuns enemies in range. |
+| STANDARD PULSE | Primary | 10 | 120ms | 2.5 | 8 | Entry weapon, fastest fire rate. |
+| PHASE LANCE | Primary | 28 | 280ms | 5.5 | 14 | Hard single shot that rewards aim. |
+| FRAG DISPERSAL | Primary | 10 x5 | 320ms | 7 | 22 | Close-range cluster shredder. |
+| MASS DRIVER | Primary | 75 | 2200ms | 28 | 45 | Long-range sniper shot. |
+| SEEKING PAYLOAD | Secondary | 65 | 1100ms | 20 | 0 | Reliable homing backup. |
+| TWIN SEEKER | Secondary | 60 x2 | 1600ms | 32 | 0 | Expensive burst kill option. |
+| SYSTEM DISRUPTOR | Secondary | 8 AoE | 3800ms | 28 | 0 | 22u EMP with 2200ms stun. |
 
 ## Skill Tree
 
 ```text
-HULL:    hull_1 -> hull_2 -> hull_3 -> hull_4
-SHIELD:  shield_1 -> shield_2 -> shield_3 -> shield_4
-WEAPONS: weap_1 -> weap_3 -> weap_4
+HULL:    hull_1 -> hull_2 -> hull_3 -> hull_4 -> hull_5
+SHIELD:  shield_1 -> shield_2 -> shield_3 -> shield_4 -> shield_5
+WEAPONS: weap_1 -> weap_3 -> weap_4 -> weap_5
          weap_2
-ENGINES: eng_1 -> eng_2 -> eng_3 -> eng_4
+ENGINES: eng_1 -> eng_2 -> eng_3 -> eng_4 -> eng_5
 ```
+
+Tier 5 skills add build identity: Point Defense Grid blocks 20% of enemy bullets, Mirror Protocol reflects shielded hits into nearby enemies, Ghost Round bypasses evasion 15% of the time, and Cold Jump teleports 40 units forward on `E` with a 25s cooldown.
 
 ## Heat And Overheat
 
@@ -45,10 +48,12 @@ Damage records `lastHitAt`, interrupts regen, and raises adrenaline. Shields abo
 | Score | Tier | Classes |
 | ---: | ---: | --- |
 | `< 1` | 0 | Tutorial scouts only. |
-| `< 500` | 1 | Scouts. |
-| `< 1500` | 2 | Scouts, interceptors. |
-| `< 4000` | 3 | Scouts, interceptors, gunboats, elites. |
-| `>= 4000` | 4 | All classes including dreadnoughts. |
+| `< 200` | 1 | Audit Probes. |
+| `< 800` | 2 | Audit Probes, Swarm Specialists. |
+| `< 3000` | 3 | Audit Probes, Swarm Specialists, DevPlan Enforcers, Nexussy Operators. |
+| `>= 3000` | 4 | All classes including HERMES-Dreadnoughts and Phantom Processes. |
+
+Past tier 4, `getDifficultyMultiplier(score)` scales enemy fire cooldown and accuracy from `1.0x` at 3000 score toward a `1.75x` cap, so high-score runs keep escalating instead of flattening out.
 
 ## Station Equipment
 
@@ -71,7 +76,7 @@ Enemy kills add the destroyed class' `xpReward`, so scouts and dreadnoughts no l
 
 ## Upgrade Effects
 
-`hull_4` adds slow armor regeneration while landed and grants a small dock bonus, capped above the normal hull maximum. `shield_4` overcharge is reset on launch, so it can fire once per flight session instead of every immediate re-dock.
+`hull_4` adds slow armor regeneration while landed and grants a small dock bonus, capped above the normal hull maximum. `shield_4` overcharge is reset on launch, so it can fire once per flight session instead of every immediate re-dock. Strafe thrust is 15% stronger, and fuel drain scales by `1 + speed * 0.012` while burning.
 
 ## HUD Feedback
 

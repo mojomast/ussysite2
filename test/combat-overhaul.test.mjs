@@ -80,7 +80,7 @@ describe('combat class data', () => {
     const state = { xp: 0, xpToNextPoint: 100, skillPoints: 0 };
     addCombatXp(state, eliteReward.xp);
     assert.equal(state.skillPoints, 1, 'elite XP reward should grant one skill point from zero');
-    assert.equal(state.xp, 0, 'elite XP reward should roll over exactly at 100 XP');
+    assert.equal(state.xp, 20, 'elite XP reward should retain overflow after the first skill point');
   });
 });
 

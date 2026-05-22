@@ -1,35 +1,68 @@
-export const MISSION_INTRO_TEXT = 'DOGFIGHT LINK ESTABLISHED. CONGRATULATIONS, OPERATOR: YOU FOUND THE USSYVERSE EASTER EGG. YOU ARE NOW PILOTING A SCRAP-CLASS COCKPIT THROUGH THE PROJECT CONSTELLATION. CONTROL REFERENCE IS LIVE ON YOUR HUD. FIRST OBJECTIVE: HUNT DOWN 5 TUTORIAL BOGEYS AS THEY TELEPORT INTO THE AO.';
+export const MISSION_INTRO_TEXT = 'UPLINK CONFIRMED. WELCOME TO THE USSYVERSE PROJECT CONSTELLATION - A LIVE GRAPH OF ACTIVE DEVELOPMENT NODES MAINTAINED BY OPERATOR KYLE. YOU ARE PILOTING A SCRAP-CLASS INTERCEPTOR ON AN UNREGISTERED FLIGHT PLAN. OPENCLAWSSY HAS NOT ISSUED YOUR SESSION KEY. HERMES-DASHBOARD HAS ALREADY LOGGED YOUR ENTRY VECTOR. DEVUSSY HAS QUEUED A FIVE-STEP ENGAGEMENT PLAN FOR YOUR DESTRUCTION. YOUR FIRST OBJECTIVE: ELIMINATE 5 AUDIT PROBES BEFORE THEY COMPLETE THEIR SCAN AND ESCALATE TO ENFORCEMENT. HUD REFERENCE IS LIVE. GOOD LUCK, GHOST.';
 
 export const BUILTIN_MISSION_CONTRACTS = [
   {
-    id: 'patrol-sweep',
-    title: 'Patrol Sweep',
-    description: 'Clear a pirate scout wing, then dock at any project station for a 300cr bounty.',
+    id: 'audit-probe-sweep',
+    title: 'AUDIT PROBE SWEEP',
+    description: 'OPENCLAWSSY flagged 4 Audit Probes loitering in the project graph without a valid session key. Eliminate them and dock at a core node for a 350cr security bounty.',
+    rewardCredits: 350,
+    steps: [
+      { id: 'audit-probes-clear', type: 'kills', label: 'ELIMINATE AUDIT PROBES', detail: '4 unsanctioned OPENCLAWSSY probe instances are scanning the constellation. Terminate them.', target: 4, spawnEnemies: 4 },
+      { id: 'audit-probes-report', type: 'land', label: 'TRANSMIT PROOF TO CORE NODE', detail: 'Land at any core project station to upload kill telemetry and claim the bounty.' }
+    ]
+  },
+  {
+    id: 'devplan-cargo-run',
+    title: 'DEVPLAN CARGO RUN',
+    description: 'DEVUSSY issued a 3-checkpoint DevPlan for a priority cargo run. Execute all steps in sequence for 250cr and a 50cr accuracy bonus.',
+    rewardCredits: 250,
+    steps: [
+      { id: 'devplan-acquire', type: 'trade', action: 'buy', label: 'CHECKPOINT 1: ACQUIRE PAYLOAD', detail: 'DEVUSSY DevPlan step 1: acquire cargo at any market node. Human ACK required at pickup.', target: 1 },
+      { id: 'devplan-transit', type: 'landDifferent', label: 'CHECKPOINT 2: TRANSIT TO DELIVERY NODE', detail: 'DEVUSSY DevPlan step 2: fly to a different station. No shortcuts - the plan specifies a node change.', target: 1 },
+      { id: 'devplan-deliver', type: 'trade', action: 'sell', label: 'CHECKPOINT 3: DELIVER AND LOG', detail: 'DEVUSSY DevPlan step 3: sell cargo and log delivery. Mission closes on confirmed receipt.', target: 1 }
+    ]
+  },
+  {
+    id: 'constellation-telemetry',
+    title: 'CONSTELLATION TELEMETRY SWEEP',
+    description: 'HERMES-DASHBOARD requires telemetry from 3 distinct project nodes to update its context window. 300cr on full receipt.',
     rewardCredits: 300,
     steps: [
-      { id: 'patrol-clear', type: 'kills', label: 'Clear Pirate Scouts', detail: 'Destroy 3 hostile contacts before they push into the project graph.', target: 3, spawnEnemies: 3 },
-      { id: 'patrol-dock', type: 'land', label: 'Dock For Bounty', detail: 'Land at any project station to transmit proof of sweep completion.' }
+      { id: 'telemetry-node-1', type: 'land', label: 'NODE 1: CAPTURE TELEMETRY', detail: 'Land at any project node. HERMES is watching your entry signature.', target: 1 },
+      { id: 'telemetry-node-2', type: 'landDifferent', label: 'NODE 2: EXPAND CONTEXT WINDOW', detail: 'Second node required. HERMES context window grows with each unique signal.', target: 1 },
+      { id: 'telemetry-node-3', type: 'landDifferent', label: 'NODE 3: COMPLETE SWEEP', detail: 'Third and final node. HERMES will acknowledge mission completion automatically.', target: 1 }
     ]
   },
   {
-    id: 'market-proving-run',
-    title: 'Market Proving Run',
-    description: 'Buy any cargo, fly to a different station, sell cargo, and pocket a 150cr route bonus.',
-    rewardCredits: 150,
+    id: 'phantom-purge',
+    title: 'PHANTOM PROCESS PURGE',
+    description: 'Three Phantom Processes were detected in the graph by OPENCLAWSSY. They have no policy file and no owner. Purge them before they consume further untracked resources. 600cr bounty.',
+    rewardCredits: 600,
     steps: [
-      { id: 'market-buy', type: 'trade', action: 'buy', label: 'Buy Cargo', detail: 'Open a cargo market and buy at least 1 unit of any commodity.', target: 1 },
-      { id: 'market-dock-away', type: 'landDifferent', label: 'Change Markets', detail: 'Fly to a different project station before selling.', target: 1 },
-      { id: 'market-sell', type: 'trade', action: 'sell', label: 'Sell Cargo', detail: 'Sell at least 1 unit from your hold to complete the run.', target: 1 }
+      { id: 'phantom-purge-kills', type: 'kills', label: 'PURGE PHANTOM PROCESSES', detail: 'These processes are fast and evasive. Use scatter weapons or EMP to reduce their evasion window.', target: 3, spawnEnemies: 3, spawnClass: 'phantom' },
+      { id: 'phantom-purge-report', type: 'land', label: 'REPORT TO OPENCLAWSSY NODE', detail: 'Dock at any core node to submit the purge report. OPENCLAWSSY will verify the kills from its audit trail.' }
     ]
   },
   {
-    id: 'constellation-survey',
-    title: 'Constellation Survey',
-    description: 'Visit two different project stations and transmit survey telemetry for 200cr.',
-    rewardCredits: 200,
+    id: 'swarm-breakout',
+    title: 'SWARM BREAKOUT DEFENSE',
+    description: 'A SWARMUSSY coding swarm entered adversarial mode after a bad merge conflict. Three Swarm Specialist waves inbound. Defend the constellation for 500cr.',
+    rewardCredits: 500,
     steps: [
-      { id: 'survey-first', type: 'land', label: 'Survey First Node', detail: 'Land at any project node to capture local telemetry.', target: 1 },
-      { id: 'survey-second', type: 'landDifferent', label: 'Survey Second Node', detail: 'Land at a different project node to complete the route.', target: 1 }
+      { id: 'swarm-wave-1', type: 'kills', label: 'REPEL WAVE 1', detail: 'First swarm cell: 3 Swarm Specialists. Fast. Commit early.', target: 3, spawnEnemies: 3, spawnClass: 'interceptor' },
+      { id: 'swarm-wave-2', type: 'kills', label: 'REPEL WAVE 2', detail: 'Second cell inbound. They are adapting - expect tighter formation fire.', target: 4, spawnEnemies: 4, spawnClass: 'interceptor' },
+      { id: 'swarm-debrief', type: 'land', label: 'DOCK FOR DEBRIEF', detail: 'Land at any station to close the incident report and receive payment.' }
+    ]
+  },
+  {
+    id: 'mass-driver-test',
+    title: 'MASS DRIVER TEST RUN',
+    description: 'USSYCODE VM-WARDEN needs a live fire test of a Mass Driver prototype. Buy the cannon, prove it in combat, return to collect 700cr and the weapon discount code.',
+    rewardCredits: 700,
+    steps: [
+      { id: 'mass-driver-acquire', type: 'trade', action: 'buy', label: 'ACQUIRE MASS DRIVER', detail: 'Purchase a RAILGUN from any infrastructure or security station market.', target: 1 },
+      { id: 'mass-driver-kills', type: 'kills', label: 'FIRE IN ANGER: 2 CONFIRMED KILLS', detail: 'USSYCODE telemetry must record 2 hostile destructions while the Mass Driver is active.', target: 2, spawnEnemies: 2 },
+      { id: 'mass-driver-return', type: 'land', label: 'RETURN TO VM-WARDEN', detail: 'Land at any station. VM-WARDEN will parse the kill logs from your mount path and process payment.' }
     ]
   }
 ];
@@ -325,7 +358,7 @@ export function setMissionStep(stepId, data = {}) {
 
   if ((step.spawnEnemies || 0) > 0) {
     missionDeps.activateEnemyWave(missionDeps.enemies, step.spawnEnemies, (enemy, offset, delay) => {
-      missionDeps.spawnEnemy(enemy, offset, delay, step.enemyClassId || 'scout');
+      missionDeps.spawnEnemy(enemy, offset, delay, step.spawnClass || step.enemyClassId || 'scout');
       if (enemy.userData) enemy.userData.missionContractId = contract.id;
     });
   }

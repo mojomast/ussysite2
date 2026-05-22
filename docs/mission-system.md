@@ -37,6 +37,7 @@ When accepted, station missions are converted into the same contract shape used 
 Built-in contracts use a shared `steps` array:
 
 - `kills`: spawns a wave once at step activation, then advances when `registerMissionKill()` reaches `target`.
+- `kills` can set optional `spawnClass` to force a class such as `phantom` or `interceptor`; otherwise contract waves default to Audit Probes.
 - `land`: sets a nav target when a station is specified or selected, then advances from `handleMissionLanding()`.
 - `landDifferent`: requires landing somewhere other than `contractStartStationId`.
 - `trade`: advances from the trader `onTrade` callback when action, station, commodity, and quantity requirements match.
@@ -57,3 +58,7 @@ Built-in contracts use a shared `steps` array:
 8. `completeMission()` credits rewards, plays `ui_confirm`, announces completion with high-priority TTS, and resets mission state to free roam.
 
 If `missionState.active` is already true, orchestrator dispatch returns false and does not replace the active mission.
+
+## Built-In Contract Set
+
+The default board now uses six USSYVERSE-specific contracts: `audit-probe-sweep`, `devplan-cargo-run`, `constellation-telemetry`, `phantom-purge`, `swarm-breakout`, and `mass-driver-test`. They keep the existing `kills`, `land`, `landDifferent`, and `trade` step engine while adding lore-specific enemy waves and traversal goals.

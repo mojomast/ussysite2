@@ -1,88 +1,111 @@
 export const ENEMY_CLASSES = [
   {
     id: 'scout',
-    label: 'SCOUT',
+    label: 'AUDIT PROBE',
+    lore: "Autonomous recon drones deployed by OPENCLAWSSY's deny-by-default policy layer.",
     color: 0xff3355,
     wingColor: 0xb8c4d8,
     health: 1,
     speed: 1.0,
-    fireRate: 1500,
-    accuracy: 0.72,
+    fireRate: 2200,
+    accuracy: 0.55,
     burstCount: 1,
     burstDelay: 0,
     evasion: 0.0,
-    creditReward: 50,
-    xpReward: 10,
+    creditReward: 40,
+    xpReward: 8,
     approachSpeed: { far: 18, near: 4.2 },
     geometry: 'default'
   },
   {
     id: 'interceptor',
-    label: 'INTERCEPTOR',
+    label: 'SWARM SPECIALIST',
+    lore: 'A single agent detached from a SWARMUSSY coding swarm, repurposed for combat.',
     color: 0xff8800,
     wingColor: 0xff4400,
     health: 2,
-    speed: 1.45,
-    fireRate: 900,
-    accuracy: 0.85,
-    burstCount: 1,
-    burstDelay: 0,
+    speed: 1.65,
+    fireRate: 750,
+    accuracy: 0.80,
+    burstCount: 2,
+    burstDelay: 60,
     evasion: 0.012,
-    creditReward: 120,
-    xpReward: 25,
+    creditReward: 140,
+    xpReward: 28,
     approachSpeed: { far: 26, near: 6.0 },
     geometry: 'dart'
   },
   {
     id: 'gunboat',
-    label: 'GUNBOAT',
+    label: 'DEVPLAN ENFORCER',
+    lore: 'A heavy enforcement platform running a DEVUSSY DevPlan as its engagement protocol.',
     color: 0x44aaff,
     wingColor: 0x2266cc,
     health: 5,
-    speed: 0.55,
+    speed: 0.45,
     fireRate: 700,
-    accuracy: 0.65,
-    burstCount: 3,
-    burstDelay: 120,
+    accuracy: 0.72,
+    burstCount: 4,
+    burstDelay: 100,
     evasion: 0.0,
-    creditReward: 280,
-    xpReward: 60,
+    creditReward: 320,
+    xpReward: 70,
     approachSpeed: { far: 10, near: 2.8 },
     geometry: 'box'
   },
   {
     id: 'elite',
-    label: 'ELITE ACE',
+    label: 'NEXUSSY OPERATOR',
+    lore: 'A fully sanctioned combat operator with a live session key issued by OPENCLAWSSY.',
     color: 0xcc44ff,
     wingColor: 0x8800cc,
     health: 3,
-    speed: 1.2,
-    fireRate: 600,
-    accuracy: 0.92,
-    burstCount: 2,
-    burstDelay: 80,
-    evasion: 0.025,
-    creditReward: 450,
-    xpReward: 100,
+    speed: 1.35,
+    fireRate: 520,
+    accuracy: 0.95,
+    burstCount: 3,
+    burstDelay: 65,
+    evasion: 0.035,
+    creditReward: 520,
+    xpReward: 120,
     approachSpeed: { far: 22, near: 5.5 },
     geometry: 'diamond'
   },
   {
     id: 'dreadnought',
-    label: 'DREADNOUGHT',
+    label: 'HERMES-DREADNOUGHT',
+    lore: 'The HERMES-DASHBOARD given a weapons mandate with full telemetry on the player.',
     color: 0xff0000,
     wingColor: 0x880000,
-    health: 12,
+    health: 15,
     speed: 0.3,
-    fireRate: 500,
-    accuracy: 0.70,
-    burstCount: 5,
-    burstDelay: 90,
+    fireRate: 420,
+    accuracy: 0.78,
+    burstCount: 6,
+    burstDelay: 80,
     evasion: 0.0,
-    creditReward: 900,
-    xpReward: 200,
-    approachSpeed: { far: 7, near: 2.0 },
+    creditReward: 1100,
+    xpReward: 250,
+    approachSpeed: { far: 6, near: 2.2 },
     geometry: 'cruiser'
+  },
+  {
+    id: 'phantom',
+    label: 'PHANTOM PROCESS',
+    lore: "Orphaned agent tasks that were never ACK'd and never garbage-collected.",
+    color: 0x00ffcc,
+    wingColor: 0x006655,
+    health: 2,
+    speed: 1.8,
+    fireRate: 1100,
+    accuracy: 0.60,
+    burstCount: 1,
+    burstDelay: 0,
+    evasion: 0.055,
+    creditReward: 380,
+    xpReward: 85,
+    approachSpeed: { far: 30, near: 8.0 },
+    geometry: 'phantom'
   }
 ];
 
@@ -111,13 +134,13 @@ export function emitCombatMissionComplete(payload = {}) {
 }
 
 export const WEAPON_DEFS = [
-  { id: 'laser_mk1', name: 'LASER Mk.I', type: 'beam', damage: 12, cooldown: 140, energyCost: 2.5, ammoCost: 1, projectileSpeed: 155, projectileLife: 1800, color: 0x66ff44, overheatBuildup: 8, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'Standard pulse laser.' },
-  { id: 'laser_mk2', name: 'LASER Mk.II', type: 'beam', damage: 20, cooldown: 200, energyCost: 4.0, ammoCost: 1, projectileSpeed: 165, projectileLife: 2000, color: 0x00ffcc, overheatBuildup: 14, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'Upgraded laser. Runs hotter.' },
-  { id: 'scatter_cannon', name: 'SCATTER CANNON', type: 'burst', damage: 8, cooldown: 380, energyCost: 6.0, ammoCost: 4, projectileSpeed: 130, projectileLife: 1200, color: 0xffaa00, overheatBuildup: 22, pellets: 4, spreadAngle: 0.08, missileCount: 0, aoeRadius: 0, description: 'Wide spread. Shreds shields.' },
-  { id: 'railgun', name: 'RAILGUN', type: 'beam', damage: 55, cooldown: 1800, energyCost: 22.0, ammoCost: 1, projectileSpeed: 380, projectileLife: 3500, color: 0xffffff, overheatBuildup: 45, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'One-shot power. Long cooldown.' },
-  { id: 'missile_rack', name: 'MISSILE RACK', type: 'missile', damage: 60, cooldown: 900, energyCost: 18.0, ammoCost: 0, projectileSpeed: 55, projectileLife: 8000, color: 0xfff2cf, overheatBuildup: 0, pellets: 0, spreadAngle: 0, missileCount: 1, aoeRadius: 0, description: 'Standard homing missile.' },
-  { id: 'dual_missile', name: 'DUAL RACK', type: 'missile', damage: 55, cooldown: 1400, energyCost: 30.0, ammoCost: 0, projectileSpeed: 60, projectileLife: 8000, color: 0xfff2cf, overheatBuildup: 0, pellets: 0, spreadAngle: 0, missileCount: 2, aoeRadius: 0, description: 'Twin launch. Expensive.' },
-  { id: 'emp_burst', name: 'EMP BURST', type: 'area', damage: 5, cooldown: 4500, energyCost: 35.0, ammoCost: 0, projectileSpeed: 0, projectileLife: 0, color: 0x88ffff, overheatBuildup: 0, pellets: 0, spreadAngle: 0, missileCount: 0, aoeRadius: 18, description: 'Stuns all enemies in range.' }
+  { id: 'laser_mk1', name: 'STANDARD PULSE', type: 'beam', damage: 10, cooldown: 120, energyCost: 2.5, ammoCost: 1, projectileSpeed: 155, projectileLife: 1800, color: 0x66ff44, overheatBuildup: 8, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'Fastest fire rate, lowest damage per shot. Good for probes.' },
+  { id: 'laser_mk2', name: 'PHASE LANCE', type: 'beam', damage: 28, cooldown: 280, energyCost: 5.5, ammoCost: 1, projectileSpeed: 165, projectileLife: 2000, color: 0x00ffcc, overheatBuildup: 14, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'Hard-hitting single shot that rewards accuracy.' },
+  { id: 'scatter_cannon', name: 'FRAG DISPERSAL', type: 'burst', damage: 10, cooldown: 320, energyCost: 7.0, ammoCost: 4, projectileSpeed: 130, projectileLife: 1200, color: 0xffaa00, overheatBuildup: 22, pellets: 5, spreadAngle: 0.10, missileCount: 0, aoeRadius: 0, description: 'Devastating up close against clusters, weak at range.' },
+  { id: 'railgun', name: 'MASS DRIVER', type: 'beam', damage: 75, cooldown: 2200, energyCost: 28.0, ammoCost: 1, projectileSpeed: 500, projectileLife: 3500, color: 0xffffff, overheatBuildup: 45, pellets: 1, spreadAngle: 0, missileCount: 0, aoeRadius: 0, description: 'Sniper weapon. High skill ceiling and heavy reload.' },
+  { id: 'missile_rack', name: 'SEEKING PAYLOAD', type: 'missile', damage: 65, cooldown: 1100, energyCost: 20.0, ammoCost: 0, projectileSpeed: 55, projectileLife: 8000, color: 0xfff2cf, overheatBuildup: 0, pellets: 0, spreadAngle: 0, missileCount: 1, aoeRadius: 0, description: 'Reliable homing backup with a longer reload.' },
+  { id: 'dual_missile', name: 'TWIN SEEKER', type: 'missile', damage: 60, cooldown: 1600, energyCost: 32.0, ammoCost: 0, projectileSpeed: 60, projectileLife: 8000, color: 0xfff2cf, overheatBuildup: 0, pellets: 0, spreadAngle: 0, missileCount: 2, aoeRadius: 0, description: 'Devastating burst for high-energy builds.' },
+  { id: 'emp_burst', name: 'SYSTEM DISRUPTOR', type: 'area', damage: 8, cooldown: 3800, energyCost: 28.0, ammoCost: 0, projectileSpeed: 0, projectileLife: 0, color: 0x88ffff, overheatBuildup: 0, pellets: 0, spreadAngle: 0, missileCount: 0, aoeRadius: 22, stunDuration: 2200, description: 'Area denial and escape tool. Situationally powerful.' }
 ];
 
 export const SKILL_TREE_NODES = [
@@ -125,18 +148,22 @@ export const SKILL_TREE_NODES = [
   { id: 'hull_2', name: 'HULL PLATING II', branch: 'HULL', effect: 'armor base +30', cost: 2, requires: 'hull_1', description: 'Second armor layer adds 30 more base armor.' },
   { id: 'hull_3', name: 'REACTIVE ARMOR', branch: 'HULL', effect: '15% armor dmg reduction', cost: 2, requires: 'hull_2', description: 'Reactive plates reduce armor damage by 15%.' },
   { id: 'hull_4', name: 'DAMAGE CONTROL', branch: 'HULL', effect: 'armor +1/s regen at dock', cost: 3, requires: 'hull_3', description: 'Dock crews repair armor slowly while landed.' },
+  { id: 'hull_5', name: 'POINT DEFENSE GRID', branch: 'HULL', effect: '20% chance to block enemy bullets', cost: 3, requires: 'hull_4', description: 'A reactive grid fires micro-bursts to intercept incoming rounds.' },
   { id: 'shield_1', name: 'SHIELD BOOST I', branch: 'SHIELD', effect: 'maxShield +25', cost: 1, requires: null, description: 'Adds 25 maximum shield capacity.' },
   { id: 'shield_2', name: 'SHIELD BOOST II', branch: 'SHIELD', effect: 'maxShield +25', cost: 2, requires: 'shield_1', description: 'Adds another 25 maximum shield capacity.' },
   { id: 'shield_3', name: 'RAPID RECHARGE', branch: 'SHIELD', effect: 'regenDelay 5000->3000ms', cost: 2, requires: 'shield_2', description: 'Shield regen starts sooner after damage.' },
   { id: 'shield_4', name: 'OVERCHARGE', branch: 'SHIELD', effect: 'one-time 150% shield burst per dock', cost: 3, requires: 'shield_3', description: 'Docking briefly overcharges shields to 150% capacity.' },
+  { id: 'shield_5', name: 'MIRROR PROTOCOL', branch: 'SHIELD', effect: 'Reflect 8% of blocked damage back as AOE', cost: 3, requires: 'shield_4', description: 'Excess shield energy is vectored back at the attacker.' },
   { id: 'weap_1', name: 'CAPACITOR I', branch: 'WEAPONS', effect: 'energy +20', cost: 1, requires: null, description: 'Expands energy storage to 120.' },
   { id: 'weap_2', name: 'HEAT SINKS', branch: 'WEAPONS', effect: 'maxHeat +30', cost: 1, requires: null, description: 'Raises maximum heat before overheat.' },
   { id: 'weap_3', name: 'OVERCLOCKED COILS', branch: 'WEAPONS', effect: 'fireCooldown x0.85', cost: 2, requires: 'weap_1', description: 'Primary weapons cycle 15% faster.' },
   { id: 'weap_4', name: 'ARMOR PIERCING', branch: 'WEAPONS', effect: '25% dmg bypasses enemy shieldHp', cost: 3, requires: 'weap_3', description: 'Part of each hit punches through enemy shield pips.' },
+  { id: 'weap_5', name: 'GHOST ROUND', branch: 'WEAPONS', effect: '15% of shots ignore enemy evasion roll', cost: 3, requires: 'weap_4', description: 'Sensor-guided micro-adjustments override target evasion.' },
   { id: 'eng_1', name: 'THRUSTER BOOST I', branch: 'ENGINES', effect: 'thrust +3', cost: 1, requires: null, description: 'Adds 3 thrust.' },
   { id: 'eng_2', name: 'THRUSTER BOOST II', branch: 'ENGINES', effect: 'thrust +3', cost: 2, requires: 'eng_1', description: 'Adds 3 more thrust.' },
   { id: 'eng_3', name: 'AFTERBURNER', branch: 'ENGINES', effect: 'Shift: thrust x1.8 / 3s / 12s cd', cost: 2, requires: 'eng_2', description: 'Unlocks timed afterburner on Shift.' },
-  { id: 'eng_4', name: 'INERTIAL DAMPENERS', branch: 'ENGINES', effect: 'damping 0.985->0.975', cost: 3, requires: 'eng_3', description: 'Tighter damping reduces drift.' }
+  { id: 'eng_4', name: 'INERTIAL DAMPENERS', branch: 'ENGINES', effect: 'damping 0.985->0.975', cost: 3, requires: 'eng_3', description: 'Tighter damping reduces drift.' },
+  { id: 'eng_5', name: 'COLD JUMP', branch: 'ENGINES', effect: 'Emergency warp: teleport 40 units forward, 25s cooldown', cost: 3, requires: 'eng_4', description: 'A single-axis microjump. No FTL. Just distance.' }
 ];
 
 export const STATION_EQUIPMENT = {
@@ -164,7 +191,7 @@ const tierClassIds = [
   ['scout'],
   ['scout', 'interceptor'],
   ['scout', 'interceptor', 'gunboat', 'elite'],
-  ['scout', 'interceptor', 'gunboat', 'elite', 'dreadnought']
+  ['scout', 'interceptor', 'gunboat', 'elite', 'dreadnought', 'phantom']
 ];
 
 const classWeights = {
@@ -172,15 +199,22 @@ const classWeights = {
   interceptor: 30,
   gunboat: 10,
   elite: 8,
-  dreadnought: 2
+  dreadnought: 2,
+  phantom: 6
 };
 
 export function getDifficultyTier(score) {
   if (score < 1) return 0;
-  if (score < 500) return 1;
-  if (score < 1500) return 2;
-  if (score < 4000) return 3;
+  if (score < 200) return 1;
+  if (score < 800) return 2;
+  if (score < 3000) return 3;
   return 4;
+}
+
+export function getDifficultyMultiplier(score) {
+  if (score < 3000) return 1.0;
+  if (score < 6000) return 1.0 + (score - 3000) / 10000;
+  return Math.min(1.0 + (score - 3000) / 8000, 1.75);
 }
 
 export function getEnemyClass(classId = 'scout') {

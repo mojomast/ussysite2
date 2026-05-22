@@ -1,4 +1,4 @@
-import { getDifficultyTier, getEnemyClass, getRandomClassForTier, applyDamageModel } from './combat-overhaul.js';
+import { getDifficultyMultiplier, getDifficultyTier, getEnemyClass, getRandomClassForTier, applyDamageModel } from './combat-overhaul.js';
 import { combatState } from './combat-state.js';
 import { sfxEngine } from './sfx.js';
 import {
@@ -45,7 +45,7 @@ export function buildEnemyMaterial(color, opacity = 0.88) {
 export function buildEnemyGeometry(classId) {
   const cls = getEnemyClass(classId);
   const group = new THREE.Group();
-  const bodyMat = buildEnemyMaterial(cls.color, 0.95);
+  const bodyMat = buildEnemyMaterial(cls.color, cls.geometry === 'phantom' ? 0.55 : 0.95);
   const wingMat = buildEnemyMaterial(cls.wingColor, 0.78);
   const accentMat = buildEnemyMaterial(0xffcc00, 0.65);
   const geometry = cls.geometry;
@@ -89,6 +89,17 @@ export function buildEnemyGeometry(classId) {
     const crossB = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.82, 0.52), wingMat);
     body.userData.enemyBody = true;
     group.add(body, crossA, crossB);
+  } else if (geometry === 'phantom') {
+    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.32), bodyMat);
+    const bladeGeo = new THREE.BoxGeometry(0.04, 0.56, 0.12);
+    body.userData.enemyBody = true;
+    [-1, 1].forEach(side => {
+      const blade = new THREE.Mesh(bladeGeo, wingMat);
+      blade.position.set(side * 0.32, 0, 0);
+      blade.rotation.z = Math.PI / 4;
+      group.add(blade);
+    });
+    group.add(body);
   } else {
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), bodyMat);
     const leftWing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.05, 1.05), wingMat);
@@ -180,6 +191,44 @@ export function applyEnemyHit(enemy, rawDamage = 12) {
   }
 }
 
+function animatePhantom(enemy) {
+  if (!enemy.userData.bodyMaterial) return;
+  enemy.userData.phantomPulseFrame = (enemy.userData.phantomPulseFrame || 0) + 1;
+  if (enemy.userData.phantomPulseFrame % 80 === 0) {
+    enemy.userData.phantomOpacityTarget = (enemy.userData.phantomOpacityTarget || 0.55) > 0.6 ? 0.55 : 0.82;
+  }
+  const target = enemy.userData.phantomOpacityTarget || 0.55;
+  enemy.userData.bodyMaterial.opacity += (target - enemy.userData.bodyMaterial.opacity) * 0.08;
+}
+
+function getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown) {
+  const baseCooldown = getEnemyFireCooldown(enemy.position, cls);
+  return baseCooldown / (enemy.userData.difficultyMultiplier || 1);
+}
+
+function shouldEnemyEvadeHit(enemy) {
+  const cls = getEnemyClass(enemy.userData.classId);
+  if (!cls.evasion) return false;
+  if (combatState.unlocked.has('weap_5') && Math.random() < 0.15) return false;
+  if (Math.random() >= cls.evasion) return false;
+  enemy.userData.evasionTimer = Math.max(enemy.userData.evasionTimer || 0, 450);
+  return true;
+}
+
+function findNearestEnemyToPosition(position, maxDistance) {
+  let nearest = null;
+  let nearestDistSq = maxDistance * maxDistance;
+  enemies.forEach(enemy => {
+    if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0) return;
+    const distSq = enemy.position.distanceToSquared(position);
+    if (distSq < nearestDistSq) {
+      nearestDistSq = distSq;
+      nearest = enemy;
+    }
+  });
+  return nearest;
+}
+
 export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   const { flightState, getEnemyFireCooldown, missionState } = requireDeps();
   if (!enemy) return;
@@ -187,6 +236,7 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
     ? 'scout'
     : (classId || getRandomClassForTier(getDifficultyTier(flightState.score)));
   const cls = getEnemyClass(resolvedClassId);
+  const difficultyMultiplier = getDifficultyMultiplier(flightState.score);
   buildEnemyFromClass(enemy, cls.id);
   const angle = Math.random() * Math.PI * 2 + offset;
   const height = (Math.random() - 0.5) * 54;
@@ -204,10 +254,14 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
   enemy.userData.burstNextAt = 0;
   enemy.userData.evasionTimer = 0;
   enemy.userData.stunUntil = 0;
+  enemy.userData.difficultyMultiplier = difficultyMultiplier;
+  enemy.userData.accuracy = Math.min(0.98, cls.accuracy * (0.85 + difficultyMultiplier * 0.15));
+  enemy.userData.phantomPulseFrame = 0;
+  enemy.userData.phantomOpacityTarget = cls.geometry === 'phantom' ? 0.55 : null;
   enemy.userData.shieldHp = cls.health > 2 ? cls.health - 1 : 0;
   enemy.userData.maxShieldHp = enemy.userData.shieldHp;
   enemy.userData.spawnDelay = delay;
-  const fireCooldown = getEnemyFireCooldown(enemy.position, cls);
+  const fireCooldown = getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown);
   enemy.userData.cooldown = fireCooldown + delay * 1000 + Math.random() * fireCooldown;
   enemy.visible = delay <= 0;
   buildEnemyHealthPips(enemy);
@@ -229,6 +283,7 @@ export function updateCombatObjects(dt) {
     }
     const now = performance.now();
     const cls = getEnemyClass(enemy.userData.classId);
+    if (cls.geometry === 'phantom') animatePhantom(enemy);
     if (enemy.userData.bodyMaterial && enemy.userData.flashUntil && now >= enemy.userData.flashUntil) {
       enemy.userData.bodyMaterial.color.setHex(cls.color);
       enemy.userData.flashUntil = 0;
@@ -260,7 +315,7 @@ export function updateCombatObjects(dt) {
 
     if (enemy.userData.burstRemaining > 0 && now >= enemy.userData.burstNextAt) {
       flightTempVec2.copy(flightState.pos).sub(enemy.position).normalize();
-      const jitter = Math.max(0, 1 - cls.accuracy);
+      const jitter = Math.max(0, 1 - (enemy.userData.accuracy ?? cls.accuracy));
       flightTempVec2
         .addScaledVector(flightRight, (Math.random() - 0.5) * jitter)
         .addScaledVector(flightUp, (Math.random() - 0.5) * jitter)
@@ -271,7 +326,7 @@ export function updateCombatObjects(dt) {
       enemy.userData.burstRemaining -= 1;
       enemy.userData.burstNextAt = now + cls.burstDelay;
       if (enemy.userData.burstRemaining <= 0) {
-        const fireCooldown = getEnemyFireCooldown(enemy.position, cls);
+        const fireCooldown = getScaledEnemyFireCooldown(enemy, cls, getEnemyFireCooldown);
         enemy.userData.cooldown = fireCooldown + Math.random() * fireCooldown * 0.45;
       }
     }
@@ -290,6 +345,7 @@ export function updateCombatObjects(dt) {
       if (bullet.position.distanceToSquared(enemy.position) < radius * radius) {
         triggerImpactFlash(bullet.position);
         deactivateCombatObject(bullet);
+        if (shouldEnemyEvadeHit(enemy)) return;
         applyEnemyHit(enemy, bullet.userData.damage || 12);
       }
     });
@@ -299,6 +355,12 @@ export function updateCombatObjects(dt) {
     if (!bullet.userData.active) return;
     if (bullet.position.distanceToSquared(flightState.pos) < 0.55) {
       deactivateCombatObject(bullet);
+      if (combatState.unlocked.has('hull_5') && Math.random() < 0.20) {
+        triggerImpactFlash(flightState.pos);
+        flightState.status = 'POINT DEFENSE INTERCEPT';
+        flightState.statusUntil = performance.now() + 900;
+        return;
+      }
       applyPlayerDamage(8);
     }
   });
@@ -311,6 +373,7 @@ export function updateCombatObjects(dt) {
       if (missile.position.distanceToSquared(enemy.position) < radius * radius) {
         triggerImpactFlash(missile.position);
         deactivateCombatObject(missile);
+        if (shouldEnemyEvadeHit(enemy)) return;
         applyEnemyHit(enemy, missile.userData.damage || 60);
       }
     });
@@ -338,13 +401,19 @@ export function applyPlayerDamage(amount) {
   const damage = applyDamageModel({ shield: flightState.shield, armor: flightState.armor }, amount, skillTree.getArmorDamageMultiplier());
   flightState.shield = damage.shield;
   flightState.armor = damage.armor;
+  const shieldDrop = shieldBefore - flightState.shield;
+  if (combatState.unlocked.has('shield_5') && shieldBefore > 25 && shieldDrop > 0) {
+    sfxEngine.playFlat('shield_hit');
+    triggerImpactFlash(flightState.pos);
+    const nearest = findNearestEnemyToPosition(flightState.pos, 12);
+    if (nearest) applyEnemyHit(nearest, Math.max(1, amount * 0.2));
+  }
   if (flightHud) {
     flightHud.classList.remove('hud-hit');
     void flightHud.offsetWidth;
     flightHud.classList.add('hud-hit');
     windowRef.setTimeout(() => flightHud.classList.remove('hud-hit'), 180);
   }
-  const shieldDrop = shieldBefore - flightState.shield;
   if (shieldDrop > 15) {
     combatAudio.bark('TAKING FIRE', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'low' });
   }

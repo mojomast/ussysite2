@@ -79,7 +79,7 @@ describe('flight physics helpers', () => {
     const state = makeState();
     state.vel.z = -3;
     applyStrafe(state, new Vector3(1, 0, 0), 1, 1);
-    assert.equal(state.vel.x, 8, 'strafe should add lateral velocity');
+    assert.equal(state.vel.x, 9.2, 'strafe should add the tuned lateral velocity');
     assert.equal(state.vel.z, -3, 'strafe should not change forward velocity');
   });
 

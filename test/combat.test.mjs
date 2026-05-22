@@ -8,14 +8,15 @@ import {
   applyHeatShot,
   applySkillEffects,
   getDifficultyTier,
+  getDifficultyMultiplier,
   getMaxShield,
   getStationEquipment,
   simulateBurstFire
 } from '../js/flight/combat-overhaul.js';
 import { awardXp, combatState } from '../js/flight/combat-state.js';
 
-test('ENEMY_CLASSES has five complete entries', () => {
-  assert.equal(ENEMY_CLASSES.length, 5);
+test('ENEMY_CLASSES has six complete entries', () => {
+  assert.equal(ENEMY_CLASSES.length, 6);
   for (const cls of ENEMY_CLASSES) {
     for (const field of ['id', 'label', 'color', 'wingColor', 'health', 'speed', 'fireRate', 'accuracy', 'burstCount', 'creditReward', 'xpReward', 'approachSpeed', 'geometry']) {
       assert.ok(Object.hasOwn(cls, field), `${cls.id} missing ${field}`);
@@ -33,7 +34,13 @@ test('WEAPON_DEFS has seven complete entries', () => {
 });
 
 test('getDifficultyTier boundaries', () => {
-  assert.deepEqual([0, 1, 499, 500, 1499, 1500, 3999, 4000].map(getDifficultyTier), [0, 1, 1, 2, 2, 3, 3, 4]);
+  assert.deepEqual([0, 1, 199, 200, 799, 800, 2999, 3000].map(getDifficultyTier), [0, 1, 1, 2, 2, 3, 3, 4]);
+});
+
+test('getDifficultyMultiplier scales high score pressure', () => {
+  assert.equal(getDifficultyMultiplier(2999), 1);
+  assert.equal(getDifficultyMultiplier(6000), 1.375);
+  assert.equal(getDifficultyMultiplier(20000), 1.75);
 });
 
 test('applyPlayerDamage bleedthrough model', () => {

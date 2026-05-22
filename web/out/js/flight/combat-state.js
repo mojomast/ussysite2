@@ -40,6 +40,7 @@ export const combatState = {
   afterburnerActive: false,
   afterburnerUntil: 0,
   afterburnerCooldownUntil: 0,
+  coldJumpCooldown: 0,
   bountyPending: 0,
   overchargeUsed: false,
   lastAdrenalineBarkAt: 0,

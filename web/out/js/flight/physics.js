@@ -1,4 +1,5 @@
 import { combatState } from './combat-state.js';
+import { sfxEngine } from './sfx.js';
 import { traderState, updateFuelDrain } from '../economy/trader.js';
 
 const THREE = globalThis.THREE;
@@ -13,6 +14,7 @@ export const flightQuat = typeof THREE !== 'undefined' ? new THREE.Quaternion() 
 const flightInputVec = typeof THREE !== 'undefined' ? new THREE.Vector3() : null;
 const flightInputQuat = typeof THREE !== 'undefined' ? new THREE.Quaternion() : null;
 let deps = null;
+let coldJumpKeyWasDown = false;
 
 export const BASE_MAX_VELOCITY = 22;
 export const DEFAULT_DAMPING = 0.985;
@@ -62,6 +64,7 @@ export function updateFlight(time = 0) {
   combatState.heat = Math.max(0, combatState.heat - combatState.heatCoolRate * dt);
   if (combatState.overheated && combatState.heat <= 0) combatState.overheated = false;
   if (combatState.overheated) flightState.status = 'WEAPONS OFFLINE - COOLING';
+  combatState.coldJumpCooldown = Math.max(0, (combatState.coldJumpCooldown || 0) - dt * 1000);
 
   if (flightState.landed) {
     flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
@@ -95,6 +98,15 @@ export function updateFlight(time = 0) {
     if (combatState.afterburnerActive && performance.now() >= combatState.afterburnerUntil) combatState.afterburnerActive = false;
     const boost = combatState.afterburnerActive ? 1.8 : 1;
     if (flightHud) flightHud.classList.toggle('afterburner-active', combatState.afterburnerActive);
+    const coldJumpKeyDown = flightState.keys.has('KeyE');
+    if (coldJumpKeyDown && !coldJumpKeyWasDown && skillTree.unlocked.has('eng_5') && combatState.coldJumpCooldown <= 0) {
+      flightState.pos.addScaledVector(flightForward, 40);
+      sfxEngine.playFlat('missile', { volume: 0.8 });
+      combatState.coldJumpCooldown = 25000;
+      flightState.status = 'COLD JUMP EXECUTED';
+      flightState.statusUntil = performance.now() + 1400;
+    }
+    coldJumpKeyWasDown = coldJumpKeyDown;
     if (flightState.keys.has('KeyW') || flightState.keys.has('ArrowUp')) {
       flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * dt);
     }
@@ -102,10 +114,10 @@ export function updateFlight(time = 0) {
       flightState.vel.addScaledVector(flightForward, -flightState.thrust * 0.58 * dt);
     }
     if (flightState.keys.has('KeyA') || flightState.keys.has('ArrowLeft')) {
-      flightState.vel.addScaledVector(flightRight, -flightState.strafe * dt);
+      flightState.vel.addScaledVector(flightRight, -flightState.strafe * 1.15 * dt);
     }
     if (flightState.keys.has('KeyD') || flightState.keys.has('ArrowRight')) {
-      flightState.vel.addScaledVector(flightRight, flightState.strafe * dt);
+      flightState.vel.addScaledVector(flightRight, flightState.strafe * 1.15 * dt);
     }
 
     applyVelocityCapAndDrag(flightState, 0, boost);
@@ -118,7 +130,8 @@ export function updateFlight(time = 0) {
   const isThrusting = flightState.keys.has('KeyW') || flightState.keys.has('KeyS')
     || flightState.keys.has('ArrowUp') || flightState.keys.has('ArrowDown')
     || flightState.autopilot;
-  if (updateFuelDrain(dt, isThrusting) && !flightState.fuelDepleted) {
+  const fuelDrainScale = 1 + flightState.vel.length() * 0.012;
+  if (updateFuelDrain(dt * fuelDrainScale, isThrusting) && !flightState.fuelDepleted) {
     flightState.fuelDepleted = true;
     flightState.thrust = 2;
     flightState.strafe = 1;
@@ -159,7 +172,7 @@ export function applyReverseThrust(state, forward, dt) {
 
 export function applyStrafe(state, right, dt, direction = 1) {
   if (!canApplyThrust(state)) return state;
-  state.vel.addScaledVector(right, (state.strafe ?? 8) * direction * dt);
+  state.vel.addScaledVector(right, (state.strafe ?? 8) * 1.15 * direction * dt);
   return state;
 }
 

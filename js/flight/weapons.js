@@ -321,7 +321,7 @@ export function applyEmpBurst(origin, weapon) {
   enemies.forEach(enemy => {
     if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0) return;
     if (enemy.position.distanceTo(origin) > weapon.aoeRadius) return;
-    enemy.userData.stunUntil = performance.now() + 1200;
+    enemy.userData.stunUntil = performance.now() + (weapon.stunDuration ?? 1200);
     applyEnemyHit(enemy, weapon.damage);
     hitCount += 1;
   });
