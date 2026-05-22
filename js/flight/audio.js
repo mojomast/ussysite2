@@ -40,6 +40,11 @@ export function getTtsPriorityRank(priority = 'normal') {
 }
 
 let audioRuntime = { flightState: null, updateFlightHud: () => {}, getVoicePersona: source => ({ voiceId: 'onyx', source }) };
+const fallbackSettingsState = { radioVolume: 70, chatterVolume: 60, sfxVolume: 80, ttsVolume: 75, ttsEnabled: true, ttsBackendEnabled: false };
+
+function getSettingsState() {
+  return typeof settingsState !== 'undefined' ? settingsState : fallbackSettingsState;
+}
 
 export function configureFlightAudio(options = {}) {
   audioRuntime = { ...audioRuntime, ...options };
@@ -77,7 +82,7 @@ export function saveFlightSettings() {
 }
 
 export function setRadioVolume(value) {
-  settingsState.radioVolume = toVolumeSetting(value);
+  getSettingsState().radioVolume = toVolumeSetting(value);
   radioChain.updateOutputGains();
   if (audioRuntime.flightState) audioRuntime.flightState.status = `RADIO VOLUME ${volumePercent(gameSettings.radioVolume)}`;
   if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
@@ -85,7 +90,7 @@ export function setRadioVolume(value) {
 }
 
 export function setChatterVolume(value) {
-  settingsState.chatterVolume = toVolumeSetting(value);
+  getSettingsState().chatterVolume = toVolumeSetting(value);
   combatAudio.updateGain();
   if (audioRuntime.flightState) audioRuntime.flightState.status = `CHATTER VOLUME ${volumePercent(gameSettings.chatterVolume)}`;
   if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
@@ -93,7 +98,7 @@ export function setChatterVolume(value) {
 }
 
 export function setSfxVolume(value) {
-  settingsState.sfxVolume = toVolumeSetting(value);
+  getSettingsState().sfxVolume = toVolumeSetting(value);
   sfxVolumeApplier(gameSettings.sfxVolume);
   if (audioRuntime.flightState) audioRuntime.flightState.status = `SFX VOLUME ${volumePercent(gameSettings.sfxVolume)}`;
   if (audioRuntime.flightState) audioRuntime.flightState.statusUntil = performance.now() + 2200;
@@ -102,20 +107,20 @@ export function setSfxVolume(value) {
 
 Object.defineProperties(gameSettings, {
   radioVolume: {
-    get: () => settingsState.radioVolume / 100,
-    set: value => { settingsState.radioVolume = toVolumeSetting(value); }
+    get: () => getSettingsState().radioVolume / 100,
+    set: value => { getSettingsState().radioVolume = toVolumeSetting(value); }
   },
   chatterVolume: {
-    get: () => settingsState.chatterVolume / 100,
-    set: value => { settingsState.chatterVolume = toVolumeSetting(value); }
+    get: () => getSettingsState().chatterVolume / 100,
+    set: value => { getSettingsState().chatterVolume = toVolumeSetting(value); }
   },
   sfxVolume: {
-    get: () => settingsState.sfxVolume / 100,
-    set: value => { settingsState.sfxVolume = toVolumeSetting(value); }
+    get: () => getSettingsState().sfxVolume / 100,
+    set: value => { getSettingsState().sfxVolume = toVolumeSetting(value); }
   },
   ttsVolume: {
-    get: () => settingsState.ttsVolume / 100,
-    set: value => { settingsState.ttsVolume = toVolumeSetting(value); }
+    get: () => getSettingsState().ttsVolume / 100,
+    set: value => { getSettingsState().ttsVolume = toVolumeSetting(value); }
   }
 });
 
@@ -226,8 +231,8 @@ export const ttsEngine = {
 };
 
 Object.defineProperty(ttsEngine, 'enabled', {
-  get: () => settingsState.ttsEnabled,
-  set: value => { settingsState.ttsEnabled = Boolean(value); }
+  get: () => getSettingsState().ttsEnabled,
+  set: value => { getSettingsState().ttsEnabled = Boolean(value); }
 });
 
 export const radioChain = {
@@ -514,8 +519,8 @@ let ttsBackendRetryAfter = 0;
 let ttsBackendWarnedAt = 0;
 
 export function setTTSBackendEnabled(enabled = true) {
-  settingsState.ttsBackendEnabled = Boolean(enabled);
-  ttsConfig.enabled = settingsState.ttsBackendEnabled;
+  getSettingsState().ttsBackendEnabled = Boolean(enabled);
+  ttsConfig.enabled = getSettingsState().ttsBackendEnabled;
   if (ttsConfig.enabled) ttsBackendRetryAfter = 0;
   return ttsConfig.enabled;
 }
