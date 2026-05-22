@@ -162,6 +162,7 @@ let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, r
 let debrisField, dustField;
 let telemetryLastUpdate = 0;
 let gameRoot, playerShip, flightNavLine;
+let flightAssistKeyCaptureRegistered = false;
 
 const projectHitTargets = engineProjectHitTargets;
 const projectNodeById = engineProjectNodeById;
@@ -562,6 +563,7 @@ export function init() {
   configureHud({
     activeUniverseScale: () => activeUniverseScale,
     camTarget,
+    camera,
     cockpitRadar,
     documentRef: document,
     enemies,
@@ -611,6 +613,7 @@ export function init() {
     activeUniverseScale: () => activeUniverseScale,
     firePrimaryWeapon,
     fireSecondaryWeapon,
+    findNearestEnemy,
     flightBounds,
     flightHud,
     flightState,
@@ -820,6 +823,7 @@ export function init() {
     updateFlightHud,
     windowRef: window
   });
+  registerFlightAssistKeyCapture();
   syncOrbitFromCamera();
   
   // Populate UI Lists
@@ -1316,6 +1320,7 @@ function enterFlightMode() {
   flightState.thrust = 14;
   flightState.strafe = 8;
   flightState.damping = 0.985;
+  resetFlightAssistState();
   combatState.heat = 0;
   combatState.overheated = false;
   combatState.adrenaline = 0;
@@ -1395,6 +1400,7 @@ function exitFlightMode(releasePointer = true) {
   flightState.autopilot = false;
   flightState.currentDockedProject = null;
   flightState.vel.set(0, 0, 0);
+  resetFlightAssistState();
   traderState.docked = false;
   traderState.dockedStation = null;
   gameOrchestrator.polling = false;
@@ -1423,6 +1429,7 @@ function exitFlightMode(releasePointer = true) {
 }
 
 function toggleFlightView() {
+  if (flightState.keys.has('KeyC')) return;
   flightState.view = flightState.view === 'cockpit' ? 'third' : 'cockpit';
   document.body.classList.toggle('flight-third-person', flightState.view === 'third');
   flightState.status = `${flightState.view.toUpperCase()} VIEW ACTIVE`;
@@ -1479,9 +1486,32 @@ function handleFlightUndock() {
   sfxEngine.startEngineHum();
 }
 
+function resetFlightAssistState() {
+  flightState.throttleEnabled = false;
+  flightState.throttleLevel = 0.5;
+  flightState.matchSpeedActive = false;
+  flightState.matchSpeedTarget = null;
+  flightState.matchSpeedUntil = 0;
+}
+
+function registerFlightAssistKeyCapture() {
+  if (flightAssistKeyCaptureRegistered) return;
+  flightAssistKeyCaptureRegistered = true;
+  const assistKeys = new Set(['KeyT', 'KeyC']);
+  window.addEventListener('keydown', event => {
+    if (!isFlightActive || !assistKeys.has(event.code)) return;
+    flightState.keys.add(event.code);
+  }, true);
+  window.addEventListener('keyup', event => {
+    if (!assistKeys.has(event.code)) return;
+    flightState.keys.delete(event.code);
+  }, true);
+}
+
 function undockFromTradeMenu() {
   flightState.landed = false;
   flightState.currentDockedProject = null;
+  resetFlightAssistState();
   handleFlightUndock();
   flightState.status = 'UNDOCKED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
   flightState.statusUntil = performance.now() + 3000;
@@ -2180,6 +2210,7 @@ function restockAtProject(project) {
   flightState.fuel = traderState.fuel;
   flightState.fuelDepleted = false;
   flightState.strafe = 8;
+  resetFlightAssistState();
   flightState.shieldCriticalSpoken = false;
   flightState.finalApproachSpoken = false;
   flightState.status = `RESTOCKED AT ${project.name.toUpperCase()}`;

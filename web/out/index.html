@@ -419,7 +419,13 @@
         <path id="reticle-shield-arch" d="M 65,35 A 70,70 0 0,0 65,165" fill="none" stroke="var(--cyber-cyan)" stroke-width="3" stroke-dasharray="220" stroke-dashoffset="0"/>
         <!-- Right arch for Heat -->
         <path id="reticle-heat-arch" d="M 135,35 A 70,70 0 0,1 135,165" fill="none" stroke="var(--cyber-pink)" stroke-width="3" stroke-dasharray="220" stroke-dashoffset="0"/>
+        <!-- Throttle arch - bottom center, fills left to right with throttle level -->
+        <path id="reticle-throttle-arch" d="M 55,155 A 70,70 0 0,0 145,155" fill="none" stroke="var(--cyber-yellow)" stroke-width="2.5" stroke-dasharray="150" stroke-dashoffset="150" opacity="0"/>
+        <!-- Throttle label -->
+        <text id="reticle-throttle-label" x="100" y="190" text-anchor="middle" font-family="monospace" font-size="10" fill="var(--cyber-yellow)" opacity="0">THR 50%</text>
       </svg>
+      <div id="reticle-lead-pip" class="reticle-lead-pip" aria-hidden="true"></div>
+      <div id="bogey-indicators" aria-hidden="true"></div>
     </div>
 
     <!-- TOP LEFT: Radar -->
@@ -516,7 +522,7 @@
             </div>
           </div>
         </div>
-        <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // C CAM // T TRADE // I INVENTORY</div>
+        <div class="dash-center-help">MOUSELOOK // W/S THRUST // A/D STRAFE // T THROTTLE // Z/X THR +/- // G MATCH // C EVADE // LMB FIRE // RMB SECONDARY // V NAV // P AUTO // I INVENTORY</div>
       </div>
     </div>
 

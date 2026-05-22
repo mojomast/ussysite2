@@ -15,6 +15,11 @@ const flightInputVec = typeof THREE !== 'undefined' ? new THREE.Vector3() : null
 const flightInputQuat = typeof THREE !== 'undefined' ? new THREE.Quaternion() : null;
 let deps = null;
 let coldJumpKeyWasDown = false;
+let throttleZWasDown = false;
+let throttleXWasDown = false;
+let throttleTWasDown = false;
+let matchSpeedKeyWasDown = false;
+let evasionKeyWasDown = false;
 
 export const BASE_MAX_VELOCITY = 22;
 export const DEFAULT_DAMPING = 0.985;
@@ -33,6 +38,7 @@ export function updateFlight(time = 0) {
     activeUniverseScale,
     firePrimaryWeapon,
     fireSecondaryWeapon,
+    findNearestEnemy,
     flightBounds,
     flightHud,
     flightState,
@@ -65,6 +71,7 @@ export function updateFlight(time = 0) {
   if (combatState.overheated && combatState.heat <= 0) combatState.overheated = false;
   if (combatState.overheated) flightState.status = 'WEAPONS OFFLINE - COOLING';
   combatState.coldJumpCooldown = Math.max(0, (combatState.coldJumpCooldown || 0) - dt * 1000);
+  combatState.evasionCooldown = Math.max(0, (combatState.evasionCooldown || 0) - dt * 1000);
 
   if (flightState.landed) {
     flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
@@ -107,11 +114,99 @@ export function updateFlight(time = 0) {
       flightState.statusUntil = performance.now() + 1400;
     }
     coldJumpKeyWasDown = coldJumpKeyDown;
-    if (flightState.keys.has('KeyW') || flightState.keys.has('ArrowUp')) {
-      flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * dt);
+
+    const matchSpeedKeyDown = flightState.keys.has('KeyG');
+    if (matchSpeedKeyDown && !matchSpeedKeyWasDown) {
+      const nearestEnemy = typeof findNearestEnemy === 'function' ? findNearestEnemy() : null;
+      if (nearestEnemy?.userData?.active && nearestEnemy.userData.velocity) {
+        flightState.matchSpeedTarget = nearestEnemy.userData.velocity.clone();
+        flightState.matchSpeedActive = true;
+        flightState.matchSpeedUntil = performance.now() + 800;
+        flightState.status = 'G — MATCHING TARGET VELOCITY';
+        flightState.statusUntil = performance.now() + 1800;
+      } else {
+        flightState.matchSpeedTarget = new THREE.Vector3(0, 0, 0);
+        flightState.matchSpeedActive = true;
+        flightState.matchSpeedUntil = performance.now() + 1200;
+        flightState.status = 'G — EMERGENCY BRAKE';
+        flightState.statusUntil = performance.now() + 1800;
+      }
     }
-    if (flightState.keys.has('KeyS') || flightState.keys.has('ArrowDown')) {
-      flightState.vel.addScaledVector(flightForward, -flightState.thrust * 0.58 * dt);
+    matchSpeedKeyWasDown = matchSpeedKeyDown;
+
+    if (flightState.matchSpeedActive && flightState.matchSpeedTarget) {
+      const t = Math.min(1, dt * 4.5);
+      flightState.vel.lerp(flightState.matchSpeedTarget, t);
+      if (performance.now() >= flightState.matchSpeedUntil) {
+        flightState.matchSpeedActive = false;
+        flightState.matchSpeedTarget = null;
+      }
+    }
+
+    const evasionKeyDown = flightState.keys.has('KeyC');
+    if (evasionKeyDown && !evasionKeyWasDown && combatState.evasionCooldown <= 0) {
+      const rollDir = Math.random() > 0.5 ? 1 : -1;
+      flightState.vel.addScaledVector(flightRight, flightState.strafe * 3.2 * rollDir);
+      flightState.vel.addScaledVector(flightUp, flightState.strafe * 1.4);
+      applyLocalFlightRotation(0, 0, 1, rollDir * 1.2);
+      combatState.evasionCooldown = 4000;
+      flightState.status = 'C — EVASION ROLL';
+      flightState.statusUntil = performance.now() + 800;
+      sfxEngine.playFlat('boost', { volume: 0.7 });
+    }
+    evasionKeyWasDown = evasionKeyDown;
+
+    const throttleTDown = flightState.keys.has('KeyT');
+    if (throttleTDown && !throttleTWasDown) {
+      flightState.throttleEnabled = !flightState.throttleEnabled;
+      flightState.throttleLevel = flightState.throttleLevel ?? 0.5;
+      flightState.status = flightState.throttleEnabled
+        ? `THROTTLE ENGAGED — ${Math.round(flightState.throttleLevel * 100)}%`
+        : 'THROTTLE DISENGAGED';
+      flightState.statusUntil = performance.now() + 1600;
+    }
+    throttleTWasDown = throttleTDown;
+
+    if (flightState.throttleEnabled) {
+      const throttleZDown = flightState.keys.has('KeyZ');
+      const throttleXDown = flightState.keys.has('KeyX');
+      if (throttleZDown && !throttleZWasDown) {
+        flightState.throttleLevel = Math.min(1.0, +((flightState.throttleLevel ?? 0.5) + 0.1).toFixed(1));
+        flightState.status = `THROTTLE ${Math.round(flightState.throttleLevel * 100)}%`;
+        flightState.statusUntil = performance.now() + 800;
+      }
+      if (throttleXDown && !throttleXWasDown) {
+        flightState.throttleLevel = Math.max(0.0, +((flightState.throttleLevel ?? 0.5) - 0.1).toFixed(1));
+        flightState.status = `THROTTLE ${Math.round(flightState.throttleLevel * 100)}%`;
+        flightState.statusUntil = performance.now() + 800;
+      }
+      throttleZWasDown = throttleZDown;
+      throttleXWasDown = throttleXDown;
+    } else {
+      throttleZWasDown = false;
+      throttleXWasDown = false;
+    }
+
+    if (flightState.throttleEnabled) {
+      // Continuous forward thrust at throttle level; Z/X adjust the static throttle setting.
+      if (flightState.keys.has('KeyW') || flightState.keys.has('ArrowUp')) {
+        flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * flightState.throttleLevel * dt);
+      }
+      if (flightState.keys.has('KeyS') || flightState.keys.has('ArrowDown')) {
+        flightState.vel.addScaledVector(flightForward, -flightState.thrust * 0.58 * flightState.throttleLevel * dt);
+      }
+      if (!flightState.keys.has('KeyW') && !flightState.keys.has('ArrowUp')
+          && !flightState.keys.has('KeyS') && !flightState.keys.has('ArrowDown')
+          && flightState.throttleLevel > 0) {
+        flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * flightState.throttleLevel * 0.6 * dt);
+      }
+    } else {
+      if (flightState.keys.has('KeyW') || flightState.keys.has('ArrowUp')) {
+        flightState.vel.addScaledVector(flightForward, flightState.thrust * boost * dt);
+      }
+      if (flightState.keys.has('KeyS') || flightState.keys.has('ArrowDown')) {
+        flightState.vel.addScaledVector(flightForward, -flightState.thrust * 0.58 * dt);
+      }
     }
     if (flightState.keys.has('KeyA') || flightState.keys.has('ArrowLeft')) {
       flightState.vel.addScaledVector(flightRight, -flightState.strafe * 1.15 * dt);
@@ -129,6 +224,7 @@ export function updateFlight(time = 0) {
   flightState.pos.addScaledVector(flightState.vel, dt);
   const isThrusting = flightState.keys.has('KeyW') || flightState.keys.has('KeyS')
     || flightState.keys.has('ArrowUp') || flightState.keys.has('ArrowDown')
+    || (flightState.throttleEnabled && flightState.throttleLevel > 0)
     || flightState.autopilot;
   const fuelDrainScale = 1 + flightState.vel.length() * 0.012;
   if (updateFuelDrain(dt * fuelDrainScale, isThrusting) && !flightState.fuelDepleted) {

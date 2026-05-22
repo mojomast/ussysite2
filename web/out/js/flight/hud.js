@@ -124,6 +124,7 @@ export function updateCockpitRadar(time = performance.now(), force = false) {
 
 export function updateFlightHud(force = false) {
   const {
+    camera,
     documentRef = document,
     enemies = [],
     findNearestEnemy,
@@ -200,6 +201,53 @@ export function updateFlightHud(force = false) {
   const reticleHeatArch = el('reticle-heat-arch');
   if (reticleHeatArch) reticleHeatArch.style.strokeDashoffset = String(Math.max(0, 220 - (220 * (combatState.heat / combatState.maxHeat))));
 
+  const reticleThrottleArch = el('reticle-throttle-arch');
+  const reticleThrottleLabel = el('reticle-throttle-label');
+  if (reticleThrottleArch) {
+    const throttleVisible = flightState.throttleEnabled ? '1' : '0';
+    reticleThrottleArch.setAttribute('opacity', throttleVisible);
+    if (reticleThrottleLabel) reticleThrottleLabel.setAttribute('opacity', throttleVisible);
+    const offset = Math.max(0, 150 - (150 * (flightState.throttleLevel ?? 0)));
+    reticleThrottleArch.style.strokeDashoffset = String(offset);
+    if (reticleThrottleLabel) reticleThrottleLabel.textContent = `THR ${Math.round((flightState.throttleLevel ?? 0) * 100)}%`;
+  }
+
+  const leadPip = el('reticle-lead-pip');
+  if (leadPip) {
+    const nearestEnemy = typeof findNearestEnemy === 'function' ? findNearestEnemy() : null;
+    if (nearestEnemy?.userData?.active && nearestEnemy.userData.velocity && camera) {
+      const bulletSpeed = 130;
+      const toEnemy = nearestEnemy.position.clone().sub(flightState.pos);
+      const dist = toEnemy.length();
+      const tof = dist / bulletSpeed;
+      const predicted = nearestEnemy.position.clone();
+      predicted.addScaledVector(nearestEnemy.userData.velocity, tof);
+      const projected = predicted.clone().project(camera);
+      const containerEl = leadPip.parentElement;
+      if (containerEl) {
+        const view = documentRef.defaultView || globalThis;
+        const rect = containerEl.getBoundingClientRect();
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+        const vpW = view.innerWidth || rect.width;
+        const vpH = view.innerHeight || rect.height;
+        const screenX = (projected.x * 0.5 + 0.5) * vpW;
+        const screenY = (1 - (projected.y * 0.5 + 0.5)) * vpH;
+        const containerCenterX = rect.left + cx;
+        const containerCenterY = rect.top + cy;
+        const offsetX = screenX - containerCenterX + cx;
+        const offsetY = screenY - containerCenterY + cy;
+        const clampedX = Math.max(8, Math.min(rect.width - 8, offsetX));
+        const clampedY = Math.max(8, Math.min(rect.height - 8, offsetY));
+        leadPip.style.left = `${clampedX}px`;
+        leadPip.style.top = `${clampedY}px`;
+        leadPip.style.opacity = dist < 60 ? '1' : '0';
+      }
+    } else {
+      leadPip.style.opacity = '0';
+    }
+  }
+
   const flightThreatEl = el('flight-threat-c');
   if (flightThreatEl) {
     const nearestEnemy = typeof findNearestEnemy === 'function' ? findNearestEnemy() : null;
@@ -210,6 +258,42 @@ export function updateFlightHud(force = false) {
       flightThreatEl.textContent = 'NO THREAT';
       flightThreatEl.style.color = 'var(--cyber-yellow)';
     }
+  }
+
+  const bogeyContainer = el('bogey-indicators');
+  if (bogeyContainer) {
+    const containerEl = bogeyContainer.parentElement;
+    const activeEnemies = enemies
+      .filter(enemy => enemy.userData.active && enemy.visible)
+      .slice(0, 4);
+
+    while (bogeyContainer.children.length < activeEnemies.length) {
+      const arrow = documentRef.createElement('div');
+      arrow.className = 'bogey-indicator';
+      bogeyContainer.appendChild(arrow);
+    }
+    while (bogeyContainer.children.length > activeEnemies.length) {
+      bogeyContainer.removeChild(bogeyContainer.lastChild);
+    }
+
+    const containerRect = containerEl?.getBoundingClientRect();
+    const halfW = (containerRect?.width ?? 200) / 2;
+    const halfH = (containerRect?.height ?? 200) / 2;
+    const edgePad = 18;
+
+    activeEnemies.forEach((enemy, i) => {
+      const arrow = bogeyContainer.children[i];
+      if (!arrow) return;
+      const point = mapRadarPoint(enemy.position, 1);
+      const angle = Math.atan2(point.x, -point.y) * (180 / Math.PI);
+      const rad = Math.atan2(point.x, -point.y);
+      const edgeX = halfW + Math.sin(rad) * (halfW - edgePad);
+      const edgeY = halfH + (-Math.cos(rad)) * (halfH - edgePad);
+      arrow.style.left = `${edgeX}px`;
+      arrow.style.top = `${edgeY}px`;
+      arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+      arrow.style.opacity = Math.abs(rad) < 0.35 ? '0' : '0.85';
+    });
   }
 
   text('flight-nav-telemetry-c', `${flightState.autopilot ? 'AP: ON' : 'AP: OFF'} // ETA:${flightState.navEta}`);

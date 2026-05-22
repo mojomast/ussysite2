@@ -289,10 +289,14 @@ export function updateCombatObjects(dt) {
       enemy.userData.flashUntil = 0;
     }
     updateEnemyHealthPips(enemy, now);
+    if (!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
+    enemy.userData.velocity.copy(enemy.position);
     flightTempVec.copy(flightState.pos).sub(enemy.position);
     const dist = flightTempVec.length();
     if (dist > 0.001) flightTempVec.multiplyScalar(1 / dist);
-    const approachSpeed = dist > 46 ? cls.approachSpeed.far : cls.approachSpeed.near;
+    const orbitRadius = 46;
+    const aggressionRadius = flightState.shield < 40 ? orbitRadius * 0.6 : orbitRadius;
+    const approachSpeed = dist > aggressionRadius ? cls.approachSpeed.far : cls.approachSpeed.near;
     enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
     if (cls.evasion > 0) {
       enemy.userData.evasionTimer = Math.max(0, (enemy.userData.evasionTimer || 0) - dt * 1000);
@@ -303,11 +307,15 @@ export function updateCombatObjects(dt) {
         enemy.userData.evasionTimer = 800 + Math.random() * 400;
       }
     }
+    enemy.userData.velocity
+      .copy(enemy.position)
+      .sub(enemy.userData.velocity)
+      .multiplyScalar(dt > 0 ? 1 / dt : 0);
     enemy.lookAt(flightState.pos);
     if (now < (enemy.userData.stunUntil || 0)) return;
     enemy.userData.cooldown -= dt * 1000;
 
-    if (enemy.userData.cooldown <= 0 && dist < 46) {
+    if (enemy.userData.cooldown <= 0 && dist < aggressionRadius) {
       enemy.userData.burstRemaining = cls.burstCount;
       enemy.userData.burstNextAt = now;
       enemy.userData.cooldown = Infinity;
