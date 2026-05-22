@@ -163,7 +163,7 @@ import { SURFACE_STATES, beginDeparture, beginLanding, cancelSurfaceApproach, up
 import { configureCursor, setCursorHovering, tickCustomCursor } from '../ui/cursor.js';
 import { configureHeroUI, setupHeroNavDots, updateHeroCameraAndLights } from '../ui/hero.js';
 import { configureInventoryPanel } from '../ui/inventory-panel.js';
-import { configureSettingsMenu } from '../ui/settings-menu.js';
+import { closeSettingsMenu, configureSettingsMenu, isSettingsMenuOpen, openSettingsMenu } from '../ui/settings-menu.js';
 import {
   activateConsoleMode as activateConsoleModeModule,
   configureConsoleUI,
@@ -938,6 +938,7 @@ export function init() {
     canvasContainer,
     coreOuterParticles,
     customCursor,
+    closeSettingsMenu,
     disableAutopilot,
     dismissGameMessage,
     documentRef: document,
@@ -948,6 +949,7 @@ export function init() {
     hideTutorialOverlay,
     handleSurfaceEscape,
     isHelpMenuOpen,
+    isSettingsMenuOpen,
     isTutorialOverlayVisible,
     heroContainer,
     isConsoleActive: () => isConsoleActive,
@@ -956,6 +958,7 @@ export function init() {
     mouse,
     openAudioSettingsMenu,
     openMissionBoard,
+    openSettingsMenu,
     openSkillTree,
     openStationMenu,
     playFireSfx: type => sfxEngine.playFlat(type, { volume: type === 'missile' ? 0.9 : 0.8 }),
@@ -979,6 +982,11 @@ export function init() {
     unlockAudio: () => sfxEngine.unlock(),
     updateFlightHud,
     windowRef: window
+  });
+  document.getElementById('hud-settings-btn')?.addEventListener('click', openSettingsMenu);
+  document.getElementById('hud-controls-bar')?.addEventListener('click', event => {
+    const action = event.target?.closest?.('[data-hud-action]')?.dataset?.hudAction;
+    if (action === 'settings') openSettingsMenu();
   });
   registerFlightAssistKeyCapture();
   registerNavigationPanelControls();

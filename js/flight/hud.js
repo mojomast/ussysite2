@@ -67,6 +67,7 @@ export function renderHudControlsBar(documentRef = deps.documentRef || document)
       const button = documentRef.createElement('button');
       button.type = 'button';
       button.className = 'hud-touch-control';
+      button.dataset.hudAction = label.toLowerCase();
       button.setAttribute('aria-label', label);
       button.textContent = `${icon} ${label}`;
       bar.appendChild(button);
