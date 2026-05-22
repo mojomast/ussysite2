@@ -16,7 +16,7 @@ globalThis.performance ??= { now: () => 1000 };
 
 const { configureHeroUI } = await import('../js/ui/hero.js');
 const { configureInput, registerInputListeners } = await import('../js/input.js');
-const { HELP_CONTROLS, HELP_TIPS, configureHelpMenu, renderHelpContent, switchHelpTab } = await import('../js/flight/help.js');
+const { HELP_CONTROLS, HELP_TIPS, configureHelpMenu, getBindingDiscrepancies, openHelpMenu, renderHelpContent, switchHelpTab } = await import('../js/flight/help.js');
 
 function createClassList() {
   const classes = new Set();
@@ -44,7 +44,10 @@ function createElement(id = '') {
     appendChild(child) { this.children.push(child); return child; },
     replaceChildren(...children) { this.children = children; },
     setAttribute(name, value) { this.attributes[name] = value; },
-    addEventListener(type, listener) { this.listeners[type] = listener; },
+    addEventListener(type, listener) {
+      if (!this.listeners[type]) this.listeners[type] = [];
+      this.listeners[type].push(listener);
+    },
     closest() { return null; }
   };
 }
@@ -75,12 +78,16 @@ function createHelpDocument() {
     body: { classList: createClassList() },
     getElementById: id => elements[id] || null,
     createElement: tag => createElement(tag),
-    addEventListener() {},
+    addEventListener(type, listener) {
+      if (!this.listeners) this.listeners = {};
+      if (!this.listeners[type]) this.listeners[type] = [];
+      this.listeners[type].push(listener);
+    },
     querySelectorAll() { return []; }
   };
 }
 
-test('H opens/closes help and Escape closes open help first', () => {
+test('H opens/closes help from input', () => {
   let open = false;
   const listeners = {};
   const documentRef = {
@@ -141,9 +148,33 @@ test('H opens/closes help and Escape closes open help first', () => {
   assert.equal(open, true);
   listeners.keydown({ code: '', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
   assert.equal(open, false);
-  open = true;
-  listeners.keydown({ code: 'Escape', key: 'Escape', target: null, preventDefault() { this.prevented = true; } });
-  assert.equal(open, false);
+});
+
+test('configureHelpMenu Escape closes open menu', () => {
+  const documentRef = createHelpDocument();
+  let prevented = false;
+  configureHelpMenu({ documentRef, flightState: { paused: false, pauseReasons: new Set(), keys: new Set(), mouseButtons: new Set() }, isFlightActive: () => false });
+  assert.equal(openHelpMenu(), true);
+  assert.equal(documentRef.elements['help-menu'].hidden, false);
+
+  documentRef.listeners.keydown[0]({ code: 'Escape', preventDefault() { prevented = true; } });
+
+  assert.equal(prevented, true);
+  assert.equal(documentRef.elements['help-menu'].hidden, true);
+});
+
+test('configureHelpMenu no double-init on second call', () => {
+  const documentRef = createHelpDocument();
+  configureHelpMenu({ documentRef, flightState: { paused: false, pauseReasons: new Set() }, isFlightActive: () => false });
+  configureHelpMenu({ documentRef, flightState: { paused: false, pauseReasons: new Set() }, isFlightActive: () => false });
+
+  assert.equal(documentRef.listeners.keydown.length, 1);
+  assert.equal(documentRef.elements['help-menu-close'].listeners.click.length, 1);
+  assert.equal(documentRef.elements['help-tab-controls'].listeners.click.length, 1);
+});
+
+test('getBindingDiscrepancies returns empty array on clean state', () => {
+  assert.deepEqual(getBindingDiscrepancies(), []);
 });
 
 test('tab switch updates active panel and aria selection', () => {

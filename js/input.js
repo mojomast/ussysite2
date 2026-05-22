@@ -16,6 +16,41 @@ const THREE = globalThis.THREE;
 
 export const manualFlightKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']);
 
+export const KEY_MAP = Object.freeze({
+  'Mouse move': 'Look/aim ship while pointer locked',
+  'W / ArrowUp': 'Forward thrust',
+  'S / ArrowDown': 'Reverse thrust/brake',
+  'A / ArrowLeft': 'Strafe left',
+  'D / ArrowRight': 'Strafe right',
+  Q: 'Roll left',
+  E: 'Roll right',
+  Shift: 'Afterburner when unlocked',
+  G: 'Match speed / emergency brake',
+  F: 'Cold jump when unlocked',
+  R: 'Toggle throttle hold',
+  'Z / X': 'Throttle level up/down while throttle hold is enabled',
+  'Left mouse': 'Primary fire',
+  'Right mouse': 'Secondary fire',
+  C: 'Evasion roll',
+  T: 'Cycle target reserved; safe no-op until implemented',
+  V: 'Set navigation target from crosshair',
+  Y: 'Toggle autopilot',
+  M: 'System map',
+  L: 'Surface approach / land',
+  'Wheel in console': 'Zoom orbit camera',
+  'Double-click scene in console': 'Reset console camera',
+  'H / F1': 'Help overlay',
+  P: 'Pause/menu reserved',
+  I: 'Inventory/manifest',
+  B: 'Mission board when no modal/message is active',
+  O: 'Objectives',
+  U: 'Upgrades/skills while landed',
+  'Escape / Backspace': 'Close topmost overlay/back; exit flight only from clear state',
+  Space: 'Dismiss message / activate focused UI',
+  '1-6': 'Modal/menu choices',
+  'Click button/card': 'Activate UI action'
+});
+
 export const orbitState = {
   dragging: false,
   moved: false,
@@ -208,7 +243,6 @@ function onGlobalKeyDown(event) {
     gameMessageState,
     handleGameMessageChoice,
     handleSurfaceEscape,
-    isHelpMenuOpen,
     isFlightActive,
     landOnNearestProject,
     openAudioSettingsMenu,
@@ -248,11 +282,7 @@ function onGlobalKeyDown(event) {
     return;
   }
 
-  if (event.code === 'Escape' && typeof isHelpMenuOpen === 'function' && isHelpMenuOpen()) {
-    event.preventDefault();
-    if (typeof toggleHelpMenu === 'function') toggleHelpMenu();
-    return;
-  }
+  // Help menu Escape handled in help.js configureHelpMenu
 
   if (!isFlightActive()) return;
   if (typeof unlockAudio === 'function') unlockAudio();

@@ -1,4 +1,5 @@
 import { PLANETS, STATIONS, JUMP_POINTS } from './world.js';
+import { KEY_MAP } from '../input.js';
 
 export const HELP_TABS = [
   { id: 'controls', label: 'CONTROLS' },
@@ -70,7 +71,35 @@ let deps = {
   updateFlightHud: () => {}
 };
 let activeTab = 'controls';
-let initialized = false;
+const initializedDocuments = new WeakSet();
+
+function getFlatHelpControlEntries() {
+  return Object.values(HELP_CONTROLS).flat();
+}
+
+export function getBindingDiscrepancies() {
+  const helpEntries = new Map(getFlatHelpControlEntries());
+  const discrepancies = [];
+
+  Object.entries(KEY_MAP).forEach(([input, action]) => {
+    if (!helpEntries.has(input)) {
+      discrepancies.push({ input, runtimeAction: action, helpAction: null, type: 'missing-help-entry' });
+      return;
+    }
+    const helpAction = helpEntries.get(input);
+    if (helpAction !== action) {
+      discrepancies.push({ input, runtimeAction: action, helpAction, type: 'action-mismatch' });
+    }
+  });
+
+  helpEntries.forEach((helpAction, input) => {
+    if (!Object.hasOwn(KEY_MAP, input)) {
+      discrepancies.push({ input, runtimeAction: null, helpAction, type: 'missing-runtime-entry' });
+    }
+  });
+
+  return discrepancies;
+}
 
 function createEl(documentRef, tag, className, text) {
   const el = documentRef.createElement(tag);
@@ -242,12 +271,17 @@ export function toggleHelpMenu() {
 export function configureHelpMenu(options = {}) {
   deps = { ...deps, ...options };
   const { documentRef } = deps;
-  if (!documentRef || initialized) return;
-  initialized = true;
+  if (!documentRef || initializedDocuments.has(documentRef)) return;
+  initializedDocuments.add(documentRef);
   renderHelpContent(documentRef);
   switchHelpTab(activeTab, documentRef);
   HELP_TABS.forEach(tab => {
     documentRef.getElementById(`help-tab-${tab.id}`)?.addEventListener?.('click', () => switchHelpTab(tab.id, documentRef));
   });
   documentRef.getElementById('help-menu-close')?.addEventListener?.('click', closeHelpMenu);
+  documentRef.addEventListener?.('keydown', event => {
+    if (event.code !== 'Escape' || !isHelpMenuOpen(documentRef)) return;
+    event.preventDefault();
+    closeHelpMenu();
+  });
 }
