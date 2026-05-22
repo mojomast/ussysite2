@@ -12,6 +12,7 @@ import {
   updateMissile,
   updateWeaponVfxPools
 } from './weapons.js';
+import { COMBAT_ZONE_RADIUS } from './world.js';
 
 const THREE = globalThis.THREE;
 
@@ -20,6 +21,7 @@ export const enemies = [];
 export const ENEMY_BASE_RADIUS = 0.62;
 export const DREADNOUGHT_SCALE = 2.4;
 export const BOSS_DREADNOUGHT_SCALE = 3.2;
+const LOCAL_AGGRESSION_RADIUS = Math.min(46, COMBAT_ZONE_RADIUS);
 
 let deps = null;
 let combatWasActive = false;
@@ -866,7 +868,7 @@ export function updateCombatObjects(dt) {
     flightTempVec.copy(flightState.pos).sub(enemy.position);
     const dist = flightTempVec.length();
     if (dist > 0.001) flightTempVec.multiplyScalar(1 / dist);
-    const orbitRadius = 46;
+    const orbitRadius = LOCAL_AGGRESSION_RADIUS;
     const aggressionRadius = flightState.shield < 40 ? orbitRadius * 0.6 : orbitRadius;
     const approachSpeed = dist > aggressionRadius ? cls.approachSpeed.far : cls.approachSpeed.near;
     const role = enemy.userData.role || FORMATION_ROLES.AGGRESSOR;
