@@ -24,6 +24,24 @@ js/flight/combat-state.js
 js/flight/loadout.js
   -> dock loadout panel rendering, weapon buy/equip, armor and shield service actions
 
+js/flight/world.js
+  -> static system-scale planets, stations, jump points, world radius, LOD, and hyperspeed constants
+
+js/flight/starfield.js
+  -> 8,000-point flight-system starfield generation and disposal
+
+js/flight/planets.js
+  -> planet LOD groups, atmosphere shells, body placement, nearest-body lookup
+
+js/flight/stations.js
+  -> primitive station builders, station placement, rotation update, proximity docking constant
+
+js/flight/navgraph.js
+  -> Map-based navigation graph builder and A* route lookup over planets/stations/jump points
+
+js/flight/autopilot.js
+  -> route plotting, autopilot state machine, hyperspeed movement, star-stretch VFX, system map drawing
+
 js/flight/enemies.js
   -> enemy pools, formation roles, movement, projectile collision, debrief trigger
 
@@ -44,11 +62,38 @@ user input -> updateFlight physics -> combat objects -> objective/mission state 
 
 Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, landing checks, objective progression, HUD updates, and radio messages. Flight assists are stateful: static throttle stores `throttleEnabled` and `throttleLevel`, match-speed stores `matchSpeedActive`, `matchSpeedTarget`, and `matchSpeedUntil`, and combat evasion uses `combatState.evasionCooldown` plus `flightState.cameraRollTarget` / `cameraRollCurrent` for the cockpit roll effect.
 
+`flightState.autopilot` is now an object, normalized by `ensureAutopilotState(flightState)`. Its shape is:
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `state` | `'IDLE'|'PLOTTING'|'ENGAGED'|'DECELERATING'|'ARRIVED'` | Current route/autopilot state. Active travel states are plotting, engaged, and decelerating. |
+| `targetId` | `string|null` | Final navigation graph node id. |
+| `targetPos` | `Vector3`-like/null | Cloned final target position for fallback if graph data is missing. |
+| `route` | `string[]` | Ordered navigation graph node ids returned by A*. |
+| `routeIndex` | `number` | Current waypoint index in `route`. |
+| `hyperspeedMult` | `number` | Current effective travel multiplier, clamped by movement logic. |
+| `hyperspeedTarget` | `number` | Desired multiplier: `80` during cruise and `1` during deceleration/arrival. |
+| `arrivalThreshold` | `number` | Arrival radius in system units; default `200`. |
+| `blockedReason` | `string|null` | Last failure/interruption reason shown in HUD/status. |
+| `plotStartedAt` / `engagedAt` | `number` | Timing stamps for plotting delay and engagement. |
+
 Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStreakMultiplier`, `lastKillTime`, and `peakKillStreak`. The cockpit combat log uses `combatState.killFeed` as a four-entry runtime ring buffer and `killFeedDirty` to throttle DOM rerenders in `js/flight/hud.js`. Runtime sortie counters track `sessionKills`, `sessionCredits`, `sessionXp`, `shotsFired`, and `shotsHit`; when a wave clears, `debriefPending` and `debriefData` hand a snapshot to `js/flight/debrief.js`. Boss runtime fields live on `combatState.bossActive`, `bossEnemyRef`, and `bossThresholdIdx`, with `BOSS_SCORE_THRESHOLDS` defining the one-time score gates. `combatState.activeBountyHunter` and `activeFriendlyEscort` prevent duplicate security reputation consequence spawns, while `combatState.activeTurrets` tracks gunboat turret pool entries and is cleared by reset/deactivation.
 
 ## Space Visuals
 
 `js/engine/scene.js`, `js/engine/core.js`, `js/engine/starfield.js`, and `js/engine/nodes.js` own scene construction, holographic core visuals, deep-space backgrounds, and shared node registries. `main.js` still orchestrates flight-specific updates and project graph behavior. Project nodes render as planet-scale `THREE.LOD` objects with high-detail icosphere, medium icosphere, far sprite impostor, additive BackSide glow shells, and flight-only distant halo sprites. Flight mode switches from the console spiral to a deterministic 3D shell layout with much larger planet spacing, then applies an additional visual multiplier so bodies read at planetary scale while console mode remains readable. Invisible raycast spheres remain in `projectHitTargets` and scale with the visible planet radius so clicks still resolve the same project objects.
+
+The expanded system adds flight-only world objects from `js/flight/world.js`: four planet definitions, three standalone stations, and three jump points inside `SYSTEM_RADIUS = 50000`. `createStarfield()` builds an 8,000-point static backdrop inside `STARFIELD_RADIUS = SYSTEM_RADIUS * 1.8`, with white/blue/warm brightness tiers and planet exclusion zones. `createAllPlanets()` creates `THREE.LOD` planet bodies plus additive atmosphere shells. `createAllStations()` builds three primitive station silhouettes: outpost, trading hub, and military base.
+
+System LOD constants are exported by `world.js` and consumed primarily by planet rendering:
+
+| Constant | Value | Use |
+| --- | ---: | --- |
+| `LOD_NEAR` | `800` | Near-body threshold reserved for close-range LOD decisions. |
+| `LOD_MID` | `8000` | Planet mid LOD switch; `planets.js` uses `16 x 12` sphere geometry from this distance. |
+| `LOD_FAR` | `40000` | Planet far LOD switch; `planets.js` uses `6 x 4` sphere geometry from this distance. |
+
+Actual planet LOD levels are `48 x 32` at distance `0`, `16 x 12` at `LOD_MID`, and `6 x 4` at `LOD_FAR`, with a separate `radius * 1.04` BackSide atmosphere shell attached to the LOD group.
 
 Flight mode adds camera-relative depth cues only while `isFlightActive` is true: three existing `THREE.Points` star layers use different parallax factors, one `InstancedMesh` debris field recycles up to 300 low-poly rocks around the ship, and one `BufferGeometry` dust stream recycles up to 600 particles ahead of the camera. Nebula sprites are static additive canvas-gradient backdrops.
 
@@ -66,13 +111,31 @@ flight loop -> fuel drain -> dock at project node -> trade menu -> traderState -
 
 Fuel drains while thrusting or using autopilot. Landing calls restock/refuel behavior and opens the station menu. Trade choices reuse the existing message choice system and emit a trade-completed callback so objectives can advance without coupling mission code to market internals. The dock `LOADOUT` choice opens `renderLoadoutScreen(traderState, weaponDefs, combatState, options)` from `js/flight/loadout.js`; it is a visual panel layered over the existing dock message flow and returns to the station menu on close.
 
+## Navigation Graph
+
+`buildNavGraph(planets, stations, jumpPoints)` returns a `Map<string, NavNode>` rather than a plain JSON object. Nodes are created from `PLANETS`, `STATIONS`, and `JUMP_POINTS`; edges are bidirectional when nodes are within `NAVGRAPH_LOCAL_RANGE = 15000`, and each jump point also connects to its two nearest graph nodes.
+
+```ts
+type NavNode = {
+  id: string;
+  name: string;
+  type: 'planet' | 'station' | 'jump';
+  pos: THREE.Vector3;
+  edges: Array<{ targetId: string; dist: number }>;
+};
+
+type NavGraph = Map<string, NavNode>;
+```
+
+`findRoute(graph, fromId, toId)` runs A* with straight-line distance as the heuristic and returns an ordered array of node ids or `null`. `plotCourse()` chooses the nearest graph node to the player as the route origin, stores the route on `flightState.autopilot`, and starts the `PLOTTING` state.
+
 ## Audio Data Flow
 
 ```text
 /api/tts audio -> ttsEngine.speak() or combatAudio.bark() -> Web Audio radio chain -> speakers
 ```
 
-Mission comms and short barks use separate scheduling channels, but both route through the same radio filter chain before playback. Backend TTS accepts `audio/*` and Kokoro-compatible `application/octet-stream` responses; combat barks fall back to browser speech synthesis if backend audio is unavailable or cannot be decoded. The in-flight audio settings menu is opened with `M`; `Shift+M` keeps the quick TTS mute toggle.
+Mission comms and short barks use separate scheduling channels, but both route through the same radio filter chain before playback. Backend TTS accepts `audio/*` and Kokoro-compatible `application/octet-stream` responses; combat barks fall back to browser speech synthesis if backend audio is unavailable or cannot be decoded. The system map now owns the in-flight `M` key; `Shift+M` keeps the quick TTS mute toggle.
 
 ## Objectives And Missions
 
@@ -86,7 +149,23 @@ Objective progression is browser-authoritative. Kills advance kill objectives, l
 
 The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions. Kill streaks, wave announcements, shot accuracy, and debrief data are runtime-only and are reset on new sorties or respawn.
 
-`js/flight/persist.js` owns session run-state persistence via `sessionStorage` key `ussysite2.runState.v1`. It exports `saveRunState(combatState, traderState, reputationState, skillTree)`, `loadRunState()`, `clearRunState()`, and `applyRunState(data, combatState, traderState, reputationState, skillTree)`. Schema `v: 1` stores `ts`, `combat` (`score`, `wave`, `credits`, `hull`, `shieldHp`, `maxShieldHp`, `maxHull`, `bossThresholdIdx`, `killCount`), `trader` (`equippedPrimary`, `equippedSecondary`, inventory item IDs), `rep`, and purchased skill IDs from `skillTree.unlocked`. Apply validates the full payload before assignment and rejects corrupted data such as negative score, wave below one, or hull outside `[1,maxHull]`.
+`js/flight/persist.js` owns session run-state persistence via `sessionStorage` key `ussysite2.runState.v1`. It exports `saveRunState(combatState, traderState, reputationState, skillTree, options)`, `loadRunState()`, `clearRunState()`, and `applyRunState(data, combatState, traderState, reputationState, skillTree, options)`. The storage key is unchanged, but the active payload schema is now `v: 2`; `loadRunState()` rejects old `v: 1` payloads instead of migrating them.
+
+Schema v2 keeps the v1 combat/trader/reputation/skills fields and adds optional flight persistence:
+
+| Field | v1 | v2 |
+| --- | --- | --- |
+| `v` | `1` | `2` |
+| `ts` | Saved timestamp | Saved timestamp |
+| `combat` | `score`, `wave`, `credits`, `hull`, `shieldHp`, `maxShieldHp`, `maxHull`, `bossThresholdIdx`, `killCount` | Same fields |
+| `trader` | `equippedPrimary`, `equippedSecondary`, `inventory` item ids | Same fields |
+| `rep` | Reputation scores | Same fields |
+| `skills` | Unlocked skill ids | Same fields |
+| `flight.position` | Not present | Optional `[x, y, z]` player position from `flightState.pos` |
+| `flight.lastVisitedBodyId` | Not present | Optional nearest planet/station id, resolved from `PLANETS` and `STATIONS` unless custom bodies are passed |
+| `flight.autopilotTargetId` | Not present | Optional target id persisted only when autopilot is active/engaged/plotting/decelerating |
+
+Apply validates the full payload before assignment and rejects corrupted data such as negative score, wave below one, hull outside `[1,maxHull]`, invalid position arrays, or non-string persisted body/autopilot ids. When `options.flightState` is supplied, v2 applies saved position, last visited body id, and can re-plot the saved autopilot target if `options.navGraph` and `options.plotCourse` are provided.
 
 ## AI Gameplay Loop
 
@@ -116,7 +195,7 @@ Choice resolution dismisses the current message, applies any choice-1 credit/fue
 
 | State | Purpose |
 | --- | --- |
-| `flightState` | Ship resources, position, velocity, input, nav, landing, view state, throttle and match-speed assist state, evasion camera roll fields |
+| `flightState` | Ship resources, position, velocity, input, nav, landing, view state, throttle/match-speed/evasion fields, and route autopilot object |
 | `combatState` | XP/skills/loadout, weapon heat, assist cooldowns, kill streak multiplier, wave metadata, boss threshold/ref fields, faction consequence refs, kill feed ring buffer/dirty flag, session stats, debrief queue |
 | `missionState` | Current objective, tutorial/free-roam state, multi-step contract progress |
 | `gameMessageState` | Active message, typed text, choices, dismissal handler |
@@ -140,6 +219,7 @@ Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/f
 | `C` | Evasion roll |
 | `Shift+C` | Toggle cockpit/third-person view |
 | `F` | Cold jump when unlocked |
+| `M` | Toggle system map overlay |
 | `V` | Set navigation from crosshair |
 | `P` | Toggle autopilot |
 

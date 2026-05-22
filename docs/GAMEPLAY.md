@@ -13,15 +13,55 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 | `G` | Match nearest enemy velocity, or brake if no target is available |
 | `C` | Evasion roll with cockpit flash and roll camera kick |
 | `F` | Cold jump when the engine skill is unlocked |
+| `M` | Toggle the system map overlay |
 | `V` | Set nav target from the crosshair |
 | `P` | Toggle autopilot |
 | `Shift+C` | Toggle cockpit / third-person camera |
+
+## Star System
+
+The expanded flight system is authored in `js/flight/world.js` with system-space coordinates in `[x, y, z]` units.
+
+### Planets
+
+| Body | Description | Coordinates |
+| --- | --- | --- |
+| Nexus Prime | Homeworld hub world with an associated station presence. | `[0, 0, 0]` |
+| Cinder | Hostile inner-system planet with a hot red/orange atmosphere and no station. | `[8000, 0, 3000]` |
+| Vaultholm | Large trading world with green atmosphere and station support. | `[-12000, 0, -5000]` |
+| The Breach | Small anomaly world with a purple atmosphere and station support near the outer route. | `[20000, 0, -15000]` |
+
+### Stations
+
+| Station | Description | Coordinates |
+| --- | --- | --- |
+| Relay Station 7 | Outpost station focused on missions and relay services. | `[4000, 0, -2000]` |
+| Hub Alpha | Trading hub with market access and missions. | `[-6000, 0, 8000]` |
+| Fort Kova | Military base with mission services and defensive silhouette. | `[15000, 0, 5000]` |
+
+### Jump Points
+
+| Jump Point | Description | Coordinates |
+| --- | --- | --- |
+| Inner Ring Jump | Inner-system fast-travel anchor. | `[3500, 0, 3500]` |
+| Mid Ring Jump | Mid-system route anchor. | `[-9000, 0, 2000]` |
+| Outer Jump Gate | Outer-system gate near The Breach route. | `[18000, 0, -10000]` |
+
+## Navigation
+
+Press `M` in flight to toggle the system map overlay. The overlay draws the navigation graph, planets, stations, jump points, route edges, and the player's current position. Route engagement currently uses the navigation panel controls: `ENGAGE` plots a route to the current nav target when available, otherwise to the nearest planet/station fallback, and `ABORT` disengages autopilot.
+
+Autopilot uses the route state machine `IDLE -> PLOTTING -> ENGAGED -> DECELERATING -> ARRIVED`. A successful route plot shows `ROUTE PLOTTED: <TARGET>` while `PLOTTING` resolves the course, then the ship moves through graph waypoints under autopilot control. Long segments can spool hyperspeed from normal cruise up toward an 80x multiplier; final approach drops back to normal speed before arrival.
+
+If plotting fails, the HUD reports `NO NAV ROUTE AVAILABLE` or the autopilot `blockedReason` such as `NO ROUTE FOUND`. Manual override, landing/docking, boss activity, nearby hostiles, hull-critical state, target loss, or hostile interdiction can interrupt travel and set messages such as `AUTOPILOT DISENGAGED: HOSTILE INTERDICTION`.
 
 ## Combat
 
 Enemies spawn with formation roles. `aggressor` units push directly toward the player, `flanker` units steer toward a 90-degree side orbit, and `support` units hold around 60 units and only close or retreat outside their preferred band.
 
-Security reputation now has combat consequences. At `security < -30`, the faction can dispatch one elite `BOUNTY HUNTER` at a time; destroying it pays a 220cr reward and raises security reputation back toward the hostile floor. At `security > 40`, a friendly scout escort can join for 25 seconds, orbiting the player and firing at the weakest hostile before fading out.
+## Reputation
+
+Security reputation now has combat consequences. At `security < -30`, the faction can dispatch one elite `BOUNTY HUNTER` at a time; destroying it pays a 220cr reward and raises security reputation back toward the hostile floor. Bounty hunters and other nearby hostiles can interrupt autopilot/hyperspeed as hostile interdictions. At `security > 40`, a friendly scout escort can join for 25 seconds, orbiting the player and firing at the weakest hostile before fading out.
 
 ## Radar
 
@@ -69,6 +109,10 @@ Enemy death flashes the cockpit overlay using the destroyed class color. Standar
 ## Assists
 
 Match speed displays `SPEED MATCH ACTIVE` under the reticle while the assist is engaged. Evasion uses `C`, applies a lateral burst, starts a cooldown, flashes the cockpit overlay, and rolls the camera briefly.
+
+## Docking
+
+Project nodes still use the existing station services flow. System stations use proximity-based docking: flying within `120` units of Relay Station 7, Hub Alpha, or Fort Kova automatically docks, stops velocity, opens station services, and releases mouselook.
 
 ## Post-Combat Debrief
 
