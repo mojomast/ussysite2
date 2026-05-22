@@ -30,6 +30,10 @@ export function deactivateCombatObject(object) {
   object.visible = false;
   object.userData.active = false;
   object.userData.life = 0;
+  if (object.userData.isTurret && Array.isArray(combatState.activeTurrets)) {
+    const idx = combatState.activeTurrets.indexOf(object);
+    if (idx >= 0) combatState.activeTurrets.splice(idx, 1);
+  }
   if (object.userData.classId) {
     object.scale?.setScalar?.(1.0);
     object.userData.radius = object.userData.baseRadius || 0.62;
