@@ -42,6 +42,20 @@ export const combatState = {
   afterburnerCooldownUntil: 0,
   coldJumpCooldown: 0,
   evasionCooldown: 0,
+  killStreakCount: 0,
+  killStreakTimer: 0,
+  killStreakMultiplier: 1,
+  lastKillTime: 0,
+  debriefPending: false,
+  debriefData: null,
+  sessionKills: 0,
+  sessionCredits: 0,
+  sessionXp: 0,
+  shotsFired: 0,
+  shotsHit: 0,
+  peakKillStreak: 0,
+  waveNumber: 0,
+  waveComposition: '',
   bountyPending: 0,
   overchargeUsed: false,
   lastAdrenalineBarkAt: 0,
@@ -76,7 +90,106 @@ export function respawnFlightState(state, base = {}) {
   state.fuelDepleted = false;
   state.combatPhase = base.combatPhase ?? COMBAT_PHASES.IDLE;
   combatState.evasionCooldown = 0;
+  resetCombatSessionStats(combatState);
+  combatState.waveNumber = 0;
+  combatState.waveComposition = '';
   return state;
+}
+
+/** Returns the reward multiplier for a kill streak count. */
+export function getKillStreakMultiplier(killStreakCount = 0) {
+  if (killStreakCount >= 5) return 3;
+  if (killStreakCount >= 3) return 2;
+  if (killStreakCount >= 2) return 1.5;
+  return 1;
+}
+
+/** Records a kill into the active streak window. */
+export function recordKillStreak(state = combatState, now = performance.now()) {
+  state.killStreakTimer = 4000;
+  state.killStreakCount = (state.killStreakCount || 0) + 1;
+  state.lastKillTime = now;
+  state.killStreakMultiplier = getKillStreakMultiplier(state.killStreakCount);
+  state.peakKillStreak = Math.max(state.peakKillStreak || 0, state.killStreakCount);
+  return state.killStreakMultiplier;
+}
+
+/** Decays the active kill streak timer by a frame delta in seconds. */
+export function decayKillStreakTimer(state = combatState, dt = 0) {
+  if ((state.killStreakTimer || 0) <= 0) return state;
+  state.killStreakTimer -= dt * 1000;
+  if (state.killStreakTimer <= 0) {
+    state.killStreakTimer = 0;
+    state.killStreakCount = 0;
+    state.killStreakMultiplier = 1;
+  }
+  return state;
+}
+
+/** Clears runtime-only combat session counters used by debriefs. */
+export function resetCombatSessionStats(state = combatState) {
+  state.killStreakCount = 0;
+  state.killStreakTimer = 0;
+  state.killStreakMultiplier = 1;
+  state.lastKillTime = 0;
+  state.debriefPending = false;
+  state.debriefData = null;
+  state.sessionKills = 0;
+  state.sessionCredits = 0;
+  state.sessionXp = 0;
+  state.shotsFired = 0;
+  state.shotsHit = 0;
+  state.peakKillStreak = 0;
+  return state;
+}
+
+/** Adds fired shot count to the current combat session. */
+export function recordCombatShot(count = 1, state = combatState) {
+  state.shotsFired = Math.max(0, (state.shotsFired || 0) + Math.max(0, count));
+  return state.shotsFired;
+}
+
+/** Adds landed hit count to the current combat session. */
+export function recordCombatHit(count = 1, state = combatState) {
+  state.shotsHit = Math.max(0, (state.shotsHit || 0) + Math.max(0, count));
+  return state.shotsHit;
+}
+
+/** Adds kill rewards to the current combat session. */
+export function recordCombatKillStats({ creditsEarned = 0, xpEarned = 0 } = {}, state = combatState) {
+  state.sessionKills = (state.sessionKills || 0) + 1;
+  state.sessionCredits = (state.sessionCredits || 0) + Math.max(0, Math.round(creditsEarned));
+  state.sessionXp = (state.sessionXp || 0) + Math.max(0, Math.round(xpEarned));
+  return state;
+}
+
+/** Builds a serializable debrief snapshot from current combat session stats. */
+export function buildCombatDebriefData(state = combatState) {
+  const shotsFired = Math.max(0, state.shotsFired || 0);
+  const shotsHit = Math.max(0, state.shotsHit || 0);
+  return {
+    kills: state.sessionKills || 0,
+    creditsEarned: state.sessionCredits || 0,
+    xpEarned: state.sessionXp || 0,
+    accuracy: shotsFired > 0 ? Math.round((shotsHit / shotsFired) * 100) : 0,
+    peakStreak: state.peakKillStreak || 0
+  };
+}
+
+/** Queues a post-combat debrief if the current session has reportable activity. */
+export function queueCombatDebrief(state = combatState) {
+  if ((state.sessionKills || 0) <= 0 && (state.shotsFired || 0) <= 0 && (state.sessionCredits || 0) <= 0 && (state.sessionXp || 0) <= 0) return null;
+  state.debriefData = buildCombatDebriefData(state);
+  state.debriefPending = true;
+  return state.debriefData;
+}
+
+/** Returns and clears a queued post-combat debrief. */
+export function consumeCombatDebrief(state = combatState) {
+  if (!state.debriefPending || !state.debriefData) return null;
+  const data = state.debriefData;
+  resetCombatSessionStats(state);
+  return data;
 }
 
 export function setCombatFlightState(flightState) {

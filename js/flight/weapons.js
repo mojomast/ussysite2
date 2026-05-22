@@ -1,5 +1,5 @@
 import { applyHeatShot, getWeaponDef } from './combat-overhaul.js';
-import { combatState } from './combat-state.js';
+import { combatState, recordCombatHit, recordCombatShot } from './combat-state.js';
 import { sfxEngine } from './sfx.js';
 
 const THREE = globalThis.THREE;
@@ -323,6 +323,7 @@ export function applyEmpBurst(origin, weapon) {
     if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0) return;
     if (enemy.position.distanceTo(origin) > weapon.aoeRadius) return;
     applyEnemyHit(enemy, weapon.damage);
+    recordCombatHit();
     if (weapon.stunDuration && weapon.stunDuration > 0) {
       enemy.userData.stunUntil = performance.now() + weapon.stunDuration;
       stunApplied = true;
@@ -356,6 +357,7 @@ export function firePrimaryWeapon(time) {
   } else if (weapon.type === 'area') {
     flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.2);
     if (applyEmpBurst(flightTempVec, weapon)) {
+      recordCombatShot();
       flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
       applyHeatShot(combatState, weapon.overheatBuildup);
     }
@@ -368,6 +370,7 @@ export function firePrimaryWeapon(time) {
       if (fireBullet(playerBullets, flightTempVec, direction, weapon.projectileSpeed, weapon.projectileLife / 1000, { damage: weapon.damage, color: weapon.color })) fired += 1;
     }
     if (fired > 0) {
+      recordCombatShot(fired);
       sfxEngine.playFlat('laser', { volume: 0.6 });
       flightState.ammo = Math.max(0, flightState.ammo - weapon.ammoCost);
       flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
@@ -386,7 +389,10 @@ export function fireSecondaryWeapon(time) {
       flightState.status = 'EMP ENERGY LOW';
     } else {
       flightTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.2);
-      if (applyEmpBurst(flightTempVec, weapon)) flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
+      if (applyEmpBurst(flightTempVec, weapon)) {
+        recordCombatShot();
+        flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
+      }
     }
     flightState.lastMissile = time;
     return;
@@ -407,6 +413,7 @@ export function fireSecondaryWeapon(time) {
       }
     }
     if (fired > 0) {
+      recordCombatShot(fired);
       sfxEngine.playFlat('missile', { volume: 0.7 });
       flightState.energy = Math.max(0, flightState.energy - weapon.energyCost);
       flightState.status = count > 1 ? 'MISSILES AWAY' : 'MISSILE AWAY';

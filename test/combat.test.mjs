@@ -2,6 +2,7 @@ import test, { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ENEMY_CLASSES,
+  FORMATION_ROLES,
   WEAPON_DEFS,
   addCombatXp,
   applyDamageModel,
@@ -22,6 +23,14 @@ test('ENEMY_CLASSES has six complete entries', () => {
       assert.ok(Object.hasOwn(cls, field), `${cls.id} missing ${field}`);
     }
   }
+});
+
+test('FORMATION_ROLES exposes aggressor, flanker, and support roles', () => {
+  assert.deepEqual(FORMATION_ROLES, {
+    AGGRESSOR: 'aggressor',
+    FLANKER: 'flanker',
+    SUPPORT: 'support'
+  });
 });
 
 test('WEAPON_DEFS has seven complete entries', () => {

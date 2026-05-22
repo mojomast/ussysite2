@@ -13,8 +13,18 @@ globalThis.THREE = {
 const {
   COMBAT_PHASES,
   combatState,
+  buildCombatDebriefData,
+  consumeCombatDebrief,
+  decayKillStreakTimer,
   deserializeCombatState,
+  getKillStreakMultiplier,
   isPlayerDead,
+  queueCombatDebrief,
+  recordCombatHit,
+  recordCombatKillStats,
+  recordCombatShot,
+  recordKillStreak,
+  resetCombatSessionStats,
   respawnFlightState,
   serializeCombatState,
   setCombatFlightState,
@@ -49,6 +59,73 @@ describe('combat state transitions', () => {
     assert.equal(state.fuel, 80, 'respawn should restore max fuel');
     assert.equal(state.fuelDepleted, false, 'respawn should clear fuel depleted flag');
     assert.equal(state.combatPhase, COMBAT_PHASES.IDLE, 'respawn should return combat phase to idle');
+  });
+});
+
+describe('kill streak state', () => {
+  it('uses the configured multiplier thresholds', () => {
+    assert.equal(getKillStreakMultiplier(1), 1);
+    assert.equal(getKillStreakMultiplier(2), 1.5);
+    assert.equal(getKillStreakMultiplier(3), 2);
+    assert.equal(getKillStreakMultiplier(5), 3);
+  });
+
+  it('records kill streak count, multiplier, and peak streak', () => {
+    const state = { killStreakCount: 0, killStreakTimer: 0, killStreakMultiplier: 1, lastKillTime: 0, peakKillStreak: 0 };
+    recordKillStreak(state, 1000);
+    recordKillStreak(state, 2000);
+    recordKillStreak(state, 3000);
+
+    assert.equal(state.killStreakCount, 3);
+    assert.equal(state.killStreakTimer, 4000);
+    assert.equal(state.killStreakMultiplier, 2);
+    assert.equal(state.lastKillTime, 3000);
+    assert.equal(state.peakKillStreak, 3);
+  });
+
+  it('decays kill streak timer and resets count and multiplier', () => {
+    const state = { killStreakCount: 3, killStreakTimer: 1000, killStreakMultiplier: 2 };
+    decayKillStreakTimer(state, 1.2);
+
+    assert.equal(state.killStreakTimer, 0);
+    assert.equal(state.killStreakCount, 0);
+    assert.equal(state.killStreakMultiplier, 1);
+  });
+});
+
+describe('combat debrief state', () => {
+  it('populates debrief data from session kills, rewards, and accuracy', () => {
+    const state = resetCombatSessionStats({});
+    recordCombatShot(5, state);
+    recordCombatHit(3, state);
+    state.peakKillStreak = 4;
+    recordCombatKillStats({ creditsEarned: 180, xpEarned: 42 }, state);
+    recordCombatKillStats({ creditsEarned: 220, xpEarned: 58 }, state);
+
+    assert.deepEqual(buildCombatDebriefData(state), {
+      kills: 2,
+      creditsEarned: 400,
+      xpEarned: 100,
+      accuracy: 60,
+      peakStreak: 4
+    });
+  });
+
+  it('queues and consumes combat debrief data once', () => {
+    const state = resetCombatSessionStats({});
+    recordCombatShot(2, state);
+    recordCombatHit(1, state);
+    recordCombatKillStats({ creditsEarned: 50, xpEarned: 10 }, state);
+
+    const queued = queueCombatDebrief(state);
+    assert.equal(state.debriefPending, true);
+    assert.equal(queued.accuracy, 50);
+
+    const consumed = consumeCombatDebrief(state);
+    assert.equal(consumed.kills, 1);
+    assert.equal(state.debriefPending, false);
+    assert.equal(state.sessionKills, 0);
+    assert.equal(consumeCombatDebrief(state), null);
   });
 });
 

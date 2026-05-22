@@ -109,6 +109,12 @@ export const ENEMY_CLASSES = [
   }
 ];
 
+export const FORMATION_ROLES = {
+  AGGRESSOR: 'aggressor',
+  FLANKER: 'flanker',
+  SUPPORT: 'support'
+};
+
 const combatCallbacks = {
   onEnemyKill: null,
   onPlayerHit: null,

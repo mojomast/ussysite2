@@ -152,6 +152,15 @@ export function updateFlightHud(force = false) {
   const text = (id, value) => { const node = el(id); if (node) node.textContent = value; };
   const width = (id, value) => { const node = el(id); if (node) node.style.width = value; return node; };
   text('flight-score', String(flightState.score));
+  const killStreakEl = el('hud-kill-streak');
+  if (killStreakEl) {
+    const active = combatState.killStreakMultiplier > 1;
+    killStreakEl.textContent = active
+      ? `${combatState.killStreakCount}x KILL STREAK - ${combatState.killStreakMultiplier}x CR/XP`
+      : '';
+    killStreakEl.classList.toggle('active', active);
+    killStreakEl.classList.toggle('flash-off', active && Math.floor(now / 600) % 2 === 0);
+  }
   text('flight-shield', String(Math.round(flightState.shield)));
   text('flight-target', flightState.nearestNode ? `${flightState.nearestNode.userData.project.name} ${flightState.nearestDistance.toFixed(1)}u` : 'NONE');
   text('flight-crosshair-target', flightState.crosshairNode ? `${getProjectNodeName(flightState.crosshairNode)} // PRESS V` : 'NO PROJECT');
@@ -160,6 +169,12 @@ export function updateFlightHud(force = false) {
   text('flight-autopilot', flightState.autopilot ? 'P: ON' : 'P: OFF');
   text('flight-speed', `${speed.toFixed(1)}u/s`);
   width('flight-speed-bar', `${Math.min(100, (speed / 38) * 100).toFixed(1)}%`);
+  const matchSpeedEl = el('hud-match-speed-active');
+  if (matchSpeedEl) {
+    const active = Boolean(flightState.matchSpeedActive);
+    matchSpeedEl.textContent = active ? 'SPEED MATCH ACTIVE' : '';
+    matchSpeedEl.classList.toggle('active', active);
+  }
   text('flight-shields-detail', `${Math.round(flightState.shield)}/${maxShield}`);
   width('flight-shield-bar', `${Math.min(100, Math.max(0, (flightState.shield / maxShield) * 100)).toFixed(1)}%`);
   text('flight-energy', `${Math.round(flightState.energy)}/${maxEnergy}`);

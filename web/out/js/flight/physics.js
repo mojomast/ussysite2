@@ -1,4 +1,4 @@
-import { combatState } from './combat-state.js';
+import { combatState, decayKillStreakTimer } from './combat-state.js';
 import { sfxEngine } from './sfx.js';
 import { traderState, updateFuelDrain } from '../economy/trader.js';
 
@@ -26,6 +26,22 @@ export const DEFAULT_DAMPING = 0.985;
 
 export function configureFlightPhysics(options) {
   deps = options;
+}
+
+/** Sets the signed camera roll target for an evasion burst. */
+export function triggerEvasionCameraRoll(state, rollDir, amount = 28) {
+  state.cameraRollTarget = rollDir * amount;
+  return state;
+}
+
+/** Advances evasion camera roll interpolation and target decay. */
+export function updateEvasionCameraRoll(state, dt) {
+  state.cameraRollCurrent = (state.cameraRollCurrent || 0)
+    + ((state.cameraRollTarget || 0) - (state.cameraRollCurrent || 0)) * Math.min(1, dt * 12);
+  state.cameraRollTarget = (state.cameraRollTarget || 0) * Math.pow(0.04, dt);
+  if (Math.abs(state.cameraRollTarget) < 0.01) state.cameraRollTarget = 0;
+  if (Math.abs(state.cameraRollCurrent) < 0.01) state.cameraRollCurrent = 0;
+  return state;
 }
 
 function requireDeps() {
@@ -72,6 +88,8 @@ export function updateFlight(time = 0) {
   if (combatState.overheated) flightState.status = 'WEAPONS OFFLINE - COOLING';
   combatState.coldJumpCooldown = Math.max(0, (combatState.coldJumpCooldown || 0) - dt * 1000);
   combatState.evasionCooldown = Math.max(0, (combatState.evasionCooldown || 0) - dt * 1000);
+  decayKillStreakTimer(combatState, dt);
+  updateEvasionCameraRoll(flightState, dt);
 
   if (flightState.landed) {
     flightState.vel.multiplyScalar(Math.pow(0.9, dt * 60));
@@ -149,9 +167,15 @@ export function updateFlight(time = 0) {
       flightState.vel.addScaledVector(flightRight, flightState.strafe * 3.2 * rollDir);
       flightState.vel.addScaledVector(flightUp, flightState.strafe * 1.4);
       applyLocalFlightRotation(0, 0, 1, rollDir * 1.2);
+      triggerEvasionCameraRoll(flightState, rollDir);
       combatState.evasionCooldown = 4000;
       flightState.status = 'C — EVASION ROLL';
       flightState.statusUntil = performance.now() + 800;
+      const overlay = globalThis.document?.getElementById?.('cockpit-overlay');
+      if (overlay) {
+        overlay.classList.add('evasion-flash');
+        globalThis.setTimeout?.(() => overlay.classList.remove('evasion-flash'), 300);
+      }
       sfxEngine.playFlat('boost', { volume: 0.7 });
     }
     evasionKeyWasDown = evasionKeyDown;

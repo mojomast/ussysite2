@@ -1,5 +1,5 @@
-import { getDifficultyMultiplier, getDifficultyTier, getEnemyClass, getRandomClassForTier, applyDamageModel } from './combat-overhaul.js';
-import { combatState } from './combat-state.js';
+import { FORMATION_ROLES, getDifficultyMultiplier, getDifficultyTier, getEnemyClass, getRandomClassForTier, applyDamageModel } from './combat-overhaul.js';
+import { combatState, queueCombatDebrief, recordCombatHit } from './combat-state.js';
 import { sfxEngine } from './sfx.js';
 import {
   deactivateCombatObject,
@@ -18,6 +18,7 @@ const THREE = globalThis.THREE;
 export const enemies = [];
 
 let deps = null;
+let combatWasActive = false;
 
 export function configureEnemies(options) {
   deps = options;
@@ -229,13 +230,34 @@ function findNearestEnemyToPosition(position, maxDistance) {
   return nearest;
 }
 
+/** Assigns a formation role from the number of already-active enemies. */
+export function assignFormationRole(activeCount, random = Math.random) {
+  if (activeCount === 0) return FORMATION_ROLES.AGGRESSOR;
+  if (activeCount === 1) return FORMATION_ROLES.FLANKER;
+  return random() > 0.5 ? FORMATION_ROLES.SUPPORT : FORMATION_ROLES.FLANKER;
+}
+
 export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
-  const { flightState, getEnemyFireCooldown, missionState } = requireDeps();
+  const { flightState, getEnemyFireCooldown, getVoicePersona, missionState, showGameMessage, ttsEngine } = requireDeps();
   if (!enemy) return;
   const resolvedClassId = missionState.step === 'killTutorialBogeys'
     ? 'scout'
     : (classId || getRandomClassForTier(getDifficultyTier(flightState.score)));
   const cls = getEnemyClass(resolvedClassId);
+  if (cls.id === 'dreadnought') {
+    showGameMessage?.({
+      type: 'THREAT LEVEL CRITICAL',
+      source: 'USSYVERSE CONTROL',
+      text: 'HERMES-DREADNOUGHT LOCKED ON. ALL PERSONNEL STAND CLEAR.',
+      choices: []
+    });
+    ttsEngine?.speak?.('THREAT LEVEL CRITICAL. HERMES-DREADNOUGHT LOCKED ON.', getVoicePersona?.('USSYVERSE CONTROL'));
+    const overlay = globalThis.document?.getElementById?.('cockpit-overlay');
+    if (overlay) {
+      overlay.classList.add('dreadnought-alert');
+      globalThis.setTimeout?.(() => overlay.classList.remove('dreadnought-alert'), 1200);
+    }
+  }
   const difficultyMultiplier = getDifficultyMultiplier(flightState.score);
   buildEnemyFromClass(enemy, cls.id);
   const angle = Math.random() * Math.PI * 2 + offset;
@@ -247,6 +269,11 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
     flightState.pos.z + Math.sin(angle) * radius
   );
   enemy.userData.active = true;
+  const activeEnemyCount = enemies.filter(item => item !== enemy && item.userData.active).length;
+  enemy.userData.role = assignFormationRole(activeEnemyCount);
+  enemy.userData.flankDir = enemy.userData.role === FORMATION_ROLES.FLANKER && !enemy.userData.flankDir
+    ? (Math.random() > 0.5 ? 1 : -1)
+    : (enemy.userData.flankDir || 1);
   enemy.userData.velocity = new THREE.Vector3();
   enemy.userData._prevPos = null;
   enemy.userData.health = cls.health;
@@ -271,6 +298,7 @@ export function spawnEnemy(enemy, offset = 0, delay = 0, classId = null) {
 
 export function updateCombatObjects(dt) {
   const { flightRight, flightState, flightTempVec, flightTempVec2, flightUp, getEnemyFireCooldown } = requireDeps();
+  const activeAtFrameStart = enemies.some(enemy => enemy.userData.active);
   playerBullets.forEach(bullet => updateBullet(bullet, dt));
   enemyBullets.forEach(bullet => updateBullet(bullet, dt));
   playerMissiles.forEach(missile => updateMissile(missile, dt));
@@ -297,7 +325,19 @@ export function updateCombatObjects(dt) {
     const orbitRadius = 46;
     const aggressionRadius = flightState.shield < 40 ? orbitRadius * 0.6 : orbitRadius;
     const approachSpeed = dist > aggressionRadius ? cls.approachSpeed.far : cls.approachSpeed.near;
-    enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
+    const role = enemy.userData.role || FORMATION_ROLES.AGGRESSOR;
+    if (role === FORMATION_ROLES.FLANKER) {
+      flightTempVec2.copy(flightState.pos)
+        .addScaledVector(flightRight, (enemy.userData.flankDir || 1) * orbitRadius)
+        .sub(enemy.position);
+      if (flightTempVec2.lengthSq() > 0.001) flightTempVec2.normalize();
+      enemy.position.addScaledVector(flightTempVec2, approachSpeed * dt);
+    } else if (role === FORMATION_ROLES.SUPPORT) {
+      if (dist > 80) enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
+      else if (dist < 45) enemy.position.addScaledVector(flightTempVec, -approachSpeed * dt);
+    } else {
+      enemy.position.addScaledVector(flightTempVec, approachSpeed * dt);
+    }
     if (cls.evasion > 0) {
       enemy.userData.evasionTimer = Math.max(0, (enemy.userData.evasionTimer || 0) - dt * 1000);
       if (enemy.userData.evasionTimer <= 0 && Math.random() < cls.evasion) {
@@ -357,6 +397,7 @@ export function updateCombatObjects(dt) {
         triggerImpactFlash(bullet.position);
         deactivateCombatObject(bullet);
         if (shouldEnemyEvadeHit(enemy)) return;
+        recordCombatHit();
         applyEnemyHit(enemy, bullet.userData.damage || 12);
       }
     });
@@ -385,6 +426,7 @@ export function updateCombatObjects(dt) {
         triggerImpactFlash(missile.position);
         deactivateCombatObject(missile);
         if (shouldEnemyEvadeHit(enemy)) return;
+        recordCombatHit();
         applyEnemyHit(enemy, missile.userData.damage || 60);
       }
     });
@@ -399,6 +441,11 @@ export function updateCombatObjects(dt) {
     flightState.pos.set(0, 2.2, 16);
     enemies.forEach((enemy, idx) => spawnEnemy(enemy, idx * 1.7, idx * 0.9));
   }
+  const activeAtFrameEnd = enemies.some(enemy => enemy.userData.active);
+  if ((combatWasActive || activeAtFrameStart) && !activeAtFrameEnd && !combatState.debriefPending) {
+    queueCombatDebrief(combatState);
+  }
+  combatWasActive = activeAtFrameEnd;
 }
 
 export function applyPlayerDamage(amount) {

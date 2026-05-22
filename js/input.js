@@ -71,7 +71,12 @@ export const flightState = {
   mouseSensitivity: 0.0022,
   thrust: 14,
   strafe: 8,
-  damping: 0.985
+  damping: 0.985,
+  matchSpeedActive: false,
+  matchSpeedTarget: null,
+  matchSpeedUntil: 0,
+  cameraRollTarget: 0,
+  cameraRollCurrent: 0
 };
 
 export const inputState = {
@@ -241,7 +246,7 @@ function onGlobalKeyDown(event) {
     if (!event.repeat) toggleAutopilot();
     return;
   }
-  if (event.code === 'KeyC') {
+  if (event.code === 'KeyC' && event.shiftKey) {
     event.preventDefault();
     if (!event.repeat) toggleFlightView();
     return;

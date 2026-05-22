@@ -46,8 +46,12 @@ import {
   awardXp,
   buyWeapon,
   combatState,
+  consumeCombatDebrief,
+  recordKillStreak,
   deserializeCombatState,
   equipWeapon,
+  recordCombatKillStats,
+  resetCombatSessionStats,
   reapplySkills,
   serializeCombatState,
   setCombatFlightState,
@@ -72,6 +76,7 @@ import {
   showGameMessage as showGameMessageModule,
   updateGameMessage as updateGameMessageModule
 } from './messages.js';
+import { showDebrief } from './debrief.js';
 import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
   MISSION_INTRO_TEXT,
@@ -182,6 +187,7 @@ const debrisPosition = new THREE.Vector3();
 const debrisScale = new THREE.Vector3(1, 1, 1);
 const debrisAxis = new THREE.Vector3();
 const dustTempVec = new THREE.Vector3();
+const cameraRollQuat = new THREE.Quaternion();
 const ignoredRelationTags = new Set(['Featured', 'Active', 'Stable', 'Historical', 'Ecosystem']);
 const manualRelationHints = [
   ['devussy', 'swarmussy'],
@@ -305,10 +311,10 @@ const skillTree = {
 
 setCombatFlightState(flightState);
 configureCombat({
-  onEnemyKill: ({ classId, pos } = {}) => {
+  onEnemyKill: ({ classId, pos, xpReward } = {}) => {
     triggerDeathExplosion(pos);
     const cls = getEnemyClass(classId || 'scout');
-    awardXp(cls.xpReward ?? 25);
+    awardXp(xpReward ?? cls.xpReward ?? 25);
     loseReputation(getNearestStationFaction(pos), 1);
   },
   onPlayerHit: () => {
@@ -717,7 +723,9 @@ export function init() {
     getVoicePersona,
     handleEnemyDestroyed,
     missionState,
+    showGameMessage,
     skillTree,
+    ttsEngine,
     windowRef: window
   });
   configureWeapons({
@@ -1321,6 +1329,9 @@ function enterFlightMode() {
   flightState.strafe = 8;
   flightState.damping = 0.985;
   resetFlightAssistState();
+  resetCombatSessionStats(combatState);
+  combatState.waveNumber = 0;
+  combatState.waveComposition = '';
   combatState.heat = 0;
   combatState.overheated = false;
   combatState.adrenaline = 0;
@@ -1454,6 +1465,27 @@ function addCombatCredits(value) {
   if (value > 0 && isFlightActive) showCreditGain(value);
 }
 
+function announceEnemyWave(waveEnemies = []) {
+  const spawned = waveEnemies.filter(enemy => enemy?.userData?.active);
+  if (!spawned.length) return;
+  const counts = new Map();
+  spawned.forEach(enemy => {
+    const cls = getEnemyClass(enemy.userData.classId || 'scout');
+    counts.set(cls.label, (counts.get(cls.label) || 0) + 1);
+  });
+  const waveComposition = [...counts.entries()]
+    .map(([label, count]) => `${count}x ${label}`)
+    .join(', ');
+  combatState.waveNumber = (combatState.waveNumber || 0) + 1;
+  combatState.waveComposition = waveComposition;
+  showGameMessage({
+    type: `WAVE ${combatState.waveNumber}`,
+    source: 'TACTICAL',
+    text: `${spawned.length} HOSTILES INBOUND - ${waveComposition}`,
+    ttsPriority: 'normal'
+  });
+}
+
 function showGameMessage({ type = 'MISSION', source = 'USSYVERSE CONTROL', text = '', choices = [], ui = null, onDismiss = null, typeSpeed = 18, ttsPriority = 'high' }) {
   // Contract-preserved in messages.js: gameMessageState.ttsWaitUntil = ttsEngine.enabled ? performance.now() + 3500 : 0
   // Contract-preserved in messages.js: onStart: () => { gameMessageState.ttsWaitUntil = 0; priority: ttsPriority }
@@ -1492,6 +1524,8 @@ function resetFlightAssistState() {
   flightState.matchSpeedActive = false;
   flightState.matchSpeedTarget = null;
   flightState.matchSpeedUntil = 0;
+  flightState.cameraRollTarget = 0;
+  flightState.cameraRollCurrent = 0;
 }
 
 function registerFlightAssistKeyCapture() {
@@ -2002,9 +2036,15 @@ function beginContractStep() {
     if (targetNode) setNavigationTarget(targetNode, 'mission');
   }
   if (step.type === 'kills') {
+    resetCombatSessionStats(combatState);
     enemies.forEach(enemy => deactivateCombatObject(enemy));
     const count = Math.min(step.spawnEnemies || step.target || 1, enemies.length);
-    for (let i = 0; i < count; i++) spawnEnemy(enemies[i], i * 1.8, i * 0.6);
+    const spawned = [];
+    for (let i = 0; i < count; i++) {
+      spawnEnemy(enemies[i], i * 1.8, i * 0.6);
+      spawned.push(enemies[i]);
+    }
+    announceEnemyWave(spawned);
     flightState.status = `${step.label.toUpperCase()} STARTED`;
     flightState.statusUntil = performance.now() + 2400;
   }
@@ -2116,14 +2156,20 @@ function handleTradeCompleted(trade) {
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
   const pointsBefore = combatState.skillPoints;
+  const multiplier = recordKillStreak(combatState, performance.now());
+  const creditReward = Math.round(cls.creditReward * multiplier);
+  const xpReward = Math.round(cls.xpReward * multiplier);
+  const isBountyKill = gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId;
+  recordCombatKillStats({ creditsEarned: isBountyKill ? 0 : creditReward, xpEarned: xpReward }, combatState);
   sfxEngine.playPositional('explosion', enemy, { volume: 0.9 });
-  emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position });
+  emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position, xpReward });
   registerMissionKill(enemy);
   if (gameOrchestrator.bountyPendingReward > 0 && enemy?.userData?.bountyEventId) {
     deactivateCombatObject(enemy);
     if (enemies.every(item => !item.userData.active)) {
       const reward = gameOrchestrator.bountyPendingReward;
       addCombatCredits(reward);
+      combatState.sessionCredits += reward;
       flightState.status = `BOUNTY CLAIMED: +${reward}cr`;
       flightState.statusUntil = performance.now() + 3000;
       gameOrchestrator.bountyPendingReward = 0;
@@ -2140,12 +2186,13 @@ function handleEnemyDestroyed(enemy) {
     return;
   }
   flightState.score += Math.max(1, Math.round(cls.xpReward / 10));
-  addCombatCredits(cls.creditReward);
+  addCombatCredits(creditReward);
   if (combatState.skillPoints > pointsBefore) {
     flightState.status = `SKILL POINT EARNED - SP:${combatState.skillPoints}`;
     flightState.statusUntil = performance.now() + 2500;
   } else {
-    flightState.status = `${cls.label} DESTROYED +${cls.creditReward}CR`;
+    const streak = multiplier > 1 ? ` // ${combatState.killStreakCount}x STREAK ${multiplier}x` : '';
+    flightState.status = `${cls.label} DESTROYED +${creditReward}CR${streak}`;
     flightState.statusUntil = performance.now() + 1800;
   }
   const killCallouts = ['SPLASH ONE', 'BOGEY DOWN', 'KILL CONFIRMED', 'TARGET ELIMINATED', 'BANDIT DOWN', 'GOOD KILL'];
@@ -2446,11 +2493,15 @@ async function pollOrchestrator() {
 }
 
 function spawnOrchestratedEnemies(event, count = event.spawnEnemies) {
+  resetCombatSessionStats(combatState);
+  const waveEnemies = [];
   const spawned = activateEnemyWave(enemies, Math.min(count || 0, maxEnemies), (enemy, offset, delay) => {
     spawnEnemy(enemy, offset, delay);
+    waveEnemies.push(enemy);
     enemy.userData.orchestratorEventId = event.id;
     enemy.userData.bountyEventId = event.type === 'BOUNTY' ? event.id : null;
   });
+  announceEnemyWave(waveEnemies);
   return spawned;
 }
 
@@ -2837,6 +2888,10 @@ export function tick(time = 0) {
   // Slow ambient drift of camera coordinates during passive Hero screensaver state
   if (isFlightActive) {
     updateFlight(time);
+    if (combatState.debriefPending) {
+      const data = consumeCombatDebrief(combatState);
+      if (data) showDebrief(data);
+    }
     sfxEngine.updateEngineHum(flightState.vel);
     updateSpaceEnvironment(frameDt);
     if (time - lastPriceDriftTick > 30000) {
@@ -2897,6 +2952,10 @@ export function tick(time = 0) {
     camera.up.set(0, 1, 0);
   }
   camera.lookAt(camCurrent.lookAt);
+  if (isFlightActive && flightState.cameraRollCurrent) {
+    cameraRollQuat.setFromAxisAngle(flightForward, flightState.cameraRollCurrent * Math.PI / 180);
+    camera.quaternion.premultiply(cameraRollQuat);
+  }
   updateDeepSpaceAnchor();
   updateFlightNavMarker();
 

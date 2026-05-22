@@ -16,7 +16,16 @@ index.html
              -> js/tts/engine.js
 
 js/flight/state.js
-  -> pure flight, mission, and message state
+  -> flight integration, mission/director wave spawns, camera roll application
+
+js/flight/combat-state.js
+  -> combat loadout, skills, kill streaks, session stats, debrief queue
+
+js/flight/enemies.js
+  -> enemy pools, formation roles, movement, projectile collision, debrief trigger
+
+js/flight/debrief.js
+  -> post-combat overlay rendering and dismissal
 
 js/engine/*, js/flight/*, js/ui/*
   -> module boundaries for scene, flight, HUD, mission, messages, and UI code
@@ -30,7 +39,9 @@ js/engine/*, js/flight/*, js/ui/*
 user input -> updateFlight physics -> combat objects -> objective/mission state -> orchestrator poll -> game messages -> TTS
 ```
 
-Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, landing checks, objective progression, HUD updates, and radio messages. Flight assists are stateful: static throttle stores `throttleEnabled` and `throttleLevel`, match-speed stores a temporary velocity target, and combat evasion uses a cooldown tracked by combat state.
+Keyboard and mouse events mutate `flightState`. The animation loop applies physics, combat, navigation, landing checks, objective progression, HUD updates, and radio messages. Flight assists are stateful: static throttle stores `throttleEnabled` and `throttleLevel`, match-speed stores `matchSpeedActive`, `matchSpeedTarget`, and `matchSpeedUntil`, and combat evasion uses `combatState.evasionCooldown` plus `flightState.cameraRollTarget` / `cameraRollCurrent` for the cockpit roll effect.
+
+Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStreakMultiplier`, `lastKillTime`, and `peakKillStreak`. Runtime sortie counters track `sessionKills`, `sessionCredits`, `sessionXp`, `shotsFired`, and `shotsHit`; when a wave clears, `debriefPending` and `debriefData` hand a snapshot to `js/flight/debrief.js`.
 
 ## Space Visuals
 
@@ -38,7 +49,7 @@ Keyboard and mouse events mutate `flightState`. The animation loop applies physi
 
 Flight mode adds camera-relative depth cues only while `isFlightActive` is true: three existing `THREE.Points` star layers use different parallax factors, one `InstancedMesh` debris field recycles up to 300 low-poly rocks around the ship, and one `BufferGeometry` dust stream recycles up to 600 particles ahead of the camera. Nebula sprites are static additive canvas-gradient backdrops.
 
-Weapon VFX use fixed pools: four muzzle lights, six impact rings, four death explosions, long sci-fi laser trail line buffers, and missile exhaust particle buffers. Pool exhaustion logs a warning instead of allocating or throwing, and frame-lifetime updates return objects to the pool automatically. Enemy movement also records per-tick velocity on `enemy.userData.velocity` so HUD lead prediction and match-speed assist can use the same combat-object data.
+Weapon VFX use fixed pools: four muzzle lights, six impact rings, four death explosions, long sci-fi laser trail line buffers, and missile exhaust particle buffers. Pool exhaustion logs a warning instead of allocating or throwing, and frame-lifetime updates return objects to the pool automatically. Enemy movement records per-tick velocity on `enemy.userData.velocity` so HUD lead prediction and match-speed assist can use the same combat-object data. Formation roles are assigned on spawn: `aggressor` steers directly toward the player, `flanker` steers toward a side-offset orbit target, and `support` holds longer range.
 
 ## Economy Data Flow
 
@@ -66,7 +77,7 @@ Objective progression is browser-authoritative. Kills advance kill objectives, l
 
 ## Persistence
 
-The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions.
+The URL hash save format remains backward-compatible as `#save:<combat>:cr:<credits>:rep:<reputation>:ms:<mission>`. Combat serialization persists XP, skills, loadout, owned weapons, ammo, missiles, fuel, and fuel-depleted state. Mission serialization persists tutorial/free-roam completion, active step, kill progress, objective view/current objective, contract progress, and generated faction contract definitions. Kill streaks, wave announcements, shot accuracy, and debrief data are runtime-only and are reset on new sorties or respawn.
 
 ## AI Gameplay Loop
 
@@ -96,7 +107,8 @@ Choice resolution dismisses the current message, applies any choice-1 credit/fue
 
 | State | Purpose |
 | --- | --- |
-| `flightState` | Ship resources, position, velocity, input, nav, landing, view state, throttle and match-speed assist state |
+| `flightState` | Ship resources, position, velocity, input, nav, landing, view state, throttle and match-speed assist state, evasion camera roll fields |
+| `combatState` | XP/skills/loadout, weapon heat, assist cooldowns, kill streak multiplier, wave metadata, session stats, debrief queue |
 | `missionState` | Current objective, tutorial/free-roam state, multi-step contract progress |
 | `gameMessageState` | Active message, typed text, choices, dismissal handler |
 | `traderState` | Credits, fuel, cargo, docked station, trade log |
@@ -105,3 +117,27 @@ Choice resolution dismisses the current message, applies any choice-1 credit/fue
 ## Extending
 
 Add optional contracts by adding entries to `BUILTIN_MISSION_CONTRACTS` in `js/flight/mission.js` with local completion types such as `kills`, `land`, `landDifferent`, and `trade`. Add tutorial-only steps in `setMissionStep()` when they need bespoke messaging. Add commodities in `COMMODITIES` and update `getStationProfile()` rules. Add station profile behavior by mapping project categories or project IDs to production and demand arrays.
+
+## Controls Reference
+
+| Key | Action |
+| --- | --- |
+| `W/S` | Forward/reverse thrust |
+| `A/D` | Strafe |
+| `Q/E` | Roll ship |
+| `T` | Toggle static throttle |
+| `Z/X` | Increase/decrease throttle setting |
+| `G` | Match nearest target velocity or emergency brake |
+| `C` | Evasion roll |
+| `Shift+C` | Toggle cockpit/third-person view |
+| `F` | Cold jump when unlocked |
+| `V` | Set navigation from crosshair |
+| `P` | Toggle autopilot |
+
+## Weapon Definitions
+
+`WEAPON_DEFS` in `js/flight/combat-overhaul.js` is the source of truth for weapon name, type, damage, cooldown, energy cost, ammo cost, projectile speed/life, heat, pellets/spread, missile count, AOE radius, and description. The HUD lead pip reads the equipped primary weapon `projectileSpeed`.
+
+## Skill Tree Branches
+
+Skills are grouped into Hull, Shield, Weapons, and Engines. Hull improves armor and point defense, Shield improves max shield/recharge/overcharge, Weapons improve energy/heat/fire cycle/armor piercing, and Engines improve thrust, afterburner, damping, and cold jump.

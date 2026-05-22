@@ -53,7 +53,9 @@ const {
   applyRoll,
   applyStrafe,
   canApplyThrust,
-  drainFuelForThrust
+  drainFuelForThrust,
+  triggerEvasionCameraRoll,
+  updateEvasionCameraRoll
 } = await import('../js/flight/physics.js');
 
 function makeState() {
@@ -144,5 +146,22 @@ describe('velocity cap and drag', () => {
 
     assert.ok(state.vel.x >= 0, 'positive near-zero velocity should not flip sign under drag');
     assert.ok(state.vel.length() <= 1e-9, 'drag should keep near-zero velocity moving toward zero');
+  });
+});
+
+describe('evasion camera roll', () => {
+  it('sets cameraRollTarget to a signed 28 degree roll', () => {
+    const state = { cameraRollTarget: 0, cameraRollCurrent: 0 };
+    triggerEvasionCameraRoll(state, 1);
+    assert.equal(state.cameraRollTarget, 28);
+    triggerEvasionCameraRoll(state, -1);
+    assert.equal(state.cameraRollTarget, -28);
+  });
+
+  it('lerps current roll and decays target toward zero', () => {
+    const state = { cameraRollTarget: 28, cameraRollCurrent: 0 };
+    updateEvasionCameraRoll(state, 0.1);
+    assert.ok(state.cameraRollCurrent > 0, 'current roll should move toward target');
+    assert.ok(state.cameraRollTarget < 28, 'target roll should decay');
   });
 });
