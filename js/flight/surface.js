@@ -133,6 +133,8 @@ export function beginLanding(flightState, planet) {
   surface.state = SURFACE_STATES.LANDING;
   surface.planetId = planetId(planet) ?? surface.planetId;
   surface.landingProgress = 0;
+  surface.startY = flightState.pos.y ?? 0;
+  surface.preLandingThrust = flightState.thrust ?? 14;
   surface.surfaceY = getCoord(planet?.pos ?? planet?.position, 'y', 1) + planetRadius(planet);
   surface.exitQueued = planetType(planet) === 'hostile';
   flightState.landed = false;
@@ -148,9 +150,8 @@ export function updateLanding(flightState, planet, dt) {
   const surface = ensureSurface(flightState);
   if (surface.state !== SURFACE_STATES.LANDING) return surface;
   surface.landingProgress = Math.min(1, surface.landingProgress + Math.max(0, dt) / LANDING_SECONDS);
-  dampVelocity(flightState, Math.max(0, 1 - Math.max(0, dt) * 2));
   if (flightState?.pos && Number.isFinite(surface.surfaceY)) {
-    flightState.pos.y = flightState.pos.y + (surface.surfaceY - flightState.pos.y) * surface.landingProgress;
+    flightState.pos.y = surface.startY + (surface.surfaceY - surface.startY) * surface.landingProgress;
   }
   if (surface.landingProgress >= 1) onSurface(flightState, planet);
   return surface;
@@ -179,8 +180,7 @@ export function beginDeparture(flightState) {
   surface.exitQueued = false;
   flightState.landed = false;
   flightState.currentDockedProject = null;
-  flightState.thrust = flightState.thrust || 14;
-  flightState.strafe = flightState.strafe || 8;
+  flightState.thrust = Number.isFinite(surface.preLandingThrust) ? surface.preLandingThrust : 14;
   if (typeof flightState.keys?.clear === 'function') flightState.keys.clear();
   return surface;
 }
@@ -218,8 +218,6 @@ export function updateSurface(flightState, planets = [], dt = 0) {
       surface.surfaceY = 0;
       surface.exitQueued = false;
       flightState.landed = false;
-      flightState.thrust = flightState.thrust || 14;
-      flightState.strafe = flightState.strafe || 8;
     }
   }
   return surface;

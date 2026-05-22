@@ -838,7 +838,8 @@ export function updateCombatObjects(dt) {
       updateFriendlyEscort(enemy, flightState, now, dt);
       return;
     }
-    if (checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now })) return;
+    // Hunter cooldown/flee timestamps are wall-clock based; do not pass performance.now().
+    if (checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now: Date.now() })) return;
     const bossPhase = updateBossAttackPhase(enemy, cls, combatState, now);
     if (enemy.userData.bossPhaseChanged) {
       enemy.userData.bossPhaseChanged = false;

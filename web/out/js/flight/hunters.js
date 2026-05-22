@@ -27,9 +27,10 @@ export const HUNTER_TIERS = Object.freeze({
 const TIER_ORDER = [HUNTER_TIERS.SQUADRON, HUNTER_TIERS.WING, HUNTER_TIERS.SCOUT];
 const FLEE_BOUNTY_DELTA = 200;
 const DESTROY_BOUNTY_DELTA = 150;
+const MAX_ENEMY_POOL = 24;
 
 function nowMs() {
-  return globalThis.performance?.now?.() ?? Date.now();
+  return Date.now();
 }
 
 function choose(list, random = Math.random) {
@@ -68,10 +69,7 @@ export function shouldTriggerIntercept({ combatState, traderState, node, now = n
   if (!nodeId || combatState.lastNodeArrival === nodeId) return false;
 
   const tier = getTierForBounty(traderState.bountyLevel);
-  if (!tier) {
-    combatState.lastNodeArrival = nodeId;
-    return false;
-  }
+  if (!tier) return false;
   if ((traderState.interceptCooldown || 0) > now) return false;
   if (!tier.allowedNodeTypes.includes(getNodeType(node))) return false;
 
@@ -151,6 +149,11 @@ export function triggerIntercept({ combatState, traderState, flightState, enemyP
     let enemy = enemyPool.find(item => !item?.userData?.active);
     if (enemy && typeof spawnEnemy === 'function') spawnEnemy(enemy, index * 1.15, index * 0.25, classId);
     if (!enemy) {
+      const activeCount = enemyPool.filter(item => item?.userData?.active).length;
+      if (activeCount >= MAX_ENEMY_POOL) {
+        addKillFeedEntry?.('POOL FULL — HUNTER SPAWNING SKIPPED', '#ff4444');
+        continue;
+      }
       enemy = makeFallbackEnemy(flightState, index);
       enemyPool.push?.(enemy);
     }
@@ -159,6 +162,7 @@ export function triggerIntercept({ combatState, traderState, flightState, enemyP
     buildEnemyHealthPips?.(enemy);
     hunters.push(enemy);
   }
+  if (hunters.length === 0) return null;
 
   const lead = hunters[0]?.userData?.hunterName || faction.names[0];
   const message = `INCOMING TRANSMISSION — ${lead}: YOUR BOUNTY IS ${clampBounty(traderState.bountyLevel)}c. STAND DOWN.`;
@@ -189,6 +193,11 @@ export function checkHunterFlee(enemy, { combatState, traderState, enemies = [],
   traderState.bountyLevel = clampBounty((traderState.bountyLevel || 0) + FLEE_BOUNTY_DELTA);
   addKillFeedEntry?.(`${enemy.userData.factionName || 'HUNTER'} // ${enemy.userData.hunterName || 'CONTACT'} BROKE CONTACT, BOUNTY +${FLEE_BOUNTY_DELTA}`, '#ffcc00');
   deactivateCombatObject?.(enemy);
+  const activeHunters = combatState?.activeIntercept?.hunters;
+  if (activeHunters) {
+    const index = activeHunters.indexOf(enemy);
+    if (index !== -1) activeHunters.splice(index, 1);
+  }
   if (combatState?.activeIntercept && activeHuntersForIntercept(enemies, combatState.activeIntercept.id).length === 0) combatState.activeIntercept = null;
   return true;
 }
@@ -200,6 +209,11 @@ export function checkHunterDestroyed(enemy, { combatState, traderState, enemies 
   traderState.bountyLevel = clampBounty((traderState.bountyLevel || 0) - DESTROY_BOUNTY_DELTA);
   addKillFeedEntry?.(`HUNTER DESTROYED // BOUNTY -${DESTROY_BOUNTY_DELTA}`, '#44ff88');
   const interceptId = enemy.userData.bountyInterceptId;
+  const activeHunters = combatState?.activeIntercept?.hunters;
+  if (activeHunters) {
+    const index = activeHunters.indexOf(enemy);
+    if (index !== -1) activeHunters.splice(index, 1);
+  }
   const remaining = activeHuntersForIntercept(enemies, interceptId).filter(item => item !== enemy);
   if (combatState?.activeIntercept?.id === interceptId && remaining.length === 0) combatState.activeIntercept = null;
   return true;

@@ -3380,14 +3380,16 @@ export function tick(time = 0) {
     updateSystemMapInput();
     updatePlanetLOD(systemPlanets, camera);
     updateStationRotations(systemStations, frameDt);
-    if (!simulationPaused) {
-      updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
-      if (flightState.newNodeArrival) {
-        const tier = shouldTriggerIntercept({ combatState, traderState, node: flightState.newNodeArrival, now: time });
-        if (tier) triggerIntercept({ combatState, traderState, flightState, enemyPool: enemies, spawnEnemy, buildEnemyHealthPips, addKillFeedEntry, node: flightState.newNodeArrival, tier, now: time });
-        flightState.newNodeArrival = null;
-      }
-      enemies.forEach(enemy => checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now: time }));
+      if (!simulationPaused) {
+        updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+        // Hunter cooldowns are wall-clock based; do not pass the frame/performance clock.
+        const hunterNow = Date.now();
+        if (flightState.newNodeArrival) {
+          const tier = shouldTriggerIntercept({ combatState, traderState, node: flightState.newNodeArrival, now: hunterNow });
+          if (tier) triggerIntercept({ combatState, traderState, flightState, enemyPool: enemies, spawnEnemy, buildEnemyHealthPips, addKillFeedEntry, node: flightState.newNodeArrival, tier, now: hunterNow });
+          flightState.newNodeArrival = null;
+        }
+        enemies.forEach(enemy => checkHunterFlee(enemy, { combatState, traderState, enemies, addKillFeedEntry, deactivateCombatObject, now: hunterNow }));
       updateCivilians(frameDt, { THREE, gameRoot, flightState, navGraph, enemies, playerBullets, playerMissiles, addKillFeedEntry, now: time });
       spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState, enemies, now: time });
       updateMissionBoardProgress(time);

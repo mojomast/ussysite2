@@ -102,10 +102,39 @@ test('beginLanding and updateLanding lerp progress over 3 seconds then surface',
   updateLanding(state, planet, 1.5);
   assert.equal(state.surface.state, SURFACE_STATES.LANDING);
   assert.equal(state.surface.landingProgress, 0.5);
+  assert.equal(state.pos.y, 1250);
   updateLanding(state, planet, 1.5);
   assert.equal(state.surface.state, SURFACE_STATES.SURFACE);
   assert.equal(state.surface.landingProgress, 1);
   assert.equal(state.landed, true);
+});
+
+test('updateSurface: full NONE → SURFACE → NONE round-trip', () => {
+  const localPlanet = { ...planet, pos: [0, 0, 0], radius: 100 };
+  const state = flightState(new Vector3(0, 500, 0));
+  state.thrust = 18;
+
+  enterApproach(state, localPlanet);
+  enterOrbital(state, localPlanet);
+  beginLanding(state, localPlanet);
+
+  for (let guard = 0; state.surface.state !== SURFACE_STATES.SURFACE && guard < 10; guard += 1) {
+    updateLanding(state, localPlanet, 0.5);
+  }
+
+  assert.equal(state.surface.state, SURFACE_STATES.SURFACE);
+  assert.ok(Math.abs(state.pos.y - state.surface.surfaceY) < 1e-9);
+
+  beginDeparture(state);
+  assert.equal(state.thrust, 18);
+
+  for (let guard = 0; state.surface.state !== SURFACE_STATES.NONE && guard < 10; guard += 1) {
+    updateSurface(state, [localPlanet], 0.5);
+  }
+
+  assert.equal(state.surface.state, SURFACE_STATES.NONE);
+  assert.equal(state.surface.landingProgress, 0);
+  assert.equal(state.surface.planetId, null);
 });
 
 test('getSurfaceServices returns combat encounter for hostile planet', () => {
@@ -144,6 +173,6 @@ test('departure reverses progress to NONE and restores movement locks', () => {
   assert.equal(state.surface.planetId, null);
   assert.equal(state.landed, false);
   assert.equal(state.thrust, 14);
-  assert.equal(state.strafe, 8);
+  assert.equal(state.strafe, 0);
   assert.equal(state.keys.size, 0);
 });

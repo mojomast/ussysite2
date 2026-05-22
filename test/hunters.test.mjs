@@ -50,6 +50,19 @@ test('shouldTriggerIntercept gates by node arrival, bounty, cooldown, and roll',
   assert.equal(shouldTriggerIntercept({ combatState: state, traderState: trader, node, now: 6000, random: () => 0 }), false);
 });
 
+test('shouldTriggerIntercept does not consume node arrival below bounty threshold', () => {
+  const state = { bossActive: false, activeIntercept: null, lastNodeArrival: null };
+  const trader = { bountyLevel: 499, interceptCooldown: 0 };
+  const node = { id: 'station-threshold', type: 'station' };
+
+  assert.equal(shouldTriggerIntercept({ combatState: state, traderState: trader, node, now: 1000, random: () => 0 }), false);
+  assert.equal(state.lastNodeArrival, null);
+
+  trader.bountyLevel = 500;
+  assert.equal(shouldTriggerIntercept({ combatState: state, traderState: trader, node, now: 1001, random: () => 0 }).id, 'SCOUT');
+  assert.equal(state.lastNodeArrival, 'station-threshold');
+});
+
 test('triggerIntercept disengages autopilot and marks spawned hunters', () => {
   const state = { activeIntercept: null };
   const trader = { bountyLevel: 1600, interceptCooldown: 0 };
@@ -105,6 +118,33 @@ test('triggerIntercept creates fallback enemy entries when no pool factory is av
   assert.equal(pool[0].position.x, 130);
 });
 
+test('triggerIntercept uses Date.now for omitted cooldown timestamps', (t) => {
+  let currentNow = 1_000_000;
+  t.mock.method(Date, 'now', () => currentNow);
+
+  const trader = { bountyLevel: 500, interceptCooldown: 0 };
+  const intercept = triggerIntercept({
+    combatState: {},
+    traderState: trader,
+    flightState: { pos: new Vector3(), autopilot: createAutopilotState() },
+    enemyPool: [],
+    tier: HUNTER_TIERS.SCOUT,
+    random: () => 0
+  });
+
+  assert.equal(intercept.tier, 'SCOUT');
+  assert.equal(trader.interceptCooldown, currentNow + HUNTER_TIERS.SCOUT.cooldownMs);
+
+  currentNow += 1;
+  const blockedState = { bossActive: false, activeIntercept: null, lastNodeArrival: null };
+  const node = { id: 'date-clock-node', type: 'station' };
+  assert.equal(shouldTriggerIntercept({ combatState: blockedState, traderState: trader, node, random: () => 0 }), false);
+  assert.equal(blockedState.lastNodeArrival, null);
+
+  currentNow = trader.interceptCooldown + 1;
+  assert.equal(shouldTriggerIntercept({ combatState: blockedState, traderState: trader, node, random: () => 0 }).id, 'SCOUT');
+});
+
 test('hunter flee increases bounty and clears intercept when no hunters remain', () => {
   const enemy = { userData: { active: true, isHunter: true, health: 1, maxHealth: 5, factionName: 'REDLINE RECLAIMERS', hunterName: 'CLAIMJUMP', bountyInterceptId: 'i1' } };
   const state = { activeIntercept: { id: 'i1' } };
@@ -118,6 +158,16 @@ test('hunter flee increases bounty and clears intercept when no hunters remain',
   assert.ok(killFeed[0].includes('BOUNTY +200'));
 });
 
+test('hunter flee splices enemy from active intercept hunters', () => {
+  const enemy = { userData: { active: true, isHunter: true, health: 1, maxHealth: 5, bountyInterceptId: 'i-flee' } };
+  const wingmate = { userData: { active: true, isHunter: true, bountyInterceptId: 'i-flee' } };
+  const state = { activeIntercept: { id: 'i-flee', hunters: [enemy, wingmate] } };
+  const trader = { bountyLevel: 500 };
+
+  assert.equal(checkHunterFlee(enemy, { combatState: state, traderState: trader, enemies: [enemy, wingmate], deactivateCombatObject: target => { target.userData.active = false; }, now: 4000 }), true);
+  assert.deepEqual(state.activeIntercept.hunters, [wingmate]);
+});
+
 test('hunter destroyed lowers bounty and clears active intercept when group is gone', () => {
   const enemy = { userData: { active: true, isHunter: true, bountyInterceptId: 'i2' } };
   const state = { activeIntercept: { id: 'i2' } };
@@ -128,6 +178,16 @@ test('hunter destroyed lowers bounty and clears active intercept when group is g
   assert.equal(state.activeIntercept, null);
   assert.equal(checkHunterDestroyed(enemy, { combatState: state, traderState: trader, enemies: [enemy] }), false);
   assert.equal(trader.bountyLevel, 350);
+});
+
+test('hunter destroyed splices enemy from active intercept hunters', () => {
+  const enemy = { userData: { active: true, isHunter: true, bountyInterceptId: 'i-destroy' } };
+  const wingmate = { userData: { active: true, isHunter: true, bountyInterceptId: 'i-destroy' } };
+  const state = { activeIntercept: { id: 'i-destroy', hunters: [enemy, wingmate] } };
+  const trader = { bountyLevel: 500 };
+
+  assert.equal(checkHunterDestroyed(enemy, { combatState: state, traderState: trader, enemies: [enemy, wingmate] }), true);
+  assert.deepEqual(state.activeIntercept.hunters, [wingmate]);
 });
 
 test('combat and trader states expose hunter runtime fields', () => {
