@@ -26,6 +26,12 @@ The flight mission pipeline is client-side and lives in `js/flight/mission.js`, 
 
 Progress is serialized with `serializeMissionProgress()` and restored with `applyMissionProgress()`. Built-in contract definitions are not duplicated in save data; custom active definitions are persisted when needed.
 
+## Station Mission Board
+
+Project-authored station contracts live in `js/economy/lore.js` as `STATION_MISSIONS`. Each station offers 2-3 cross-project missions with `type`, `deliverTo`, `reward`, and optional `requiredCargo`; `state.js` marks board entries `AVAILABLE` or `LOCKED` by checking the player's cargo hold before acceptance.
+
+When accepted, station missions are converted into the same contract shape used by the director. Delivery missions with `requiredCargo` become a land step followed by a matching sell step at the destination, intel/recon missions become destination landing steps, and escort missions add a hostile-clearance step after rendezvous.
+
 ## Contract Steps
 
 Built-in contracts use a shared `steps` array:

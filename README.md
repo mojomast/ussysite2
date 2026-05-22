@@ -115,7 +115,7 @@ To switch back to GPT Audio, set `OPENROUTER_TTS_MODEL=openai/gpt-audio`. See `d
 
 ## Economy
 
-The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The player starts with credits, fuel, and an empty cargo hold. Project nodes act as stations with deterministic markets: production goods are cheap, demand goods sell high, and prices vary by station/commodity hash.
+The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The player starts with credits, fuel, and an empty cargo hold. Project nodes act as stations with deterministic markets, lore-specific merchants, a docked services grid, and cross-project mission boards that turn real project relationships into delivery, recon, intel, and escort contracts.
 
 ## Objectives
 

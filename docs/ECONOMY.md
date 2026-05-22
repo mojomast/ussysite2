@@ -58,19 +58,21 @@ Restricted commodities require minimum reputation with the docked station factio
 
 ## Black Market
 
-Stations where faction reputation is `<= -50` replace `VIEW MARKET` with `BLACK MARKET`. The black market lists all commodities, including `CONTRABAND`, ignores normal restricted-good clearance checks, and applies a 30% buy-side risk premium. `CONTRABAND` is black-market-only and is hidden from the regular market and inventory cargo grid.
+Stations where faction reputation is `<= -50` reveal a black-market tab inside the `TRADE HUB`. The black market lists all commodities, including `CONTRABAND`, ignores normal restricted-good clearance checks, and applies a 30% buy-side risk premium. `CONTRABAND` is black-market-only and is hidden from the regular market and inventory cargo grid.
 
-## Faction Missions
+## Station Lore And Missions
 
-Docked stations expose a `MISSIONS` option after startup. Each station deterministically offers one daily faction mission seeded by station ID plus day of week:
+Station contact lore and cross-project mission definitions live in `js/economy/lore.js`. `STATION_LORE` maps each project station to a merchant name, rotating greeting lines, and a faction color class used by the docked menu. `STATION_MISSIONS` maps each station to project-specific delivery, intel, escort, or recon contracts that reference other constellation projects.
+
+Docked stations expose a `MISSIONS` option after startup. Project-defined missions are shown as `AVAILABLE` or `LOCKED` by checking `requiredCargo` against `traderState.cargo`; accepting a mission converts it into the existing contract-step format:
 
 ```text
-escort: destroy 2 hostiles near another station, reward 50-300cr + 5 rep
-delivery: buy 1 local commodity and sell it at another station, reward 100-200cr + 8 rep
-bounty: destroy 3 enemies, reward 150-350cr + 6 rep
+delivery: land at destination and sell required cargo there
+intel/recon: land at destination and transmit packet
+escort: land at destination, then destroy hostile contacts
 ```
 
-Faction missions use the same `missionState` and contract-step flow as existing objectives.
+If a station has no authored mission data, the older deterministic daily faction mission fallback is still available. Faction missions use the same `missionState` and contract-step flow as existing objectives.
 
 ## Fuel
 
@@ -84,14 +86,17 @@ round((maxFuel - currentFuel) * fuelCostPerUnit)
 
 ```text
 Dock/Land
-  -> Station Welcome
-      -> View Market / Black Market
-          -> Select Commodity
-              -> Buy Quantity
-              -> Sell Quantity
+  -> Station Welcome Grid
+      -> Trade Hub
+          -> Market
+          -> Black Market (hostile reputation only)
+          -> Trade Log
+      -> Select Commodity
+          -> Buy Quantity
+          -> Sell Quantity
       -> Refuel
-      -> View Cargo
+      -> Cargo Hold
       -> Shipyard
       -> Missions
-      -> Dismiss
+      -> Undock footer link
 ```

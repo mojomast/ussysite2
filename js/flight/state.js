@@ -1,6 +1,7 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
 import { COMMODITIES, configureTrader, openTradeMenu, refuelAt, tickPriceDrift, traderState } from '../economy/trader.js';
+import { getStationLore, getStationMissions } from '../economy/lore.js';
 import { gainReputation, getEnemyAggressionMultiplier, loseReputation, normalizeCategory, reputationState } from '../economy/reputation.js';
 import { configureInput, flightState, getInteractiveHits, inputState, onPointerLockError, orbitState, registerInputListeners, syncOrbitFromCamera } from '../input.js';
 export { flightState };
@@ -343,6 +344,7 @@ const gameMessageState = {
   ttsWaitUntil: 0,
   typeSpeed: 18,
   choices: [],
+  ui: null,
   onDismiss: null
 };
 
@@ -536,7 +538,8 @@ export function init() {
     updateFlightHud,
     getVoicePersona,
     onTrade: handleTradeCompleted,
-    showFactionMission
+    showFactionMission,
+    onUndock: undockFromTradeMenu
   });
   restoreCombatStateFromHash();
   if (objectivesPanel) objectivesPanel.addEventListener('click', handleObjectivesPanelClick);
@@ -1476,6 +1479,15 @@ function handleFlightUndock() {
   sfxEngine.startEngineHum();
 }
 
+function undockFromTradeMenu() {
+  flightState.landed = false;
+  flightState.currentDockedProject = null;
+  handleFlightUndock();
+  flightState.status = 'UNDOCKED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
+  flightState.statusUntil = performance.now() + 3000;
+  updateFlightHud(true);
+}
+
 function resetContractState() {
   missionState.contractId = null;
   missionState.contractTitle = '';
@@ -1720,6 +1732,11 @@ function getFactionMissionDestination(projectId, seed) {
 }
 
 function upsertFactionMissionContract(projectId) {
+  const stationMissions = getStationMissions(projectId);
+  if (stationMissions.length) {
+    const mission = stationMissions.find(item => stationMissionAvailable(item)) || stationMissions[0];
+    return upsertStationMissionContract(projectId, mission);
+  }
   const project = USSY_PROJECTS.find(item => item.id === projectId) || { id: projectId, name: stationName(projectId), category: 'tools' };
   const seed = Array.from(projectId).reduce((sum, char) => sum + char.charCodeAt(0), 0) + new Date().getDay();
   const missionType = ['escort', 'delivery', 'bounty'][seed % 3];
@@ -1781,20 +1798,114 @@ function upsertFactionMissionContract(projectId) {
   return contract;
 }
 
-function showFactionMission(projectId) {
-  const contract = upsertFactionMissionContract(projectId);
-  const choices = [
-    { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
+function stationMissionAvailable(mission) {
+  if (!mission?.requiredCargo) return true;
+  return (traderState.cargo[mission.requiredCargo.commodityId] || 0) >= mission.requiredCargo.qty;
+}
+
+function stationMissionCargoText(mission) {
+  if (!mission?.requiredCargo) return 'NO CARGO REQUIRED';
+  const commodity = COMMODITIES.find(item => item.id === mission.requiredCargo.commodityId);
+  const held = traderState.cargo[mission.requiredCargo.commodityId] || 0;
+  return `${held}/${mission.requiredCargo.qty} ${commodity?.name || mission.requiredCargo.commodityId.toUpperCase()}`;
+}
+
+function buildStationMissionSteps(projectId, mission) {
+  const destinationName = stationName(mission.deliverTo);
+  if (mission.type === 'ESCORT') {
+    return [
+      { id: `${mission.id}-rally`, type: 'land', label: `Rally At ${destinationName}`, detail: `Dock at ${destinationName} and establish escort contact.`, targetProjectId: mission.deliverTo, target: 1 },
+      { id: `${mission.id}-cover`, type: 'kills', label: `Cover ${destinationName}`, detail: `Destroy 2 hostile contacts near ${destinationName}.`, target: 2, spawnEnemies: 2 }
+    ];
+  }
+  if (mission.requiredCargo) {
+    const commodity = COMMODITIES.find(item => item.id === mission.requiredCargo.commodityId);
+    return [
+      { id: `${mission.id}-dock`, type: 'land', label: `Dock At ${destinationName}`, detail: `Deliver ${mission.requiredCargo.qty} ${commodity?.name || mission.requiredCargo.commodityId.toUpperCase()} to ${destinationName}.`, targetProjectId: mission.deliverTo, target: 1 },
+      { id: `${mission.id}-sell`, type: 'trade', action: 'sell', commodityId: mission.requiredCargo.commodityId, stationId: mission.deliverTo, label: `Transfer ${commodity?.name || mission.requiredCargo.commodityId.toUpperCase()}`, detail: `Sell ${mission.requiredCargo.qty} ${commodity?.name || mission.requiredCargo.commodityId.toUpperCase()} at ${destinationName} to complete delivery.`, target: mission.requiredCargo.qty }
+    ];
+  }
+  return [
+    { id: `${mission.id}-travel`, type: 'land', label: `${mission.type} ${destinationName}`, detail: `Dock at ${destinationName} and transmit the ${mission.type.toLowerCase()} packet.`, targetProjectId: mission.deliverTo, target: 1 }
   ];
-  if (!missionState.active && gameOrchestrator.tutorialComplete) {
+}
+
+function upsertStationMissionContract(projectId, mission) {
+  const existing = getMissionContract(mission.id);
+  if (existing) return existing;
+  const project = USSY_PROJECTS.find(item => item.id === projectId) || { category: 'tools' };
+  const contract = {
+    id: mission.id,
+    title: mission.title,
+    description: mission.description,
+    rewardCredits: mission.reward?.credits || 0,
+    rewardRep: mission.reward?.rep || 0,
+    rewardFuel: mission.reward?.fuelBonus || 0,
+    rewardFaction: normalizeCategory(project.category),
+    steps: buildStationMissionSteps(projectId, mission)
+  };
+  missionContracts.push(contract);
+  renderObjectivesPanel();
+  return contract;
+}
+
+function showStationMissionDetail(projectId, mission) {
+  const available = stationMissionAvailable(mission);
+  const contract = upsertStationMissionContract(projectId, mission);
+  const choices = [{ key: '2', code: 'Digit2', label: 'MISSION BOARD', action: () => showFactionMission(projectId) }];
+  if (!missionState.active && gameOrchestrator.tutorialComplete && available) {
     choices.unshift({ key: '1', code: 'Digit1', label: 'ACCEPT MISSION', action: () => startMissionContract(contract.id) });
   }
   showGameMessage({
-    type: 'FACTION MISSION',
+    type: available ? 'MISSION DETAIL' : 'MISSION LOCKED',
+    source: `${stationName(projectId).toUpperCase()} CONTRACT BOARD`,
+    text: `${mission.title.toUpperCase()}. ${available ? 'AVAILABLE' : 'LOCKED'} // CARGO ${stationMissionCargoText(mission)}. ${mission.description} REWARD ${mission.reward.credits}CR + ${mission.reward.rep} REP + ${mission.reward.fuelBonus} FUEL.`,
+    choices,
+    ttsPriority: 'normal'
+  });
+}
+
+function showFactionMission(projectId) {
+  const stationMissions = getStationMissions(projectId);
+  if (!stationMissions.length) {
+    const contract = upsertFactionMissionContract(projectId);
+    const choices = [
+      { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
+    ];
+    if (!missionState.active && gameOrchestrator.tutorialComplete) {
+      choices.unshift({ key: '1', code: 'Digit1', label: 'ACCEPT MISSION', action: () => startMissionContract(contract.id) });
+    }
+    showGameMessage({
+      type: 'FACTION MISSION',
+      source: `${stationName(projectId).toUpperCase()} CONTRACT BOARD`,
+      text: missionState.active
+        ? 'MISSION BOARD LOCKED. COMPLETE CURRENT OBJECTIVE FIRST.'
+        : `${contract.title.toUpperCase()}. ${contract.description}`,
+      choices,
+      ttsPriority: 'normal'
+    });
+    return;
+  }
+  const choices = stationMissions.map((mission, idx) => {
+    const available = stationMissionAvailable(mission);
+    return {
+      key: String(idx + 1),
+      code: `Digit${idx + 1}`,
+      label: `${available ? 'AVAILABLE' : 'LOCKED'} // ${mission.title}`,
+      action: () => showStationMissionDetail(projectId, mission)
+    };
+  });
+  choices.push({ key: 'b', code: 'KeyB', label: 'STATION MENU', action: () => openTradeMenu(projectId) });
+  const rows = stationMissions.map((mission, idx) => {
+    const status = stationMissionAvailable(mission) ? 'AVAILABLE' : 'LOCKED';
+    return `[${idx + 1}] ${status}: ${mission.title} TO ${stationName(mission.deliverTo).toUpperCase()} // ${stationMissionCargoText(mission)}`;
+  });
+  showGameMessage({
+    type: 'MISSION BOARD',
     source: `${stationName(projectId).toUpperCase()} CONTRACT BOARD`,
     text: missionState.active
       ? 'MISSION BOARD LOCKED. COMPLETE CURRENT OBJECTIVE FIRST.'
-      : `${contract.title.toUpperCase()}. ${contract.description}`,
+      : rows.join(' // '),
     choices,
     ttsPriority: 'normal'
   });
@@ -1864,10 +1975,12 @@ function advanceContractStep() {
 function completeMissionContract() {
   const contract = getMissionContract(missionState.contractId);
   const reward = contract?.rewardCredits || 0;
+  const rewardFuel = contract?.rewardFuel || contract?.rewards?.fuel || 0;
   const rewardRep = contract?.rewardRep ?? 5;
   const rewardFaction = normalizeCategory(contract?.rewardFaction || getStationCategory(traderState.dockedStation || missionState.contractStartStationId || 'devussy'));
   emitCombatMissionComplete({ type: 'contract', contractId: contract?.id });
   if (reward > 0) addCombatCredits(reward);
+  if (rewardFuel > 0) traderState.fuel = Math.min(traderState.maxFuel, traderState.fuel + rewardFuel);
   if (rewardRep > 0) gainReputation(rewardFaction, rewardRep);
   const title = contract?.title || 'Objective';
   missionState.active = false;
@@ -1877,10 +1990,10 @@ function completeMissionContract() {
     id: 'free-roam',
     kicker: 'DIRECTOR ONLINE',
     title: 'Free Roam',
-    detail: `${title} complete${reward ? `, ${reward}cr paid` : ''}. Pick another objective or keep flying.`,
+    detail: `${title} complete${reward ? `, ${reward}cr paid` : ''}${rewardFuel ? `, ${rewardFuel} fuel loaded` : ''}. Pick another objective or keep flying.`,
     source: 'director'
   });
-  showGameMessage({ type: 'OBJECTIVE COMPLETE', source: 'USSYVERSE CONTROL', text: `${title.toUpperCase()} COMPLETE.${reward ? ` ${reward} CREDITS TRANSFERRED.` : ''}`, ttsPriority: 'normal' });
+  showGameMessage({ type: 'OBJECTIVE COMPLETE', source: 'USSYVERSE CONTROL', text: `${title.toUpperCase()} COMPLETE.${reward ? ` ${reward} CREDITS TRANSFERRED.` : ''}${rewardFuel ? ` ${rewardFuel} FUEL LOADED.` : ''}`, ttsPriority: 'normal' });
   updateFlightHud(true);
 }
 
@@ -2075,7 +2188,7 @@ function openStationMenu(projectId) {
   syncCombatCreditsFromTrader();
   showGameMessage({
     type: 'STATION SERVICES',
-    source: `${stationName(projectId).toUpperCase()} DOCK CONTROL`,
+    source: getStationLore(projectId).merchantName,
     text: `DOCKED AT ${stationName(projectId).toUpperCase()}. CREDITS: ${traderState.credits}CR. SELECT SERVICE:`,
     choices: [
       { key: '1', code: 'Digit1', label: 'RESTOCK', action: () => restockAtProject(USSY_PROJECTS.find(project => project.id === projectId) || { id: projectId, name: stationName(projectId) }) },

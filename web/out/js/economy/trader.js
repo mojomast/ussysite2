@@ -9,6 +9,7 @@ import {
 import { combatState, buyWeapon, equipWeapon, reapplySkills, unlockSkillNode } from '../flight/combat-state.js';
 import { gainReputation, getReputation, getReputationPriceMultiplier, normalizeCategory } from './reputation.js';
 import { refreshInventoryIfOpen } from '../ui/inventory-panel.js';
+import { getStationGreeting, getStationLore, getStationMissions } from './lore.js';
 
 export const traderState = {
   credits: 1000,
@@ -46,14 +47,16 @@ let updateFlightHudRef = noop;
 let getVoicePersonaRef = () => ({});
 let onTradeRef = noop;
 let showFactionMissionRef = noop;
+let onUndockRef = noop;
 
-export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona, onTrade, showFactionMission } = {}) {
+export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona, onTrade, showFactionMission, onUndock } = {}) {
   if (typeof showGameMessage === 'function') showGameMessageRef = showGameMessage;
   if (typeof dismissGameMessage === 'function') dismissGameMessageRef = dismissGameMessage;
   if (typeof updateFlightHud === 'function') updateFlightHudRef = updateFlightHud;
   if (typeof getVoicePersona === 'function') getVoicePersonaRef = getVoicePersona;
   if (typeof onTrade === 'function') onTradeRef = onTrade;
   if (typeof showFactionMission === 'function') showFactionMissionRef = showFactionMission;
+  if (typeof onUndock === 'function') onUndockRef = onUndock;
 }
 
 function getProject(projectId) {
@@ -151,29 +154,68 @@ function stationName(projectId) {
 }
 
 function stationSource(projectId) {
-  return `${stationName(projectId).toUpperCase()} DOCK CONTROL`;
+  return getStationLore(projectId).merchantName;
+}
+
+function stationCategoryLabel(projectId) {
+  return (getProject(projectId)?.category || 'station').toUpperCase();
+}
+
+function hasBlackMarketAccess(projectId) {
+  return getReputation(normalizeCategory(getProject(projectId)?.category)) <= -50;
+}
+
+function hasMissionCargo(mission) {
+  if (!mission.requiredCargo) return true;
+  return (traderState.cargo[mission.requiredCargo.commodityId] || 0) >= mission.requiredCargo.qty;
+}
+
+function availableMissionCount(projectId) {
+  return getStationMissions(projectId).filter(hasMissionCargo).length;
+}
+
+function dockFooterStats() {
+  return [
+    `${traderState.credits}CR`,
+    `FUEL ${Math.round(traderState.fuel)}/${traderState.maxFuel}`,
+    `CARGO ${getCargoUsed()}/${traderState.maxCargo}`
+  ];
+}
+
+function undockFromStation(projectId) {
+  traderState.docked = false;
+  traderState.dockedStation = null;
+  dismissGameMessageRef();
+  onUndockRef(projectId);
 }
 
 export function openTradeMenu(projectId) {
   traderState.docked = true;
   traderState.dockedStation = projectId;
   const projectName = stationName(projectId);
-  const faction = normalizeCategory(getProject(projectId)?.category);
-  const rep = getReputation(faction);
-  const marketChoice = rep <= -50
-    ? { key: '1', code: 'Digit1', label: 'BLACK MARKET', action: () => showBlackMarket(projectId, 0) }
-    : { key: '1', code: 'Digit1', label: 'VIEW MARKET', action: () => showMarket(projectId, 0) };
+  const lore = getStationLore(projectId);
+  const marketCount = sortedMarket(projectId).length;
+  const missionCount = availableMissionCount(projectId);
   showGameMessageRef({
-    type: 'STATION COMMS',
+    type: projectName.toUpperCase(),
     source: stationSource(projectId),
-    text: `WELCOME TO ${projectName.toUpperCase()} STATION. CREDITS: ${traderState.credits}. FUEL: ${Math.round(traderState.fuel)}%. CARGO: ${getCargoUsed()}/${traderState.maxCargo} UNITS. SELECT SERVICE:`,
+    text: getStationGreeting(projectId),
+    ui: {
+      layout: 'dock-grid',
+      headerTitle: projectName.toUpperCase(),
+      headerBadge: stationCategoryLabel(projectId),
+      colorClass: lore.colorClass,
+      footerStats: dockFooterStats(),
+      footerChoices: [
+        { key: 'u', code: 'KeyU', label: 'UNDOCK', action: () => undockFromStation(projectId) }
+      ]
+    },
     choices: [
-      marketChoice,
-      { key: '2', code: 'Digit2', label: 'REFUEL', action: () => refuelDialog(projectId) },
-      { key: '3', code: 'Digit3', label: 'VIEW CARGO', action: () => showCargoHold(projectId) },
-      { key: '4', code: 'Digit4', label: 'SHIPYARD', action: () => showShipyard(projectId) },
-      { key: '5', code: 'Digit5', label: 'MISSIONS', action: () => showFactionMissionRef(projectId) },
-      { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessageRef() }
+      { key: '1', code: 'Digit1', label: 'TRADE HUB', icon: 'package-search', hint: hasBlackMarketAccess(projectId) ? 'MARKET // SHADOW TAB' : `${marketCount} ITEMS AVAILABLE`, tone: hasBlackMarketAccess(projectId) ? 'pink' : 'cyan', action: () => showTradeHub(projectId) },
+      { key: '2', code: 'Digit2', label: 'REFUEL', icon: 'fuel', hint: `FUEL ${Math.round(traderState.fuel)}/${traderState.maxFuel}`, tone: 'cyan', action: () => refuelDialog(projectId) },
+      { key: '3', code: 'Digit3', label: 'CARGO HOLD', icon: 'boxes', hint: `${getCargoUsed()}/${traderState.maxCargo} UNITS USED`, tone: 'cyan', action: () => showCargoHold(projectId) },
+      { key: '4', code: 'Digit4', label: 'SHIPYARD', icon: 'rocket', hint: `${combatState.ownedWeapons.size} WEAPONS OWNED`, tone: 'cyan', action: () => showShipyard(projectId) },
+      { key: '5', code: 'Digit5', label: 'MISSIONS', icon: 'radar', hint: `${missionCount} MISSIONS READY`, tone: 'yellow', action: () => showFactionMissionRef(projectId) }
     ]
   });
 }
@@ -187,6 +229,40 @@ function sortedMarket(projectId) {
   return COMMODITIES.filter(commodity => !commodity.blackMarketOnly).sort((a, b) => {
     const score = id => (profile.produces.includes(id) ? 2 : 0) + (profile.demands.includes(id) ? 3 : 0);
     return score(b.id) - score(a.id) || a.name.localeCompare(b.name);
+  });
+}
+
+function showTradeHub(projectId) {
+  const choices = [
+    { key: '1', code: 'Digit1', label: 'MARKET', icon: 'shopping-cart', hint: `${sortedMarket(projectId).length} ITEMS AVAILABLE`, tone: 'cyan', action: () => showMarket(projectId, 0) }
+  ];
+  if (hasBlackMarketAccess(projectId)) {
+    choices.push({ key: '2', code: 'Digit2', label: 'BLACK MARKET', icon: 'skull', hint: 'SHADOW TAB UNLOCKED', tone: 'pink', action: () => showBlackMarket(projectId, 0) });
+    choices.push({ key: '3', code: 'Digit3', label: 'TRADE LOG', icon: 'scroll-text', hint: `${traderState.tradeLog.length} RECENT ENTRIES`, tone: 'cyan', action: () => showTradeLog(projectId) });
+    choices.push({ key: '4', code: 'Digit4', label: 'BACK', icon: 'corner-down-left', hint: 'RETURN TO DOCK MENU', tone: 'cyan', action: () => openTradeMenu(projectId) });
+  } else {
+    choices.push({ key: '2', code: 'Digit2', label: 'TRADE LOG', icon: 'scroll-text', hint: `${traderState.tradeLog.length} RECENT ENTRIES`, tone: 'cyan', action: () => showTradeLog(projectId) });
+    choices.push({ key: '3', code: 'Digit3', label: 'BACK', icon: 'corner-down-left', hint: 'RETURN TO DOCK MENU', tone: 'cyan', action: () => openTradeMenu(projectId) });
+  }
+  showGameMessageRef({
+    type: 'TRADE HUB',
+    source: stationSource(projectId),
+    text: hasBlackMarketAccess(projectId)
+      ? 'MARKET TAB READY. BLACK MARKET ACCESS IS AVAILABLE UNDER SHADOW CLEARANCE.'
+      : 'MARKET TAB READY. BLACK MARKET TAB HIDDEN UNTIL REPUTATION FALLS BELOW TRUST THRESHOLD.',
+    choices
+  });
+}
+
+function showTradeLog(projectId) {
+  showGameMessageRef({
+    type: 'TRADE LOG',
+    source: stationSource(projectId),
+    text: getTradeLogSummary() || 'NO TRADES LOGGED AT THIS CONSOLE.',
+    choices: [
+      { key: '1', code: 'Digit1', label: 'TRADE HUB', action: () => showTradeHub(projectId) },
+      { key: '2', code: 'Digit2', label: 'STATION MENU', action: () => openTradeMenu(projectId) }
+    ]
   });
 }
 
