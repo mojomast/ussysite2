@@ -11,25 +11,27 @@ let _visible = false;
 let autoDismissTimer = 0;
 const initializedDocuments = new WeakSet();
 
-const flightRows = isCoarsePointer ? [
-  ['VIRTUAL JOYSTICK / TOUCH DRAG', 'Look / move'],
-  ['Q / E', 'Roll left / right'],
-  ['Shift', 'Afterburner'],
-  ['G', 'Match speed / brake'],
-  ['R', 'Throttle hold'],
-  ['Shift+C', 'Toggle view']
-] : [
-  ['Mouse Move', 'Look / aim'],
-  ['W / Arrow Up', 'Forward thrust'],
-  ['S / Arrow Down', 'Reverse / brake'],
-  ['A / Arrow Left', 'Strafe left'],
-  ['D / Arrow Right', 'Strafe right'],
-  ['Q / E', 'Roll left / right'],
-  ['Shift', 'Afterburner'],
-  ['G', 'Match speed / brake'],
-  ['R', 'Throttle hold'],
-  ['Shift+C', 'Toggle view']
-];
+function getFlightRows() {
+  return isCoarsePointer ? [
+    ['VIRTUAL JOYSTICK / TOUCH DRAG', 'Look / move'],
+    ['Q / E', 'Roll left / right'],
+    ['Shift', 'Afterburner'],
+    ['G', 'Match speed / brake'],
+    ['R', 'Throttle hold'],
+    ['Shift+C', 'Toggle view']
+  ] : [
+    ['Mouse Move', 'Look / aim'],
+    ['W / Arrow Up', 'Forward thrust'],
+    ['S / Arrow Down', 'Reverse / brake'],
+    ['A / Arrow Left', 'Strafe left'],
+    ['D / Arrow Right', 'Strafe right'],
+    ['Q / E', 'Roll left / right'],
+    ['Shift', 'Afterburner'],
+    ['G', 'Match speed / brake'],
+    ['R', 'Throttle hold'],
+    ['Shift+C', 'Toggle view']
+  ];
+}
 
 const combatNavRows = [
   ['LMB', 'Primary fire'],
@@ -70,7 +72,7 @@ function buildOverlay(documentRef) {
       <div class="tutorial-controls-grid">
         <section>
           <h3>FLIGHT &amp; MOVEMENT</h3>
-          ${renderRows(flightRows)}
+          ${renderRows(getFlightRows())}
         </section>
         <section>
           <h3>COMBAT &amp; NAV</h3>
