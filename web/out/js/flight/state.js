@@ -3397,7 +3397,7 @@ function resolveOrchestratedChoice(event, choice) {
 
 function resetCameraView() {
   if (!isConsoleActive || isFlightActive) return;
-  camTarget.pos.set(0, 4, 18);
+  camTarget.pos.set(0, 18, 128);
   camTarget.lookAt.set(0, 0, 0);
   syncOrbitFromCamera();
   selectedNode = null;
@@ -3713,7 +3713,7 @@ export function tick(time = 0) {
   }
 
   // Smooth LERP camera movement
-  const lerpFactor = isFlightActive ? (flightState.view === 'cockpit' ? 0.28 : 0.16) : (isConsoleActive ? 0.16 : 0.02); // Slower, more cinematic drift in Hero mode
+  const lerpFactor = isFlightActive ? (flightState.view === 'cockpit' ? 0.28 : 0.16) : 0.08;
   camCurrent.pos.lerp(camTarget.pos, lerpFactor);
   camCurrent.lookAt.lerp(camTarget.lookAt, lerpFactor);
   

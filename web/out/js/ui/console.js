@@ -243,8 +243,8 @@ export function selectProjectModule(projId, triggerFly = true) {
     camTarget.pos.copy(pos).add(dir.multiplyScalar(18)).add(new THREE.Vector3(0, 5.5, 0));
     camTarget.lookAt.copy(pos);
     if (camCurrent) {
-      camCurrent.pos.lerp(camTarget.pos, 0.55);
-      camCurrent.lookAt.lerp(camTarget.lookAt, 0.55);
+      camCurrent.pos.lerp(camTarget.pos, 0.08);
+      camCurrent.lookAt.lerp(camTarget.lookAt, 0.08);
     }
     syncOrbitFromCamera();
   }
@@ -257,11 +257,11 @@ export function activateConsoleMode() {
   const { camTarget, documentRef = document, getSelectedNode, selectProject = selectProjectModule, setConsoleActive, syncOrbitFromCamera } = requireDeps();
   setConsoleActive(true);
   documentRef.body.classList.add('console-active');
-  camTarget.pos.set(0, 8, 38);
+  camTarget.pos.set(0, 18, 128);
   camTarget.lookAt.set(0, 0, 0);
   syncOrbitFromCamera();
   const selectedNode = getSelectedNode();
-  if (selectedNode) selectProject(selectedNode.userData.project.id, true);
+  if (selectedNode) selectProject(selectedNode.userData.project.id, false);
 }
 
 export function deactivateConsoleMode() {

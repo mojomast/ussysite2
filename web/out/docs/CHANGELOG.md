@@ -1,5 +1,10 @@
 # Changelog
 
+## Camera Fix — Full ussyverse visible on load
+- Recalculated camera Z from DEFAULT_VIEW_WORLD_SCALE × outermost planet extent
+- sectionCamPositions tightened to preserve full cluster visibility
+- Camera lerp alpha increased to 0.08 for snappy project selection
+
 ## [Phase: Jump Gates + Hyperspace]
 ```text
 2957bfe feat: add jump gates, hyperspace unlock, and gate-aware routing

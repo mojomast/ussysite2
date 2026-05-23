@@ -54,21 +54,24 @@ export function createSceneGroups(targetScene = scene, { THREE: Three = THREE } 
 export function createCameraAnimationState({ THREE: Three = THREE } = {}) {
   // Locked portfolio mode uses a tightly scaled star map that fits every project
   // on screen; unlocked flight mode switches to the separate system-scale world.
+  // Camera Z = 128: frames +/-57.1 display units from the outermost project
+  // (world radius 50000 x DEFAULT_VIEW_WORLD_SCALE = 80 display units)
+  // with 15% padding at FOV 72°.
   const camTarget = {
-    pos: new Three.Vector3(0, 20, 118),
+    pos: new Three.Vector3(0, 18, 128),
     lookAt: new Three.Vector3(0, 0, 0)
   };
   const camCurrent = {
-    pos: new Three.Vector3(0, 24, 126),
+    pos: new Three.Vector3(0, 22, 136),
     lookAt: new Three.Vector3(0, 0, 0)
   };
   const sectionCamPositions = [
-    new Three.Vector3(0, 20, 118),
-    new Three.Vector3(16, 18, 108),
-    new Three.Vector3(-18, 24, 112),
-    new Three.Vector3(22, 18, 110),
-    new Three.Vector3(-14, 16, 104),
-    new Three.Vector3(0, 16, 108)
+    new Three.Vector3(0, 18, 128),
+    new Three.Vector3(14, 16, 122),
+    new Three.Vector3(-16, 20, 124),
+    new Three.Vector3(18, 16, 120),
+    new Three.Vector3(-12, 14, 122),
+    new Three.Vector3(0, 16, 122)
   ];
   const sectionColors = [
     { light1: new Three.Color(0x00f0ff), light2: new Three.Color(0xff0055) },
