@@ -738,7 +738,6 @@ export function init() {
   });
   const settingsDeps = getSettingsDeps();
   configureSettingsMenu(settingsDeps);
-  applySettings(settingsDeps);
   configureMissionBoardUI({ documentRef: document });
   configureCombatScene({
     THREE,
@@ -888,6 +887,7 @@ export function init() {
     playerLaserMaxDistanceSq,
     skillTree
   });
+  applySettings(settingsDeps);
   configureFlightNavigation({
     activeUniverseScale: () => activeUniverseScale,
     combatAudio,
