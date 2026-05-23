@@ -8,28 +8,30 @@ let deps = {
   saveSettingsToHash: () => {}
 };
 let _visible = false;
-let autoDismissTimer = 0;
+let autoDismissTimer = null;
 const initializedDocuments = new WeakSet();
 
-const flightRows = isCoarsePointer ? [
-  ['VIRTUAL JOYSTICK / TOUCH DRAG', 'Look / move'],
-  ['Q / E', 'Roll left / right'],
-  ['Shift', 'Afterburner'],
-  ['G', 'Match speed / brake'],
-  ['R', 'Throttle hold'],
-  ['Shift+C', 'Toggle view']
-] : [
-  ['Mouse Move', 'Look / aim'],
-  ['W / Arrow Up', 'Forward thrust'],
-  ['S / Arrow Down', 'Reverse / brake'],
-  ['A / Arrow Left', 'Strafe left'],
-  ['D / Arrow Right', 'Strafe right'],
-  ['Q / E', 'Roll left / right'],
-  ['Shift', 'Afterburner'],
-  ['G', 'Match speed / brake'],
-  ['R', 'Throttle hold'],
-  ['Shift+C', 'Toggle view']
-];
+function getFlightRows() {
+  return isCoarsePointer ? [
+    ['VIRTUAL JOYSTICK / TOUCH DRAG', 'Look / move'],
+    ['Q / E', 'Roll left / right'],
+    ['Shift', 'Afterburner'],
+    ['G', 'Match speed / brake'],
+    ['R', 'Throttle hold'],
+    ['Shift+C', 'Toggle view']
+  ] : [
+    ['Mouse Move', 'Look / aim'],
+    ['W / Arrow Up', 'Forward thrust'],
+    ['S / Arrow Down', 'Reverse / brake'],
+    ['A / Arrow Left', 'Strafe left'],
+    ['D / Arrow Right', 'Strafe right'],
+    ['Q / E', 'Roll left / right'],
+    ['Shift', 'Afterburner'],
+    ['G', 'Match speed / brake'],
+    ['R', 'Throttle hold'],
+    ['Shift+C', 'Toggle view']
+  ];
+}
 
 const combatNavRows = [
   ['LMB', 'Primary fire'],
@@ -70,7 +72,7 @@ function buildOverlay(documentRef) {
       <div class="tutorial-controls-grid">
         <section>
           <h3>FLIGHT &amp; MOVEMENT</h3>
-          ${renderRows(flightRows)}
+          ${renderRows(getFlightRows())}
         </section>
         <section>
           <h3>COMBAT &amp; NAV</h3>
@@ -114,7 +116,10 @@ export function showTutorialOverlay() {
   const { documentRef } = deps;
   const overlay = documentRef?.getElementById?.('tutorial-overlay') || (documentRef ? buildOverlay(documentRef) : null);
   if (!overlay) return false;
-  window.clearTimeout(autoDismissTimer);
+  if (autoDismissTimer !== null) {
+    window.clearTimeout(autoDismissTimer);
+    autoDismissTimer = null;
+  }
   _visible = true;
   overlay.hidden = false;
   overlay.setAttribute('aria-hidden', 'false');
@@ -122,6 +127,7 @@ export function showTutorialOverlay() {
   animateOverlay(overlay, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
   autoDismissTimer = window.setTimeout(() => {
     if (_visible) hideTutorialOverlay();
+    autoDismissTimer = null;
   }, 60000);
   return true;
 }
@@ -130,7 +136,10 @@ export function hideTutorialOverlay() {
   const { documentRef } = deps;
   const overlay = documentRef?.getElementById?.('tutorial-overlay');
   if (!overlay || overlay.hidden) return false;
-  window.clearTimeout(autoDismissTimer);
+  if (autoDismissTimer !== null) {
+    window.clearTimeout(autoDismissTimer);
+    autoDismissTimer = null;
+  }
   _visible = false;
   const finish = () => {
     overlay.hidden = true;

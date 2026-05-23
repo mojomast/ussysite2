@@ -113,7 +113,8 @@ export function applySettings(deps = {}) {
   deps.setBloomRadius?.(settingsState.bloomRadius);
   deps.setPixelRatio?.(settingsState.pixelRatio);
   deps.setMouseSensitivity?.(settingsState.mouseSensitivity);
-  document.documentElement.style.setProperty('--hud-scale', String(settingsState.hudScale));
+  const docRef = deps.documentRef ?? (typeof document !== 'undefined' ? document : null);
+  docRef?.documentElement.style.setProperty('--hud-scale', String(settingsState.hudScale));
 }
 
 export function resetSettings() {

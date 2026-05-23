@@ -1,4 +1,4 @@
-import { applySettings, DEFAULT_SETTINGS, resetSettings, settingsState } from '../flight/settings.js';
+import { DEFAULT_SETTINGS, resetSettings, settingsState } from '../flight/settings.js';
 
 const SETTINGS_TABS = [
   ['audio', 'AUDIO'],
@@ -63,7 +63,10 @@ let deps = {
 };
 let _open = false;
 let activeTab = 'audio';
+let _graphicsDebounceTimer = null;
 const initializedDocuments = new WeakSet();
+
+function noop() {}
 
 function createEl(documentRef, tag, className = '', text = '') {
   const el = documentRef.createElement(tag);
@@ -85,12 +88,38 @@ function syncValueLabel(documentRef, key) {
   if (label) label.textContent = labelText(key, settingsState[key]);
 }
 
-function liveApply() {
+function liveApplyAudio() {
+  deps.setSfxVolume?.(settingsState.sfxVolume);
+  deps.setRadioVolume?.(settingsState.radioVolume);
+  deps.setChatterVolume?.(settingsState.chatterVolume);
   deps.setTTSEnabled?.(settingsState.ttsEnabled);
-  applySettings(deps);
+  deps.setTTSBackendEnabled?.(settingsState.ttsBackendEnabled);
+  const docRef = deps.documentRef ?? (typeof document !== 'undefined' ? document : null);
+  docRef?.documentElement.style.setProperty('--hud-scale', String(settingsState.hudScale));
 }
 
-function bindRange(documentRef, key, { min, max, step, toState = Number, fromState = value => value } = {}) {
+function liveApplyGraphics() {
+  if (_graphicsDebounceTimer !== null) clearTimeout(_graphicsDebounceTimer);
+  _graphicsDebounceTimer = setTimeout(() => {
+    _graphicsDebounceTimer = null;
+    deps.setBloomStrength?.(settingsState.bloomStrength);
+    deps.setBloomThreshold?.(settingsState.bloomThreshold);
+    deps.setBloomRadius?.(settingsState.bloomRadius);
+    deps.setPixelRatio?.(settingsState.pixelRatio);
+  }, 80);
+}
+
+function liveApplyGameplay() {
+  deps.setMouseSensitivity?.(settingsState.mouseSensitivity);
+}
+
+function liveApply() {
+  liveApplyAudio();
+  liveApplyGraphics();
+  liveApplyGameplay();
+}
+
+function bindRange(documentRef, key, { min, max, step, toState = Number, fromState = value => value, apply = liveApply } = {}) {
   const input = documentRef.getElementById(`settings-${key}`);
   if (!input) return;
   input.min = String(min);
@@ -101,27 +130,27 @@ function bindRange(documentRef, key, { min, max, step, toState = Number, fromSta
   input.oninput = () => {
     settingsState[key] = toState(input.value);
     syncValueLabel(documentRef, key);
-    liveApply();
+    apply();
   };
 }
 
-function bindCheckbox(documentRef, key) {
+function bindCheckbox(documentRef, key, apply = liveApply) {
   const input = documentRef.getElementById(`settings-${key}`);
   if (!input) return;
   input.checked = Boolean(settingsState[key]);
   input.onchange = () => {
     settingsState[key] = input.checked;
-    liveApply();
+    apply();
   };
 }
 
-function bindSelect(documentRef, key) {
+function bindSelect(documentRef, key, apply = liveApply) {
   const input = documentRef.getElementById(`settings-${key}`);
   if (!input) return;
   input.value = settingsState[key];
   input.onchange = () => {
     settingsState[key] = input.value;
-    liveApply();
+    apply();
   };
 }
 
@@ -189,6 +218,7 @@ function buildMenu(documentRef) {
         <section id="settings-panel-graphics" class="settings-panel">
           ${settingRange('bloomStrength', 'Bloom Strength', 0, 1.5, 0.05)}
           ${settingRange('bloomThreshold', 'Bloom Threshold', 0.5, 1, 0.02)}
+          ${settingRange('bloomRadius', 'Bloom Radius', 0, 1, 0.05)}
           <label class="settings-field" for="settings-pixelRatio"><span>Pixel Ratio</span><select id="settings-pixelRatio"><option value="auto">Auto</option><option value="1">1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select></label>
           <label class="settings-field" for="settings-particleDensity"><span>Particle Density</span><select id="settings-particleDensity"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
           <p class="settings-note">Particle density and pixel ratio take effect on flight mode restart</p>
@@ -236,30 +266,35 @@ function switchSettingsTab(tabId, documentRef = deps.documentRef) {
 
 function syncControls(documentRef = deps.documentRef) {
   if (!documentRef) return;
-  bindRange(documentRef, 'sfxVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'radioVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'chatterVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'ttsVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'bloomStrength', { min: 0, max: 1.5, step: 0.05 });
-  bindRange(documentRef, 'bloomThreshold', { min: 0.5, max: 1, step: 0.02 });
+  bindRange(documentRef, 'sfxVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'radioVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'chatterVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'ttsVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'bloomStrength', { min: 0, max: 1.5, step: 0.05, apply: liveApplyGraphics });
+  bindRange(documentRef, 'bloomThreshold', { min: 0.5, max: 1, step: 0.02, apply: liveApplyGraphics });
+  bindRange(documentRef, 'bloomRadius', { min: 0, max: 1, step: 0.05, apply: liveApplyGraphics });
   bindRange(documentRef, 'mouseSensitivity', {
     min: 0.25,
     max: 4,
     step: 0.05,
     fromState: value => value / DEFAULT_SETTINGS.mouseSensitivity,
-    toState: value => Number(value) * DEFAULT_SETTINGS.mouseSensitivity
+    toState: value => Number(value) * DEFAULT_SETTINGS.mouseSensitivity,
+    apply: liveApplyGameplay
   });
-  bindRange(documentRef, 'ttsRate', { min: 0.5, max: 2, step: 0.1 });
-  bindRange(documentRef, 'ttsPitch', { min: 0.5, max: 1.5, step: 0.05 });
-  bindRange(documentRef, 'hudScale', { min: 0.75, max: 1.5, step: 0.05 });
-  ['ttsEnabled', 'flightAssistDefault', 'mouseInvert', 'ttsBackendEnabled', 'reducedMotion'].forEach(key => bindCheckbox(documentRef, key));
-  ['pixelRatio', 'particleDensity'].forEach(key => bindSelect(documentRef, key));
+  bindRange(documentRef, 'ttsRate', { min: 0.5, max: 2, step: 0.1, apply: liveApplyAudio });
+  bindRange(documentRef, 'ttsPitch', { min: 0.5, max: 1.5, step: 0.05, apply: liveApplyAudio });
+  bindRange(documentRef, 'hudScale', { min: 0.75, max: 1.5, step: 0.05, apply: liveApplyAudio });
+  ['ttsEnabled', 'ttsBackendEnabled'].forEach(key => bindCheckbox(documentRef, key, liveApplyAudio));
+  ['flightAssistDefault', 'mouseInvert'].forEach(key => bindCheckbox(documentRef, key, noop));
+  bindCheckbox(documentRef, 'reducedMotion', liveApplyGraphics);
+  bindSelect(documentRef, 'pixelRatio', liveApplyGraphics);
+  bindSelect(documentRef, 'particleDensity', noop);
   documentRef.querySelectorAll('input[name="settings-crosshairStyle"]').forEach(input => {
     input.checked = input.value === settingsState.crosshairStyle;
     input.onchange = () => {
       if (!input.checked) return;
       settingsState.crosshairStyle = input.value;
-      liveApply();
+      noop();
     };
   });
 }
@@ -282,12 +317,6 @@ function bindMenu(documentRef) {
       priority: 'high'
     });
   });
-  documentRef.addEventListener('keydown', event => {
-    if (event.code !== 'Escape' || !isSettingsMenuOpen()) return;
-    event.preventDefault();
-    event.stopPropagation();
-    closeSettingsMenu();
-  }, true);
 }
 
 export function configureSettingsMenu(options = {}) {
@@ -303,8 +332,14 @@ export function configureSettingsMenu(options = {}) {
 
 export function openSettingsMenu() {
   const { documentRef } = deps;
-  const menu = documentRef?.getElementById?.('settings-menu') || (documentRef ? buildMenu(documentRef) : null);
-  if (!menu) return false;
+  if (!documentRef) return false;
+  let menu = documentRef.getElementById('settings-menu');
+  if (!menu) {
+    menu = buildMenu(documentRef);
+    bindMenu(documentRef);
+    syncControls(documentRef);
+    switchSettingsTab(activeTab, documentRef);
+  }
   deps.releasePointerLock?.();
   _open = true;
   menu.hidden = false;
