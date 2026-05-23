@@ -188,9 +188,9 @@ Mission comms and short barks use separate scheduling channels, but both route t
 
 ## Settings UI
 
-`js/flight/settings.js` exports `DEFAULT_SETTINGS`, mutable `settingsState`, `loadSettings(hashString)`, `saveSettings()`, `applySettings(deps)`, and `resetSettings()`. Settings are encoded as base64 JSON in the URL hash `:cfg:` slot and are not written to `localStorage`. `applySettings()` receives dependency-injected setters from `state.js` for audio volumes, backend TTS, bloom, pixel ratio, mouse sensitivity, and HUD scale.
+`js/flight/settings.js` exports `DEFAULT_SETTINGS`, mutable `settingsState`, `loadSettings(hashString)`, `saveSettings()`, `applySettings(deps)`, and `resetSettings()`. Settings are encoded as base64 JSON in the URL hash `:cfg:` slot and are not written to `localStorage`. `applySettings()` receives dependency-injected setters from `state.js` for audio volumes, backend TTS, bloom strength/threshold/radius, pixel ratio, and mouse sensitivity; it uses `deps.documentRef` to write the `--hud-scale` CSS variable.
 
-`js/ui/settings-menu.js` injects `#settings-menu` on configuration and exposes `configureSettingsMenu(deps)`, `openSettingsMenu()`, `closeSettingsMenu()`, and `isSettingsMenuOpen()`. The menu has Audio, Graphics, Gameplay, TTS, Controls, and Accessibility tabs. It uses capture-phase Escape handling so settings closes before lower-priority flight Escape behavior.
+`js/ui/settings-menu.js` injects `#settings-menu` on configuration and exposes `configureSettingsMenu(deps)`, `openSettingsMenu()`, `closeSettingsMenu()`, and `isSettingsMenuOpen()`. The menu has Audio, Graphics, Gameplay, TTS, Controls, and Accessibility tabs; the Graphics tab exposes bloom strength, threshold, radius, pixel ratio, and particle density. Global keyboard routing stays in `js/input.js`, so settings-menu does not register its own Escape listener.
 
 `js/flight/tutorial-overlay.js` injects `#tutorial-overlay` and exposes `configureTutorialOverlay(deps)`, `showTutorialOverlay()`, `hideTutorialOverlay()`, and `isTutorialOverlayVisible()`. `enterFlightMode()` shows it after startup messages when `gameOrchestrator.tutorialComplete` is false and `settingsState.tutorialOverlayDismissed` is false. It does not pause the game loop.
 

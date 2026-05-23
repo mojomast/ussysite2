@@ -1,5 +1,14 @@
 # Changelog
 
+## [patch] — Bug fixes: settings, tutorial overlay, HUD
+- fix: defer `isCoarsePointer` evaluation in tutorial-overlay to runtime (issue #1)
+- fix: `openSettingsMenu` fallback path now fully initializes menu DOM (issue #2)
+- fix: `autoDismissTimer` initialized to `null` with `clearTimeout` guard (issue #3)
+- fix: `applySettings` no longer references `document` directly — uses `deps.documentRef` (issue #4)
+- fix: removed redundant capture-phase Escape listener from `settings-menu.js` (issue #5)
+- perf: bloom/graphics setters debounced 80ms on slider `oninput` (issue #6)
+- fix: `bloomRadius` slider exposed in graphics panel and `syncControls` (issue #7)
+
 ## [settings-tutorial-hud] - 2026-05-22
 ### Added
 - Added hash-backed `js/flight/settings.js` as the canonical settings store and `js/ui/settings-menu.js` with Audio, Graphics, Gameplay, TTS, Controls, and Accessibility tabs.
