@@ -212,6 +212,7 @@ function buildMenu(documentRef) {
         <section id="settings-panel-graphics" class="settings-panel">
           ${settingRange('bloomStrength', 'Bloom Strength', 0, 1.5, 0.05)}
           ${settingRange('bloomThreshold', 'Bloom Threshold', 0.5, 1, 0.02)}
+          ${settingRange('bloomRadius', 'Bloom Radius', 0, 1, 0.05)}
           <label class="settings-field" for="settings-pixelRatio"><span>Pixel Ratio</span><select id="settings-pixelRatio"><option value="auto">Auto</option><option value="1">1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select></label>
           <label class="settings-field" for="settings-particleDensity"><span>Particle Density</span><select id="settings-particleDensity"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
           <p class="settings-note">Particle density and pixel ratio take effect on flight mode restart</p>
@@ -265,6 +266,7 @@ function syncControls(documentRef = deps.documentRef) {
   bindRange(documentRef, 'ttsVolume', { min: 0, max: 100, step: 1 });
   bindRange(documentRef, 'bloomStrength', { min: 0, max: 1.5, step: 0.05 });
   bindRange(documentRef, 'bloomThreshold', { min: 0.5, max: 1, step: 0.02 });
+  bindRange(documentRef, 'bloomRadius', { min: 0, max: 1, step: 0.05 });
   bindRange(documentRef, 'mouseSensitivity', {
     min: 0.25,
     max: 4,
