@@ -53,15 +53,15 @@ export function createSceneGroups(targetScene = scene, { THREE: Three = THREE } 
 
 export function createCameraAnimationState({ THREE: Three = THREE } = {}) {
   const camTarget = {
-    pos: new Three.Vector3(0, 6, 22),
+    pos: new Three.Vector3(0, 10, 52),
     lookAt: new Three.Vector3(0, 0, 0)
   };
   const camCurrent = {
-    pos: new Three.Vector3(0, 15, 30),
+    pos: new Three.Vector3(0, 18, 58),
     lookAt: new Three.Vector3(0, 0, 0)
   };
   const sectionCamPositions = [
-    new Three.Vector3(0, 6, 22),
+    new Three.Vector3(0, 10, 52),
     new Three.Vector3(5, 4, 15),
     new Three.Vector3(-6, 8, 18),
     new Three.Vector3(8, 5, 16),

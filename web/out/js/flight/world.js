@@ -2,6 +2,7 @@
 // imported by rendering, navigation, and tests without requiring THREE.
 export const WORLD_SCALE = 50;
 export const SYSTEM_RADIUS = 50000;
+export const DEFAULT_VIEW_WORLD_SCALE = 0.5;
 export const COMBAT_ZONE_RADIUS = 600;
 export const HYPERSPEED_MULTIPLIER_MAX = 80;
 export const HYPERSPEED_MULTIPLIER_MIN = 10;
@@ -54,15 +55,21 @@ export const JUMP_POINTS = [
 // The ONE authoritative [x,y,z] -> THREE.Vector3 converter.
 // Every system that needs a world position must call this.
 // world.js must remain import-free - THREE is injected by the caller.
-export function worldToThree(posArray, THREE) {
+export function worldToThree(posArray, THREE, scale = 1) {
   if (posArray?.isVector3 || typeof posArray?.distanceTo === 'function') {
-    return typeof posArray.clone === 'function'
-      ? posArray.clone()
-      : new THREE.Vector3(posArray.x ?? 0, posArray.y ?? 0, posArray.z ?? 0);
+    return new THREE.Vector3(
+      (posArray.x ?? 0) * scale,
+      (posArray.y ?? 0) * scale,
+      (posArray.z ?? 0) * scale
+    );
   }
   if (posArray && !Array.isArray(posArray) && typeof posArray === 'object') {
-    return new THREE.Vector3(posArray.x ?? 0, posArray.y ?? 0, posArray.z ?? 0);
+    return new THREE.Vector3(
+      (posArray.x ?? 0) * scale,
+      (posArray.y ?? 0) * scale,
+      (posArray.z ?? 0) * scale
+    );
   }
   const [x = 0, y = 0, z = 0] = posArray ?? [];
-  return new THREE.Vector3(x, y, z);
+  return new THREE.Vector3(x * scale, y * scale, z * scale);
 }

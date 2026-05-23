@@ -82,5 +82,8 @@ describe('world landmark data', () => {
     }
     const vector = worldToThree([1, 2, 3], { Vector3 });
     assert.deepEqual({ x: vector.x, y: vector.y, z: vector.z }, { x: 1, y: 2, z: 3 });
+
+    const scaledVector = worldToThree([1, 2, 3], { Vector3 }, 0.5);
+    assert.deepEqual({ x: scaledVector.x, y: scaledVector.y, z: scaledVector.z }, { x: 0.5, y: 1, z: 1.5 });
   });
 });

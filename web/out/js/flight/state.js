@@ -150,7 +150,7 @@ import { PROJECT_HOW_COPY } from '../data/projectCopy.js';
 import { flightUniverseScale, isCoarsePointer, maxPlayerAmmo, maxPlayerMissilesStored, prefersReducedMotion } from '../constants.js';
 import { combatAudio, configureFlightAudio, gameSettings, radioChain, setChatterVolume, setRadioVolume, setSfxVolume, setTTSBackendEnabled, ttsEngine, volumePercent } from './audio.js';
 import { sfxEngine } from './sfx.js';
-import { STATIONS, SYSTEM_RADIUS, worldToThree } from './world.js';
+import { DEFAULT_VIEW_WORLD_SCALE, STATIONS, SYSTEM_RADIUS, worldToThree } from './world.js';
 import { createStarfield } from './starfield.js';
 import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js';
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
@@ -1068,7 +1068,7 @@ function buildProjectNodes() {
     const cat = USSY_CATEGORIES[proj.category];
     const catColor = cat ? cat.color : '#00f0ff';
     const hexColor = parseInt(catColor.replace('#', '0x'));
-    const worldPos = worldToThree(proj.planet?.pos, THREE);
+    const worldPos = worldToThree(proj.planet?.pos, THREE, DEFAULT_VIEW_WORLD_SCALE);
 
     const nodeMesh = createPlanetNodeLOD(hexColor);
     nodeMesh.position.copy(worldPos);
