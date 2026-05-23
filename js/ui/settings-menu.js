@@ -303,8 +303,14 @@ export function configureSettingsMenu(options = {}) {
 
 export function openSettingsMenu() {
   const { documentRef } = deps;
-  const menu = documentRef?.getElementById?.('settings-menu') || (documentRef ? buildMenu(documentRef) : null);
-  if (!menu) return false;
+  if (!documentRef) return false;
+  let menu = documentRef.getElementById('settings-menu');
+  if (!menu) {
+    menu = buildMenu(documentRef);
+    bindMenu(documentRef);
+    syncControls(documentRef);
+    switchSettingsTab(activeTab, documentRef);
+  }
   deps.releasePointerLock?.();
   _open = true;
   menu.hidden = false;
