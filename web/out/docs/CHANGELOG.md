@@ -1,5 +1,19 @@
 # Changelog
 
+## [Phase: Jump Gates + Hyperspace]
+```text
+2957bfe feat: add jump gates, hyperspace unlock, and gate-aware routing
+ce45b1e fix: phase one combat visuals, planet rendering, map layout, and flight scale
+6b40320 fix: pull back default camera and reduce fog density so all nodes visible on load
+93cd32b fix: remove duplicate configureEnemies key, dedupe configureHud, guard interval leak, add hash deserialization try/catch, reset flight assist on exit, remove dead tempColor vars, extract PROJECT_HOW_COPY
+68aab4c fix(console): guard legacy project connection line access
+c3e2041 fix(csp): use allowed unpkg host for Three module imports
+593be0d fix(settings): apply startup settings after weapons configure
+0802931 chore(deploy): verified live deploy of post-review bug fixes
+e86ad09 fix(settings-menu): address post-review Escape routing and scoped live apply
+fd83c0b docs: post-review bug fix patch notes and architecture updates
+```
+
 ## [phase-1] — Visuals, default layout, and flight scale
 - fix: enemy deaths now snapshot the kill position and trigger visible pooled explosions directly before enemy reuse/deactivation while preserving XP, kill feed, SFX, and reputation callbacks.
 - changed: flight planets now render with lit procedural surface materials and a rim-only atmosphere shader capped below full-dome opacity.
