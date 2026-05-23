@@ -33,6 +33,15 @@ function getProjectHowCopy(proj) {
   return `${proj.name} combines ${specs} with ${features}. The project is mapped here as a ${USSY_CATEGORIES[proj.category]?.title || 'Ussyverse'} node so its implementation details, related systems, and source links can be inspected together.`;
 }
 
+function setLegacyConnectionLineVisible(node, visible) {
+  if (node?.userData?.connectionLine) node.userData.connectionLine.visible = visible;
+}
+
+function setLegacyConnectionLineOpacity(node, opacity) {
+  const material = node?.userData?.connectionLine?.material;
+  if (material) material.opacity = opacity;
+}
+
 export function populateProjectsUI() {
   const { USSY_CATEGORIES, USSY_PROJECTS, activeCategory, isFlightActive, projectsScrollList, selectProject = selectProjectModule, documentRef = document } = requireDeps();
   projectsScrollList.innerHTML = '';
@@ -97,7 +106,7 @@ export function setupUIEventListeners() {
       projectNodes.forEach(node => {
         const matches = card.dataset.category === 'all' || node.userData.project.category === card.dataset.category;
         node.visible = matches;
-        node.userData.connectionLine.visible = matches;
+        setLegacyConnectionLineVisible(node, matches);
       });
       updateRelationshipEdges();
       projectLabels.forEach(label => {
@@ -159,7 +168,7 @@ export function selectProjectModule(projId, triggerFly = true) {
     const isRelated = getRelatedEdgesForProject(projId).some(edge => edge.fromNode === node || edge.toNode === node);
     node.scale.setScalar(node.userData.baseScale * (isSelected ? 1.5 : 1));
     setProjectNodeOpacity(node, isSelected ? 1.0 : (isRelated ? 0.82 : 0.5));
-    node.userData.connectionLine.material.opacity = isSelected ? 0.6 : 0.15;
+    setLegacyConnectionLineOpacity(node, isSelected ? 0.6 : 0.15);
   });
   updateSelectedRelationEdges();
 
@@ -269,7 +278,7 @@ export function deactivateConsoleMode() {
   projectNodes.forEach(node => {
     node.scale.setScalar(node.userData.baseScale);
     setProjectNodeOpacity(node, 0.85);
-    node.userData.connectionLine.material.opacity = 0.15;
+    setLegacyConnectionLineOpacity(node, 0.15);
   });
   updateSelectedRelationEdges();
   documentRef.querySelectorAll('.project-item').forEach(item => item.classList.remove('active'));
@@ -287,7 +296,7 @@ export function resetCategoryFilterForFlight() {
   });
   projectNodes.forEach(node => {
     node.visible = true;
-    node.userData.connectionLine.visible = true;
+    setLegacyConnectionLineVisible(node, true);
   });
   projectLabels.forEach(label => {
     label.element.style.display = 'block';
