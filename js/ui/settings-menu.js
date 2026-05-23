@@ -66,6 +66,8 @@ let activeTab = 'audio';
 let _graphicsDebounceTimer = null;
 const initializedDocuments = new WeakSet();
 
+function noop() {}
+
 function createEl(documentRef, tag, className = '', text = '') {
   const el = documentRef.createElement(tag);
   if (className) el.className = className;
@@ -104,16 +106,20 @@ function liveApplyGraphics() {
     deps.setBloomThreshold?.(settingsState.bloomThreshold);
     deps.setBloomRadius?.(settingsState.bloomRadius);
     deps.setPixelRatio?.(settingsState.pixelRatio);
-    deps.setMouseSensitivity?.(settingsState.mouseSensitivity);
   }, 80);
+}
+
+function liveApplyGameplay() {
+  deps.setMouseSensitivity?.(settingsState.mouseSensitivity);
 }
 
 function liveApply() {
   liveApplyAudio();
   liveApplyGraphics();
+  liveApplyGameplay();
 }
 
-function bindRange(documentRef, key, { min, max, step, toState = Number, fromState = value => value } = {}) {
+function bindRange(documentRef, key, { min, max, step, toState = Number, fromState = value => value, apply = liveApply } = {}) {
   const input = documentRef.getElementById(`settings-${key}`);
   if (!input) return;
   input.min = String(min);
@@ -124,27 +130,27 @@ function bindRange(documentRef, key, { min, max, step, toState = Number, fromSta
   input.oninput = () => {
     settingsState[key] = toState(input.value);
     syncValueLabel(documentRef, key);
-    liveApply();
+    apply();
   };
 }
 
-function bindCheckbox(documentRef, key) {
+function bindCheckbox(documentRef, key, apply = liveApply) {
   const input = documentRef.getElementById(`settings-${key}`);
   if (!input) return;
   input.checked = Boolean(settingsState[key]);
   input.onchange = () => {
     settingsState[key] = input.checked;
-    liveApply();
+    apply();
   };
 }
 
-function bindSelect(documentRef, key) {
+function bindSelect(documentRef, key, apply = liveApply) {
   const input = documentRef.getElementById(`settings-${key}`);
   if (!input) return;
   input.value = settingsState[key];
   input.onchange = () => {
     settingsState[key] = input.value;
-    liveApply();
+    apply();
   };
 }
 
@@ -260,31 +266,35 @@ function switchSettingsTab(tabId, documentRef = deps.documentRef) {
 
 function syncControls(documentRef = deps.documentRef) {
   if (!documentRef) return;
-  bindRange(documentRef, 'sfxVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'radioVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'chatterVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'ttsVolume', { min: 0, max: 100, step: 1 });
-  bindRange(documentRef, 'bloomStrength', { min: 0, max: 1.5, step: 0.05 });
-  bindRange(documentRef, 'bloomThreshold', { min: 0.5, max: 1, step: 0.02 });
-  bindRange(documentRef, 'bloomRadius', { min: 0, max: 1, step: 0.05 });
+  bindRange(documentRef, 'sfxVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'radioVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'chatterVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'ttsVolume', { min: 0, max: 100, step: 1, apply: liveApplyAudio });
+  bindRange(documentRef, 'bloomStrength', { min: 0, max: 1.5, step: 0.05, apply: liveApplyGraphics });
+  bindRange(documentRef, 'bloomThreshold', { min: 0.5, max: 1, step: 0.02, apply: liveApplyGraphics });
+  bindRange(documentRef, 'bloomRadius', { min: 0, max: 1, step: 0.05, apply: liveApplyGraphics });
   bindRange(documentRef, 'mouseSensitivity', {
     min: 0.25,
     max: 4,
     step: 0.05,
     fromState: value => value / DEFAULT_SETTINGS.mouseSensitivity,
-    toState: value => Number(value) * DEFAULT_SETTINGS.mouseSensitivity
+    toState: value => Number(value) * DEFAULT_SETTINGS.mouseSensitivity,
+    apply: liveApplyGameplay
   });
-  bindRange(documentRef, 'ttsRate', { min: 0.5, max: 2, step: 0.1 });
-  bindRange(documentRef, 'ttsPitch', { min: 0.5, max: 1.5, step: 0.05 });
-  bindRange(documentRef, 'hudScale', { min: 0.75, max: 1.5, step: 0.05 });
-  ['ttsEnabled', 'flightAssistDefault', 'mouseInvert', 'ttsBackendEnabled', 'reducedMotion'].forEach(key => bindCheckbox(documentRef, key));
-  ['pixelRatio', 'particleDensity'].forEach(key => bindSelect(documentRef, key));
+  bindRange(documentRef, 'ttsRate', { min: 0.5, max: 2, step: 0.1, apply: liveApplyAudio });
+  bindRange(documentRef, 'ttsPitch', { min: 0.5, max: 1.5, step: 0.05, apply: liveApplyAudio });
+  bindRange(documentRef, 'hudScale', { min: 0.75, max: 1.5, step: 0.05, apply: liveApplyAudio });
+  ['ttsEnabled', 'ttsBackendEnabled'].forEach(key => bindCheckbox(documentRef, key, liveApplyAudio));
+  ['flightAssistDefault', 'mouseInvert'].forEach(key => bindCheckbox(documentRef, key, noop));
+  bindCheckbox(documentRef, 'reducedMotion', liveApplyGraphics);
+  bindSelect(documentRef, 'pixelRatio', liveApplyGraphics);
+  bindSelect(documentRef, 'particleDensity', noop);
   documentRef.querySelectorAll('input[name="settings-crosshairStyle"]').forEach(input => {
     input.checked = input.value === settingsState.crosshairStyle;
     input.onchange = () => {
       if (!input.checked) return;
       settingsState.crosshairStyle = input.value;
-      liveApply();
+      noop();
     };
   });
 }

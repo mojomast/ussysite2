@@ -267,6 +267,12 @@ function onGlobalKeyDown(event) {
   } = requireDeps();
 
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
+  if (event.code === 'Escape' && isSettingsMenuOpen?.()) {
+    event.preventDefault();
+    closeSettingsMenu?.();
+    return;
+  }
+
   if (isTypingTarget(event.target) || event.metaKey || event.altKey) return;
   if (!isFlightActive() && event.ctrlKey) return;
 
@@ -277,12 +283,6 @@ function onGlobalKeyDown(event) {
       return;
     }
     if (!event.repeat) openSettingsMenu?.();
-    return;
-  }
-
-  if (event.code === 'Escape' && isSettingsMenuOpen?.()) {
-    event.preventDefault();
-    closeSettingsMenu?.();
     return;
   }
 
