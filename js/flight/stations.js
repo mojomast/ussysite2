@@ -130,12 +130,12 @@ export function buildStationGeometry(type, THREE) {
   return buildOutpostStation(THREE);
 }
 
-export function createStation(stationDef, THREE) {
+export function createStation(stationDef, THREE, positionScale = 1) {
   if (!stationDef) throw new Error('createStation requires a station definition');
   if (!THREE) throw new Error('createStation requires THREE');
 
   const station = buildStationGeometry(stationDef.type, THREE);
-  const worldPos = worldToThree(stationDef.pos, THREE);
+  const worldPos = worldToThree(stationDef.pos, THREE, positionScale);
   if (typeof station.position?.copy === 'function') station.position.copy(worldPos);
   else if (typeof station.position?.set === 'function') station.position.set(worldPos.x, worldPos.y, worldPos.z);
   else station.position = worldPos;
@@ -154,9 +154,9 @@ export function createStation(stationDef, THREE) {
   return station;
 }
 
-export function createAllStations(scene, THREE) {
+export function createAllStations(scene, THREE, positionScale = 1) {
   if (!scene) throw new Error('createAllStations requires a scene');
-  const stations = STATIONS.map(stationDef => createStation(stationDef, THREE));
+  const stations = STATIONS.map(stationDef => createStation(stationDef, THREE, positionScale));
   for (const station of stations) scene.add(station);
   return stations;
 }

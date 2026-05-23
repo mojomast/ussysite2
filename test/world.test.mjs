@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { COMBAT_ZONE_RADIUS, JUMP_POINTS, PLANETS, STATIONS, SYSTEM_RADIUS, worldToThree } from '../js/flight/world.js';
+import { COMBAT_ZONE_RADIUS, DEFAULT_VIEW_WORLD_SCALE, FLIGHT_WORLD_DISTANCE_SCALE, JUMP_POINTS, PLANETS, STATIONS, SYSTEM_RADIUS, worldToThree } from '../js/flight/world.js';
 
 globalThis.window ??= {};
 await import('../projects.js');
@@ -85,5 +85,10 @@ describe('world landmark data', () => {
 
     const scaledVector = worldToThree([1, 2, 3], { Vector3 }, 0.5);
     assert.deepEqual({ x: scaledVector.x, y: scaledVector.y, z: scaledVector.z }, { x: 0.5, y: 1, z: 1.5 });
+  });
+
+  it('keeps default map and flight distance scales separate', () => {
+    assert.equal(DEFAULT_VIEW_WORLD_SCALE, 0.0016);
+    assert.equal(FLIGHT_WORLD_DISTANCE_SCALE, 1.35);
   });
 });

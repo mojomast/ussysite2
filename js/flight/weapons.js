@@ -200,6 +200,13 @@ export function triggerImpactFlash(position) {
   impact.visible = true;
 }
 
+/**
+ * Starts a pooled enemy-death explosion at a stable world position.
+ * The position is copied immediately so callers can safely deactivate, respawn,
+ * or reuse the destroyed enemy while the explosion animates for maxFrames ticks.
+ * @param {{x:number,y:number,z:number}} position World-space impact center.
+ * @returns {void}
+ */
 export function triggerDeathExplosion(position) {
   const { gameRoot } = requireDeps();
   if (!position || !gameRoot) return;

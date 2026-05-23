@@ -1,8 +1,11 @@
 // Static system-scale flight landmarks. Keep this module data-only so it can be
 // imported by rendering, navigation, and tests without requiring THREE.
 export const WORLD_SCALE = 50;
+// The flight star system uses in-game units: project planets occupy tens of thousands
+// of units so autopilot, surface approach, and station travel feel like real distance.
 export const SYSTEM_RADIUS = 50000;
-export const DEFAULT_VIEW_WORLD_SCALE = 0.5;
+export const DEFAULT_VIEW_WORLD_SCALE = 0.0016;
+export const FLIGHT_WORLD_DISTANCE_SCALE = 1.35;
 export const COMBAT_ZONE_RADIUS = 600;
 export const HYPERSPEED_MULTIPLIER_MAX = 80;
 export const HYPERSPEED_MULTIPLIER_MIN = 10;

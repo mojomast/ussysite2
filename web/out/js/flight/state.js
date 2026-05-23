@@ -150,7 +150,7 @@ import { PROJECT_HOW_COPY } from '../data/projectCopy.js';
 import { flightUniverseScale, isCoarsePointer, maxPlayerAmmo, maxPlayerMissilesStored, prefersReducedMotion } from '../constants.js';
 import { combatAudio, configureFlightAudio, gameSettings, radioChain, setChatterVolume, setRadioVolume, setSfxVolume, setTTSBackendEnabled, ttsEngine, volumePercent } from './audio.js';
 import { sfxEngine } from './sfx.js';
-import { DEFAULT_VIEW_WORLD_SCALE, STATIONS, SYSTEM_RADIUS, worldToThree } from './world.js';
+import { DEFAULT_VIEW_WORLD_SCALE, FLIGHT_WORLD_DISTANCE_SCALE, STATIONS, SYSTEM_RADIUS, worldToThree } from './world.js';
 import { createStarfield } from './starfield.js';
 import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js';
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
@@ -260,7 +260,7 @@ const planetDistantHaloScale = isCoarsePointer ? 14 : 18;
 const planetNodeHitRadius = isCoarsePointer ? planetNodeRadius * 1.18 : planetNodeRadius * 1.06;
 const planetLabelRadius = planetNodeRadius * 1.35;
 const landingRange = 7.2;
-const flightBounds = SYSTEM_RADIUS;
+const flightBounds = SYSTEM_RADIUS * FLIGHT_WORLD_DISTANCE_SCALE;
 const radarRange = 140;
 const debrisCount = prefersReducedMotion ? 72 : (isCoarsePointer ? 210 : 300);
 const dustParticleCount = prefersReducedMotion ? 180 : (isCoarsePointer ? 420 : 600);
@@ -349,7 +349,6 @@ const skillTree = {
 setCombatFlightState(flightState);
 configureCombat({
   onEnemyKill: ({ classId, pos, xpReward } = {}) => {
-    triggerDeathExplosion(pos);
     const cls = getEnemyClass(classId || 'scout');
     awardXp(xpReward ?? cls.xpReward ?? 25);
     loseReputation(getNearestStationFaction(pos), 1);
@@ -795,6 +794,7 @@ export function init() {
     backToHeroBtn,
     btnDemo,
     btnGithub,
+    camCurrent,
     camTarget,
     documentRef: document,
     enterConsoleBtn,
@@ -1832,7 +1832,9 @@ function updateSurfaceVisuals() {
     if (!atmosphere?.material) continue;
     const isApproach = activePlanet === planet && surfaceState === SURFACE_STATES.APPROACH;
     const isHeld = activePlanet === planet && holdSurfaceVisuals;
-    atmosphere.material.opacity = isApproach ? THREE.MathUtils.lerp(0.18, 0.45, approachT) : (isHeld ? 0.45 : 0.18);
+    const opacity = isApproach ? THREE.MathUtils.lerp(0.16, 0.34, approachT) : (isHeld ? 0.34 : 0.16);
+    if (atmosphere.material.uniforms?.uOpacity) atmosphere.material.uniforms.uOpacity.value = opacity;
+    else atmosphere.material.opacity = opacity;
   }
   const targetFov = surfaceState === SURFACE_STATES.APPROACH ? THREE.MathUtils.lerp(75, 55, approachT) : (holdSurfaceVisuals ? 55 : 75);
   if (camera && Math.abs(camera.fov - targetFov) > 0.01) {
@@ -1843,8 +1845,8 @@ function updateSurfaceVisuals() {
 
 function createSystemWorldObjects() {
   systemStarfield = createStarfield(scene, THREE);
-  systemPlanets = createAllPlanets(scene, THREE);
-  systemStations = createAllStations(scene, THREE);
+  systemPlanets = createAllPlanets(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
+  systemStations = createAllStations(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
   navGraph = buildNavGraph(getSurfacePlanetsForHUD(), getSystemStationDefinitions());
   spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState });
   setSystemWorldVisible(false);
@@ -2697,12 +2699,14 @@ function handleTradeCompleted(trade) {
 
 function handleEnemyDestroyed(enemy) {
   const cls = getEnemyClass(enemy?.userData?.classId);
+  const deathPos = enemy?.position?.clone ? enemy.position.clone() : (enemy?.position ? new THREE.Vector3(enemy.position.x ?? 0, enemy.position.y ?? 0, enemy.position.z ?? 0) : null);
   if (enemy?.userData?.isFriendly) {
     if (combatState.activeFriendlyEscort === enemy) combatState.activeFriendlyEscort = null;
     deactivateCombatObject(enemy);
     addKillFeedEntry('FRIENDLY ESCORT LOST', '#ffcc00');
     return;
   }
+  if (enemy?.userData?.isBoss) triggerDeathExplosion(deathPos);
   if (handleBossDeath(combatState, enemy, flightState, { addCombatCredits, addKillFeedEntry, showGameMessage })) {
     flightState.status = 'DREADNOUGHT DESTROYED +1200CR';
     flightState.statusUntil = performance.now() + 3000;
@@ -2724,8 +2728,9 @@ function handleEnemyDestroyed(enemy) {
   recordCombatKillStats({ creditsEarned: isBountyKill ? 0 : creditReward, xpEarned: xpReward }, combatState);
   addKillFeedEntry(`${cls.label.toUpperCase()} DESTROYED +${creditReward}CR`, `#${cls.color.toString(16).padStart(6, '0')}`);
   triggerEnemyDeathFeedback(enemy, cls);
+  triggerDeathExplosion(deathPos);
   sfxEngine.playPositional('explosion', enemy, { volume: 0.9 });
-  emitCombatEnemyKill({ classId: cls.id, pos: enemy?.position, xpReward });
+  emitCombatEnemyKill({ classId: cls.id, pos: deathPos, xpReward });
   if (bountyReward) {
     reputationState.scores.security = Math.max(-100, Math.min(100, Math.min((reputationState.scores.security ?? 0) + 8, -30)));
     addKillFeedEntry('BOUNTY HUNTER ELIMINATED // SECURITY PRESSURE EASED', '#44ff88');
@@ -3613,7 +3618,7 @@ export function tick(time = 0) {
   }
 
   // Smooth LERP camera movement
-  const lerpFactor = isFlightActive ? (flightState.view === 'cockpit' ? 0.28 : 0.16) : (isConsoleActive ? 0.06 : 0.02); // Slower, more cinematic drift in Hero mode
+  const lerpFactor = isFlightActive ? (flightState.view === 'cockpit' ? 0.28 : 0.16) : (isConsoleActive ? 0.16 : 0.02); // Slower, more cinematic drift in Hero mode
   camCurrent.pos.lerp(camTarget.pos, lerpFactor);
   camCurrent.lookAt.lerp(camTarget.lookAt, lerpFactor);
   

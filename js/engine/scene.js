@@ -52,21 +52,23 @@ export function createSceneGroups(targetScene = scene, { THREE: Three = THREE } 
 }
 
 export function createCameraAnimationState({ THREE: Three = THREE } = {}) {
+  // Locked portfolio mode uses a tightly scaled star map that fits every project
+  // on screen; unlocked flight mode switches to the separate system-scale world.
   const camTarget = {
-    pos: new Three.Vector3(0, 10, 52),
+    pos: new Three.Vector3(0, 20, 118),
     lookAt: new Three.Vector3(0, 0, 0)
   };
   const camCurrent = {
-    pos: new Three.Vector3(0, 18, 58),
+    pos: new Three.Vector3(0, 24, 126),
     lookAt: new Three.Vector3(0, 0, 0)
   };
   const sectionCamPositions = [
-    new Three.Vector3(0, 10, 52),
-    new Three.Vector3(5, 4, 15),
-    new Three.Vector3(-6, 8, 18),
-    new Three.Vector3(8, 5, 16),
-    new Three.Vector3(-4, 3, 12),
-    new Three.Vector3(0, 3, 14)
+    new Three.Vector3(0, 20, 118),
+    new Three.Vector3(16, 18, 108),
+    new Three.Vector3(-18, 24, 112),
+    new Three.Vector3(22, 18, 110),
+    new Three.Vector3(-14, 16, 104),
+    new Three.Vector3(0, 16, 108)
   ];
   const sectionColors = [
     { light1: new Three.Color(0x00f0ff), light2: new Three.Color(0xff0055) },

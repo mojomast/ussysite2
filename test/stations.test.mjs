@@ -97,6 +97,15 @@ describe('flight stations', () => {
     assert.equal(createStation(stationDef('military'), TestTHREE).children.length, 8);
   });
 
+  it('supports flight-only position scaling without changing geometry', () => {
+    const station = createStation(stationDef('outpost'), TestTHREE, 1.35);
+
+    assert.equal(station.position.x, 13.5);
+    assert.equal(station.position.y, 27);
+    assert.equal(station.position.z, 40.5);
+    assert.equal(station.children.length, 7);
+  });
+
   it('updateStationRotations increments rotation.y by type speed delta', () => {
     const outpost = createStation(stationDef('outpost'), TestTHREE);
     const hub = createStation(stationDef('hub'), TestTHREE);

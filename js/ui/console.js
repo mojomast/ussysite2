@@ -134,6 +134,7 @@ export function selectProjectModule(projId, triggerFly = true) {
     USSY_PROJECTS,
     btnDemo,
     btnGithub,
+    camCurrent,
     camTarget,
     documentRef = document,
     getRelatedEdgesForProject,
@@ -239,8 +240,12 @@ export function selectProjectModule(projId, triggerFly = true) {
   if (triggerFly && selectedNode) {
     const pos = selectedNode.position;
     const dir = new THREE.Vector3().copy(pos).normalize();
-    camTarget.pos.copy(pos).add(dir.multiplyScalar(7.2)).add(new THREE.Vector3(0, 2.4, 0));
+    camTarget.pos.copy(pos).add(dir.multiplyScalar(18)).add(new THREE.Vector3(0, 5.5, 0));
     camTarget.lookAt.copy(pos);
+    if (camCurrent) {
+      camCurrent.pos.lerp(camTarget.pos, 0.55);
+      camCurrent.lookAt.lerp(camTarget.lookAt, 0.55);
+    }
     syncOrbitFromCamera();
   }
   return selectedNode;

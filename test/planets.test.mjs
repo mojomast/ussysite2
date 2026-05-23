@@ -76,8 +76,15 @@ const TestTHREE = {
   LOD: TestLOD,
   Mesh: TestMesh,
   SphereGeometry: TestSphereGeometry,
+  MeshStandardMaterial: TestMaterial,
   MeshBasicMaterial: TestMaterial,
-  BackSide: 'BackSide'
+  ShaderMaterial: TestMaterial,
+  AdditiveBlending: 'AdditiveBlending',
+  FrontSide: 'FrontSide',
+  BackSide: 'BackSide',
+  Color: class {
+    constructor(value) { this.value = value; }
+  }
 };
 
 const planetDef = {
@@ -99,14 +106,22 @@ describe('flight planets', () => {
     assert.equal(planet.levels.length, 3);
   });
 
-  it('creates an atmosphere mesh with opacity 0.18 and BackSide side', () => {
+  it('creates an atmosphere mesh with rim shader settings', () => {
     const planet = createPlanet(planetDef, TestTHREE);
     const atmosphere = planet.children.find(child => child.userData?.isPlanetAtmosphere);
 
     assert.ok(atmosphere);
-    assert.equal(atmosphere.material.opacity, 0.18);
-    assert.equal(atmosphere.material.side, TestTHREE.BackSide);
+    assert.equal(atmosphere.material.uniforms.uOpacity.value, 0.16);
+    assert.equal(atmosphere.material.side, TestTHREE.FrontSide);
     assert.equal(atmosphere.material.transparent, true);
+    assert.equal(atmosphere.material.depthWrite, false);
+  });
+
+  it('supports flight-only position scaling without changing radius', () => {
+    const planet = createPlanet(planetDef, TestTHREE, 1.35);
+
+    assert.equal(planet.position.x, 13.5);
+    assert.equal(planet.levels[0].object.geometry.radius, 100);
   });
 
   it('getNearestBody returns closest body within maxDist', () => {
