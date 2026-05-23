@@ -1,4 +1,4 @@
-import { applySettings, DEFAULT_SETTINGS, resetSettings, settingsState } from '../flight/settings.js';
+import { DEFAULT_SETTINGS, resetSettings, settingsState } from '../flight/settings.js';
 
 const SETTINGS_TABS = [
   ['audio', 'AUDIO'],
@@ -63,6 +63,7 @@ let deps = {
 };
 let _open = false;
 let activeTab = 'audio';
+let _graphicsDebounceTimer = null;
 const initializedDocuments = new WeakSet();
 
 function createEl(documentRef, tag, className = '', text = '') {
@@ -85,9 +86,31 @@ function syncValueLabel(documentRef, key) {
   if (label) label.textContent = labelText(key, settingsState[key]);
 }
 
-function liveApply() {
+function liveApplyAudio() {
+  deps.setSfxVolume?.(settingsState.sfxVolume);
+  deps.setRadioVolume?.(settingsState.radioVolume);
+  deps.setChatterVolume?.(settingsState.chatterVolume);
   deps.setTTSEnabled?.(settingsState.ttsEnabled);
-  applySettings(deps);
+  deps.setTTSBackendEnabled?.(settingsState.ttsBackendEnabled);
+  const docRef = deps.documentRef ?? (typeof document !== 'undefined' ? document : null);
+  docRef?.documentElement.style.setProperty('--hud-scale', String(settingsState.hudScale));
+}
+
+function liveApplyGraphics() {
+  if (_graphicsDebounceTimer !== null) clearTimeout(_graphicsDebounceTimer);
+  _graphicsDebounceTimer = setTimeout(() => {
+    _graphicsDebounceTimer = null;
+    deps.setBloomStrength?.(settingsState.bloomStrength);
+    deps.setBloomThreshold?.(settingsState.bloomThreshold);
+    deps.setBloomRadius?.(settingsState.bloomRadius);
+    deps.setPixelRatio?.(settingsState.pixelRatio);
+    deps.setMouseSensitivity?.(settingsState.mouseSensitivity);
+  }, 80);
+}
+
+function liveApply() {
+  liveApplyAudio();
+  liveApplyGraphics();
 }
 
 function bindRange(documentRef, key, { min, max, step, toState = Number, fromState = value => value } = {}) {
