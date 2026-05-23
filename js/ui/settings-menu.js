@@ -282,12 +282,6 @@ function bindMenu(documentRef) {
       priority: 'high'
     });
   });
-  documentRef.addEventListener('keydown', event => {
-    if (event.code !== 'Escape' || !isSettingsMenuOpen()) return;
-    event.preventDefault();
-    event.stopPropagation();
-    closeSettingsMenu();
-  }, true);
 }
 
 export function configureSettingsMenu(options = {}) {
