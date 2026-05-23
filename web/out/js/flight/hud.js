@@ -21,6 +21,7 @@ const RADAR_TRAJECTORY_MAX_PX = 14;
 
 const HUD_PRIMARY_HINTS = [
   ['H', 'HELP'],
+  ['J', 'GATE'],
   ['TAB', 'SETTINGS'],
   ['Y', 'AUTOPILOT'],
   ['M', 'MAP'],
@@ -30,6 +31,7 @@ const HUD_PRIMARY_HINTS = [
 
 const HUD_SECONDARY_HINTS = [
   ['V', 'NAV TARGET'],
+  ['H', 'HYPERSPACE'],
   ['L', 'LAND'],
   ['O', 'OBJECTIVES'],
   ['I', 'INVENTORY'],
@@ -485,7 +487,9 @@ export function updateFlightHud(force = false) {
   text('flight-nav-target', flightState.navNode ? `${getProjectNodeName(flightState.navNode)} ${Math.round(flightState.navDistance)}u` : 'NONE');
   text('flight-nav-eta', flightState.navEta);
   const autopilotActive = isAutopilotActive(flightState);
-  text('flight-autopilot', autopilotActive ? 'Y: ON' : 'Y: OFF');
+  const autopilot = ensureAutopilotState(flightState);
+  const waypointLabel = autopilot.route?.length > 1 ? ` WP ${Math.min(autopilot.routeIndex ?? 1, autopilot.route.length - 1)} / ${autopilot.route.length - 1}` : '';
+  text('flight-autopilot', autopilotActive ? `Y: ON ${autopilot.routeType || 'LOCAL'}${waypointLabel}` : 'Y: OFF');
   updateNavHUD(flightState, combatState, force, documentRef);
   text('flight-speed', `${speed.toFixed(1)}u/s`);
   width('flight-speed-bar', `${Math.min(100, (speed / 38) * 100).toFixed(1)}%`);
@@ -632,7 +636,7 @@ export function updateFlightHud(force = false) {
     });
   }
 
-  text('flight-nav-telemetry-c', `${autopilotActive ? 'AP: ON' : 'AP: OFF'} // ETA:${flightState.navEta}`);
+  text('flight-nav-telemetry-c', `${autopilotActive ? `AP: ${autopilot.routeModeLabel || 'ON'}` : 'AP: OFF'}${waypointLabel} // ETA:${flightState.navEta}`);
   const cockpitOverlayEl = el('cockpit-overlay');
   if (cockpitOverlayEl) {
     const inCombat = enemies.some(e => e.userData.active) || combatState.adrenaline > 0;

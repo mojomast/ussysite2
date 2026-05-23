@@ -39,6 +39,9 @@ js/flight/planets.js
 js/flight/stations.js
   -> primitive station builders, station placement, rotation update, proximity docking constant
 
+js/flight/jumpgates.js
+  -> physical jump gate definitions, rotating gate meshes, proximity checks, and gate activation range helpers
+
 js/flight/navgraph.js
   -> Map-based navigation graph builder and A* route lookup over planets/stations/jump points
 
@@ -147,13 +150,13 @@ Fuel drains while thrusting or using autopilot. Landing calls restock/refuel beh
 
 ## Navigation Graph
 
-`buildNavGraph(planets, stations, jumpPoints)` returns a `Map<string, NavNode>` rather than a plain JSON object. Nodes are created from canonical `PLANETS`, `STATIONS`, and `JUMP_POINTS`; planet node ids match `USSY_PROJECTS`. Positions are resolved through the shared world-space coordinate model, with `worldToThree()` as the converter when Three.js vectors are needed. Edges are bidirectional when nodes are within `NAVGRAPH_LOCAL_RANGE = 15000`, and each jump point also connects to its two nearest graph nodes.
+`buildNavGraph(planets, stations, jumpPoints, jumpGates)` returns a `Map<string, NavNode>` rather than a plain JSON object. Nodes are created from canonical `PLANETS`, `STATIONS`, `JUMP_POINTS`, and `JUMP_GATES`; planet node ids match `USSY_PROJECTS`. Positions are resolved through the shared world-space coordinate model, with `worldToThree()` as the converter when Three.js vectors are needed. Edges are bidirectional when nodes are within `NAVGRAPH_LOCAL_RANGE = 15000`, each jump point also connects to its two nearest graph nodes, and jump-gate `connectsTo` links use low-cost edges so non-hyperspace routing prefers the transit network.
 
 ```ts
 type NavNode = {
   id: string;
   name: string;
-  type: 'planet' | 'station' | 'jump';
+  type: 'planet' | 'station' | 'jump' | 'gate';
   pos: THREE.Vector3;
   edges: Array<{ targetId: string; dist: number }>;
 };
@@ -161,7 +164,13 @@ type NavNode = {
 type NavGraph = Map<string, NavNode>;
 ```
 
-`findRoute(graph, fromId, toId)` runs A* with straight-line distance as the heuristic and returns an ordered array of node ids or `null`. `plotCourse()` chooses the nearest graph node to the player as the route origin, stores the route on `flightState.autopilot`, and starts the `PLOTTING` state.
+`findRoute(graph, fromId, toId)` runs A* with straight-line distance as the heuristic and returns an ordered array of node ids or `null`; with the current small graph this is O(V^2 + E) because the open set is scanned directly instead of using a heap. `plotCourse()` chooses the nearest graph node to the player as the route origin, stores the route on `flightState.autopilot`, and starts the `PLOTTING` state. If the `hyperspace` skill is unlocked, `plotCourse()` records a direct route; otherwise low-cost gate edges produce a waypoint queue through the jump-gate network when that path is cheaper.
+
+## Jump Gates And Hyperspace
+
+`js/flight/jumpgates.js` defines six physical cyan gate rings with `connectsTo` links and `activationRange = 12`. `createAllJumpGates()` attaches the rings to the flight scene at the flight-world distance scale, `updateJumpGateRotations()` animates them, and `isInJumpRange()` powers the in-range HUD prompt and manual `J` activation. Gate activation flashes the screen, plays the UI confirmation SFX, and moves the player to the linked gate.
+
+The `hyperspace` skill is a high-tier weapons unlock requiring `weap_3`, costing 5 skill points. When unlocked, route plotting marks the mode as `HYPERSPACE DIRECT`, while locked pilots see `VIA GATE NETWORK` when graph routing selects gates. The manual hyperspace key path charges, drains energy, flashes, teleports to the active nav target, and starts a 60 second cooldown.
 
 ## Surface State
 

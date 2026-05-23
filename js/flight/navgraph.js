@@ -1,7 +1,9 @@
 import { JUMP_POINTS, PLANETS, STATIONS, worldToThree } from './world.js';
+import { JUMP_GATES } from './jumpgates.js';
 
 export const NAVGRAPH_LOCAL_RANGE = 15000;
 export const JUMP_POINT_NEAREST_CONNECTIONS = 2;
+export const JUMP_GATE_TRAVEL_COST = 250;
 
 function distanceBetweenPositions(posA, posB) {
   if (!posA || !posB) return Infinity;
@@ -23,18 +25,20 @@ function addNode(graph, definition, type) {
     name: definition.name ?? definition.id,
     pos,
     type,
+    connectsTo: definition.connectsTo ?? [],
+    activationRange: definition.activationRange,
     edges: []
   });
 }
 
-function addBidirectionalEdge(graph, idA, idB) {
+function addBidirectionalEdge(graph, idA, idB, cost = null) {
   if (idA === idB) return;
 
   const nodeA = graph.get(idA);
   const nodeB = graph.get(idB);
   if (!nodeA || !nodeB) return;
 
-  const dist = distanceBetweenPositions(nodeA.pos, nodeB.pos);
+  const dist = cost ?? distanceBetweenPositions(nodeA.pos, nodeB.pos);
   if (!Number.isFinite(dist)) return;
 
   if (!nodeA.edges.some(edge => edge.targetId === idB)) {
@@ -53,12 +57,14 @@ function sortedNodesByDistance(graph, origin) {
     .sort((a, b) => a.dist - b.dist);
 }
 
-export function buildNavGraph(planets = PLANETS, stations = STATIONS, jumpPoints = JUMP_POINTS) {
+export function buildNavGraph(planets = PLANETS, stations = STATIONS, jumpPoints = JUMP_POINTS, jumpGates = null) {
   const graph = new Map();
+  const gateDefinitions = arguments.length === 0 ? JUMP_GATES : (jumpGates ?? []);
 
   for (const planet of planets ?? []) addNode(graph, planet, 'planet');
   for (const station of stations ?? []) addNode(graph, station, 'station');
   for (const jumpPoint of jumpPoints ?? []) addNode(graph, jumpPoint, 'jump');
+  for (const gate of gateDefinitions ?? []) addNode(graph, gate, 'gate');
 
   const nodes = [...graph.values()];
   for (let index = 0; index < nodes.length; index += 1) {
@@ -76,6 +82,10 @@ export function buildNavGraph(planets = PLANETS, stations = STATIONS, jumpPoints
     for (const { node } of sortedNodesByDistance(graph, jumpNode).slice(0, JUMP_POINT_NEAREST_CONNECTIONS)) {
       addBidirectionalEdge(graph, jumpNode.id, node.id);
     }
+  }
+
+  for (const gate of gateDefinitions ?? []) {
+    for (const targetId of gate?.connectsTo ?? []) addBidirectionalEdge(graph, gate.id, targetId, JUMP_GATE_TRAVEL_COST);
   }
 
   return graph;

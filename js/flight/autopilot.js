@@ -25,6 +25,9 @@ export function createAutopilotState() {
     targetId: null,
     targetPos: null,
     route: [],
+    routeType: 'LOCAL',
+    routeModeLabel: 'LOCAL ROUTE',
+    waypointFlash: null,
     hyperspeedMult: 1,
     hyperspeedTarget: 1,
     arrivalThreshold: 200,
@@ -89,10 +92,20 @@ function nearestNodeId(navGraph, pos) {
   return bestId;
 }
 
+/**
+ * Plots a route from the nearest nav node to the target.
+ * Hyperspace-unlocked pilots get a direct two-point route; everyone else uses
+ * the graph, where low-cost gate edges naturally prefer the jump-gate network.
+ * @param {object} flightState Mutable flight state with position and unlock flags.
+ * @param {Map<string, object>} navGraph Navigation graph.
+ * @param {string} targetId Destination node id.
+ * @returns {boolean} True when a route was stored on flightState.autopilot.
+ */
 export function plotCourse(flightState, navGraph, targetId) {
   const autopilot = ensureAutopilotState(flightState);
   const fromId = nearestNodeId(navGraph, flightState?.pos);
-  const route = fromId && targetId ? findRoute(navGraph, fromId, targetId) : null;
+  const directRoute = fromId && targetId ? [fromId, targetId] : null;
+  const route = flightState?.hyperspaceUnlocked ? directRoute : (fromId && targetId ? findRoute(navGraph, fromId, targetId) : null);
   if (!route) {
     autopilot.state = AUTOPILOT_STATES.IDLE;
     autopilot.blockedReason = 'NO ROUTE FOUND';
@@ -103,11 +116,15 @@ export function plotCourse(flightState, navGraph, targetId) {
   const targetNode = getNavNode(navGraph, targetId);
   autopilot.state = AUTOPILOT_STATES.PLOTTING;
   autopilot.route = route;
+  const usesGate = route.some(id => getNavNode(navGraph, id)?.type === 'gate');
+  autopilot.routeType = flightState?.hyperspaceUnlocked ? 'HYPERSPACE' : (usesGate ? 'GATE' : 'LOCAL');
+  autopilot.routeModeLabel = autopilot.routeType === 'HYPERSPACE' ? 'HYPERSPACE DIRECT' : (usesGate ? 'VIA GATE NETWORK' : 'LOCAL ROUTE');
   autopilot.targetId = targetId;
   autopilot.targetPos = clonePos(getNodePos(targetNode));
   autopilot.blockedReason = null;
   autopilot.plotStartedAt = nowSeconds();
   autopilot.routeIndex = Math.min(1, route.length - 1);
+  autopilot.waypointCount = Math.max(1, route.length - 1);
   return true;
 }
 
@@ -193,8 +210,22 @@ export function updateAutopilot(flightState, combatState, dt, navGraph) {
   const dist = distance(flightState.pos, waypoint);
   if (dist <= (autopilot.arrivalThreshold ?? 200)) {
     flightState.newNodeArrival = { id: waypointId, nodeId: waypointId, type: getNavNode(navGraph, waypointId)?.type, at: nowSeconds() };
+    const node = getNavNode(navGraph, waypointId);
+    const nextGateId = autopilot.route?.[(autopilot.routeIndex ?? 1) + 1];
+    const nextGate = getNavNode(navGraph, nextGateId);
+    if (node?.type === 'gate' && nextGate?.type === 'gate' && dist <= (node.activationRange ?? 12)) {
+      flightState.pos.copy?.(nextGate.pos) ?? Object.assign(flightState.pos, nextGate.pos);
+      flightState.vel?.set?.(0, 0, 0);
+      flightState.status = 'WAYPOINT REACHED - JUMPING';
+      flightState.statusUntil = (globalThis.performance?.now?.() ?? Date.now()) + 1500;
+      flightState.newNodeArrival = { id: nextGate.id, nodeId: nextGate.id, type: nextGate.type, at: nowSeconds() };
+      autopilot.routeIndex = Math.min((autopilot.routeIndex ?? 1) + 2, autopilot.route.length - 1);
+      autopilot.waypointFlash = 'WAYPOINT REACHED - JUMPING';
+      return autopilot;
+    }
     if ((autopilot.routeIndex ?? 1) < autopilot.route.length - 1) {
       autopilot.routeIndex += 1;
+      autopilot.waypointFlash = 'WAYPOINT REACHED';
     } else {
       autopilot.state = AUTOPILOT_STATES.ARRIVED;
       autopilot.hyperspeedTarget = 1;

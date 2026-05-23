@@ -154,6 +154,7 @@ import { DEFAULT_VIEW_WORLD_SCALE, FLIGHT_WORLD_DISTANCE_SCALE, STATIONS, SYSTEM
 import { createStarfield } from './starfield.js';
 import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js';
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
+import { createAllJumpGates, isInJumpRange, updateJumpGateRotations } from './jumpgates.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { getCivilianMapData, spawnCivilianFleet, updateCivilians } from './civilians.js';
@@ -194,6 +195,7 @@ let debrisField, dustField;
 let systemStarfield = null;
 let systemPlanets = [];
 let systemStations = [];
+let systemJumpGates = [];
 let navGraph = null;
 let systemMapKeyWasDown = false;
 let navigationPanelControlsRegistered = false;
@@ -917,6 +919,8 @@ export function init() {
     coreOuterParticles,
     customCursor,
     closeSettingsMenu,
+    activateHyperspaceTravel,
+    activateJumpGate,
     disableAutopilot,
     dismissGameMessage,
     documentRef: document,
@@ -1493,6 +1497,8 @@ function enterFlightMode() {
   flightState.fuel = flightState.maxFuel;
   flightState.fuelDepleted = false;
   flightState.currentDockedProject = null;
+  flightState.hyperspaceUnlocked = skillTree.unlocked.has('hyperspace');
+  flightState.hyperspaceCooldownUntil = 0;
   closeMissionBoard({ flightState, documentRef: document });
   flightState.thrust = 14;
   flightState.strafe = 8;
@@ -1782,6 +1788,7 @@ function setSystemWorldVisible(visible) {
   systemStarfield?.points && (systemStarfield.points.visible = visible);
   systemPlanets.forEach(body => { body.visible = visible; });
   systemStations.forEach(body => { body.visible = visible; });
+  systemJumpGates.forEach(body => { body.visible = visible; });
 }
 
 function getSurfacePlanetDefinition(planetObject) {
@@ -1811,6 +1818,18 @@ function getSystemStationDefinitions() {
     hasTrading: station.userData?.hasTrading,
     hasMissions: station.userData?.hasMissions,
     userData: station.userData
+  }));
+}
+
+function getJumpGateDefinitions() {
+  return systemJumpGates.map(gate => ({
+    id: gate.userData?.gateId ?? gate.id,
+    name: gate.userData?.name ?? gate.name ?? gate.userData?.gateId,
+    position: gate.position,
+    type: 'gate',
+    connectsTo: gate.userData?.connectsTo ?? [],
+    activationRange: gate.userData?.activationRange,
+    userData: gate.userData
   }));
 }
 
@@ -1847,7 +1866,8 @@ function createSystemWorldObjects() {
   systemStarfield = createStarfield(scene, THREE);
   systemPlanets = createAllPlanets(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
   systemStations = createAllStations(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
-  navGraph = buildNavGraph(getSurfacePlanetsForHUD(), getSystemStationDefinitions());
+  systemJumpGates = createAllJumpGates(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
+  navGraph = buildNavGraph(getSurfacePlanetsForHUD(), getSystemStationDefinitions(), undefined, getJumpGateDefinitions());
   spawnCivilianFleet({ THREE, gameRoot, navGraph, flightState });
   setSystemWorldVisible(false);
 }
@@ -1898,15 +1918,87 @@ function engageRouteAutopilot() {
   if (!navGraph) return false;
   const targetId = selectAutopilotTargetId();
   const autopilot = ensureAutopilotState(flightState);
+  flightState.hyperspaceUnlocked = skillTree.unlocked.has('hyperspace');
   if (!targetId || !plotCourse(flightState, navGraph, targetId)) {
     flightState.status = autopilot.blockedReason || 'NO NAV ROUTE AVAILABLE';
     flightState.statusUntil = performance.now() + 2200;
     updateFlightHud(true);
     return false;
   }
-  flightState.status = `ROUTE PLOTTED: ${targetId.toUpperCase()}`;
+  flightState.status = autopilot.routeModeLabel || `ROUTE PLOTTED: ${targetId.toUpperCase()}`;
   flightState.statusUntil = performance.now() + 2200;
   updateFlightHud(true);
+  return true;
+}
+
+function triggerWarpFlash() {
+  let flash = document.getElementById('warp-flash');
+  if (!flash) {
+    flash = document.createElement('div');
+    flash.id = 'warp-flash';
+    flash.style.cssText = 'position:fixed;inset:0;pointer-events:none;background:white;opacity:0;z-index:9999;transition:opacity 300ms ease;';
+    document.body.appendChild(flash);
+  }
+  flash.style.opacity = '0.92';
+  window.setTimeout(() => { flash.style.opacity = '0'; }, 120);
+}
+
+function activateJumpGate(manual = true) {
+  const gate = isInJumpRange(flightState.pos, systemJumpGates);
+  if (!gate) {
+    if (manual) {
+      flightState.status = 'NO JUMP GATE IN RANGE';
+      flightState.statusUntil = performance.now() + 1800;
+      updateFlightHud(true);
+    }
+    return false;
+  }
+  const destinationId = gate.userData.connectsTo?.[0];
+  const destination = systemJumpGates.find(item => item.userData?.gateId === destinationId);
+  if (!destination) return false;
+  triggerWarpFlash();
+  sfxEngine.playFlat('ui_confirm', { volume: 0.85 });
+  flightState.pos.copy(destination.position);
+  flightState.vel.set(0, 0, 0);
+  flightState.status = `JUMP GATE EXIT: ${destination.userData.name.toUpperCase()}`;
+  flightState.statusUntil = performance.now() + 2200;
+  updateFlightHud(true);
+  return true;
+}
+
+function activateHyperspaceTravel() {
+  if (!skillTree.unlocked.has('hyperspace')) {
+    flightState.status = 'HYPERSPACE DRIVE LOCKED';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+    return false;
+  }
+  if (!flightState.navNode) {
+    flightState.status = 'SET NAV TARGET BEFORE HYPERSPACE';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+    return false;
+  }
+  const now = performance.now();
+  if ((flightState.hyperspaceCooldownUntil ?? 0) > now) {
+    flightState.status = `HYPERSPACE COOLDOWN ${Math.ceil((flightState.hyperspaceCooldownUntil - now) / 1000)}s`;
+    flightState.statusUntil = now + 1800;
+    updateFlightHud(true);
+    return false;
+  }
+  flightState.status = 'HYPERSPACE CHARGING';
+  flightState.statusUntil = now + 2200;
+  flightState.energy = Math.max(0, flightState.energy - 35);
+  updateFlightHud(true);
+  window.setTimeout(() => {
+    triggerWarpFlash();
+    flightState.pos.copy(flightState.navNode.position);
+    flightState.vel.set(0, 0, 0);
+    flightState.hyperspaceCooldownUntil = performance.now() + 60000;
+    flightState.status = 'HYPERSPACE ARRIVAL COMPLETE';
+    flightState.statusUntil = performance.now() + 2200;
+    updateFlightHud(true);
+  }, 2000);
   return true;
 }
 
@@ -3538,8 +3630,11 @@ export function tick(time = 0) {
     updateSystemMapInput();
     updatePlanetLOD(systemPlanets, camera);
     updateStationRotations(systemStations, frameDt);
+    updateJumpGateRotations(systemJumpGates, frameDt);
       if (!simulationPaused) {
         updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+        const gate = isInJumpRange(flightState.pos, systemJumpGates);
+        if (gate && performance.now() > flightState.statusUntil) flightState.status = `[ ACTIVATE JUMP GATE: J ] ${gate.userData.name}`;
         // Hunter cooldowns are wall-clock based; do not pass the frame/performance clock.
         const hunterNow = Date.now();
         if (flightState.newNodeArrival) {

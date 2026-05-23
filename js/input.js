@@ -36,6 +36,8 @@ export const KEY_MAP = Object.freeze({
   C: 'Evasion roll',
   V: 'Set nav target from crosshair',
   Y: 'Toggle autopilot',
+  J: 'Activate jump gate in range',
+  H: 'Hyperspace jump (when unlocked; F1 always opens help)',
   M: 'System map',
   L: 'Surface approach / land',
   'H / F1': 'Help overlay',
@@ -99,6 +101,8 @@ export const flightState = {
   navDistance: Infinity,
   navEta: '--',
   autopilot: createAutopilotState(),
+  hyperspaceUnlocked: false,
+  hyperspaceCooldownUntil: 0,
   surface: {
     state: 'NONE',
     planetId: null,
@@ -240,6 +244,8 @@ function onGlobalKeyDown(event) {
     documentRef = document,
     enterFlightMode,
     exitFlightMode,
+    activateHyperspaceTravel,
+    activateJumpGate,
     gameMessageState,
     handleGameMessageChoice,
     handleSurfaceEscape,
@@ -301,6 +307,12 @@ function onGlobalKeyDown(event) {
       enterFlightMode();
       return;
     }
+  }
+
+  if (isFlightActive() && event.code === 'KeyH' && typeof activateHyperspaceTravel === 'function') {
+    event.preventDefault();
+    if (!event.repeat) activateHyperspaceTravel();
+    return;
   }
 
   if (isHelpKey(event)) {
@@ -373,6 +385,11 @@ function onGlobalKeyDown(event) {
   if (event.code === 'KeyY') {
     event.preventDefault();
     if (!event.repeat) toggleAutopilot();
+    return;
+  }
+  if (event.code === 'KeyJ') {
+    event.preventDefault();
+    if (!event.repeat && typeof activateJumpGate === 'function') activateJumpGate(true);
     return;
   }
   if (event.code === 'KeyC' && event.shiftKey) {

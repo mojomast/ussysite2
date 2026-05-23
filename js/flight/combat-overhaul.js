@@ -163,6 +163,7 @@ export const SKILL_TREE_NODES = [
   { id: 'weap_1', name: 'CAPACITOR I', branch: 'WEAPONS', effect: 'energy +20', cost: 1, requires: null, description: 'Expands energy storage to 120.' },
   { id: 'weap_2', name: 'HEAT SINKS', branch: 'WEAPONS', effect: 'maxHeat +30', cost: 1, requires: null, description: 'Raises maximum heat before overheat.' },
   { id: 'weap_3', name: 'OVERCLOCKED COILS', branch: 'WEAPONS', effect: 'fireCooldown x0.85', cost: 2, requires: 'weap_1', description: 'Primary weapons cycle 15% faster.' },
+  { id: 'hyperspace', name: 'HYPERSPACE DRIVE', label: 'HYPERSPACE DRIVE', branch: 'WEAPONS', effect: 'direct point-to-point travel', cost: 5, requires: 'weap_3', tier: 4, description: 'Direct point-to-point travel. No gates required.' },
   { id: 'weap_4', name: 'ARMOR PIERCING', branch: 'WEAPONS', effect: '25% dmg bypasses enemy shieldHp', cost: 3, requires: 'weap_3', description: 'Part of each hit punches through enemy shield pips.' },
   { id: 'weap_5', name: 'GHOST ROUND', branch: 'WEAPONS', effect: '15% of shots ignore enemy evasion roll', cost: 3, requires: 'weap_4', description: 'Sensor-guided micro-adjustments override target evasion.' },
   { id: 'eng_1', name: 'THRUSTER BOOST I', branch: 'ENGINES', effect: 'thrust +3', cost: 1, requires: null, description: 'Adds 3 thrust.' },

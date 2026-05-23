@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { JUMP_POINTS, PLANETS, STATIONS } from '../js/flight/world.js';
-import { buildNavGraph, distanceBetweenNodes, findRoute } from '../js/flight/navgraph.js';
+import { JUMP_GATES } from '../js/flight/jumpgates.js';
+import { JUMP_GATE_TRAVEL_COST, buildNavGraph, distanceBetweenNodes, findRoute } from '../js/flight/navgraph.js';
 
 class TestVector3 {
   constructor(x = 0, y = 0, z = 0) {
@@ -34,7 +35,7 @@ describe('flight navgraph', () => {
     const graph = buildNavGraph();
 
     assert.ok(graph instanceof Map);
-    assert.equal(graph.size, PLANETS.length + STATIONS.length + JUMP_POINTS.length);
+    assert.equal(graph.size, PLANETS.length + STATIONS.length + JUMP_POINTS.length + JUMP_GATES.length);
   });
 
   it('creates an edges array on each node', () => {
@@ -49,6 +50,14 @@ describe('flight navgraph', () => {
     for (const jumpPoint of JUMP_POINTS) {
       assert.ok(graph.get(jumpPoint.id).edges.length >= 2, `${jumpPoint.id} should have at least two edges`);
     }
+  });
+
+  it('adds low-cost jump gate edges', () => {
+    const graph = buildNavGraph();
+    const gate = graph.get(JUMP_GATES[0].id);
+
+    assert.equal(gate.type, 'gate');
+    assert.ok(gate.edges.some(edge => edge.dist === JUMP_GATE_TRAVEL_COST));
   });
 
   it('findRoute returns null for an unreachable node pair', () => {

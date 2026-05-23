@@ -225,7 +225,9 @@ export function updateFlightNavMarker({ camera, flightNavMarker, isFlightActive,
   y = THREE.MathUtils.clamp(y, margin, windowRef.innerHeight - margin);
   flightNavMarker.style.left = `${x}px`;
   flightNavMarker.style.top = `${y}px`;
-  flightNavMarker.textContent = `NAV ${getProjectNodeName(flightState.navNode)}\n${Math.round(flightState.navDistance)}u // ETA ${flightState.navEta}\nAUTO ${isAutopilotActive(flightState) ? 'ON' : 'OFF'}`;
+  const autopilot = ensureAutopilotState(flightState);
+  const waypoint = autopilot.route?.length > 1 ? ` // WAYPOINT ${Math.min(autopilot.routeIndex ?? 1, autopilot.route.length - 1)}/${autopilot.route.length - 1}` : '';
+  flightNavMarker.textContent = `NAV ${getProjectNodeName(flightState.navNode)}\n${Math.round(flightState.navDistance)}u // ETA ${flightState.navEta}\nAUTO ${isAutopilotActive(flightState) ? (autopilot.routeModeLabel || 'ON') : 'OFF'}${waypoint}`;
   flightNavMarker.classList.toggle('active', true);
   flightNavMarker.classList.toggle('offscreen', offscreen);
 }

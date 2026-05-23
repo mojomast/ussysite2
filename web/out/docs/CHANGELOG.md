@@ -1,5 +1,16 @@
 # Changelog
 
+## [phase-1] — Visuals, default layout, and flight scale
+- fix: enemy deaths now snapshot the kill position and trigger visible pooled explosions directly before enemy reuse/deactivation while preserving XP, kill feed, SFX, and reputation callbacks.
+- changed: flight planets now render with lit procedural surface materials and a rim-only atmosphere shader capped below full-dome opacity.
+- fix: default hero/console project nodes use a compact locked-view scale, wider camera section positions, and faster project snap interpolation so all projects remain readable on load.
+- changed: flight-mode planets and stations use a separate distance scale from the locked portfolio map so the ussyverse feels wider without changing landing/navigation radii or node materials.
+
+## [phase-2] — Jump gates and hyperspace routing
+- added: physical jump gates with rotating cyan meshes, proximity detection, manual activation on `J`, warp flash feedback, and low-cost navgraph gate links.
+- added: high-tier `HYPERSPACE DRIVE` skill unlock requiring `weap_3`, plus direct-route autopilot labeling and manual hyperspace jump/cooldown behavior.
+- changed: autopilot route state now records route mode, waypoint counts, and gate-network waypoint jumps for non-hyperspace pilots.
+
 ## [patch] — Bug fixes: settings, tutorial overlay, HUD
 - fix: defer tutorial-overlay flight-row selection to overlay build time (issue #1)
 - fix: `openSettingsMenu` fallback path now fully initializes menu DOM (issue #2)

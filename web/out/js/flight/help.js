@@ -1,4 +1,5 @@
 import { PLANETS, STATIONS, JUMP_POINTS } from './world.js';
+import { JUMP_GATES } from './jumpgates.js';
 import { KEY_MAP } from '../input.js';
 
 export const HELP_TABS = [
@@ -32,6 +33,8 @@ export const HELP_CONTROLS = {
   NAVIGATION: [
     ['V', 'Set nav target from crosshair'],
     ['Y', 'Toggle autopilot'],
+    ['J', 'Activate jump gate in range'],
+    ['H', 'Hyperspace jump (when unlocked; F1 always opens help)'],
     ['M', 'System map'],
     ['L', 'Surface approach / land']
   ],
@@ -162,7 +165,8 @@ function renderUniversePanel(panel, documentRef) {
   [
     ['PLANETS', PLANETS.length],
     ['STATIONS', STATIONS.length],
-    ['JUMP POINTS', JUMP_POINTS.length]
+    ['JUMP POINTS', JUMP_POINTS.length],
+    ['JUMP GATES', JUMP_GATES.length]
   ].forEach(([label, value]) => {
     const item = createEl(documentRef, 'div', 'help-universe-count');
     item.dataset.helpUniverseCount = label.toLowerCase().replaceAll(' ', '-');
@@ -175,7 +179,8 @@ function renderUniversePanel(panel, documentRef) {
   [
     ['Planets', PLANETS.map(item => `${item.name} // ${item.type}${item.hasStation ? ' // station support' : ''}`)],
     ['Stations', STATIONS.map(item => `${item.name} // ${item.type}${item.hasTrading ? ' // trading' : ''}${item.hasMissions ? ' // missions' : ''}`)],
-    ['Jump Points', JUMP_POINTS.map(item => item.name)]
+    ['Jump Points', JUMP_POINTS.map(item => item.name)],
+    ['Jump Gates', JUMP_GATES.map(item => `${item.name} // links ${item.connectsTo.length}`)]
   ].forEach(([title, rows]) => {
     const section = createEl(documentRef, 'section', 'help-section');
     section.appendChild(createEl(documentRef, 'h3', 'inspector-section-lbl', title));

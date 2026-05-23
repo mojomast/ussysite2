@@ -38,6 +38,8 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 | --- | --- |
 | `V` | Set nav target from crosshair |
 | `Y` | Toggle autopilot |
+| `J` | Activate jump gate in range |
+| `H` | Hyperspace jump when unlocked |
 | `M` | System map |
 | `L` | Surface approach / land |
 
@@ -96,11 +98,19 @@ Examples: `devussy`, `openclawssy`, `nexussy`, `ussycode`, `templeossy`, and `rp
 | Mid Ring Jump | Mid-system route anchor. | `[0, 0, 24500]` |
 | Outer Jump Gate | Outer-system gate for the larger 50k route network. | `[0, 0, -41000]` |
 
+### Jump Gates
+
+Six physical jump gates form the public transit network for long-distance flight. Fly within `12u` of a gate and press `J` to activate the first linked outbound gate; route autopilot can also use low-cost gate edges to cross the system efficiently.
+
+## Hyperspace Drive
+
+`HYPERSPACE DRIVE` is a high-tier skill unlock on the weapons branch. It costs `5` skill points, requires `weap_3` / `OVERCLOCKED COILS`, and enables direct point-to-point travel without the jump-gate bus. Press `H` with a nav target set to charge the drive, drain energy, jump to the target, and start a 60 second cooldown. Pilots without the unlock route through jump gates for distant trips.
+
 ## Navigation
 
 Press `M` in flight to toggle the system map overlay. The overlay draws the navigation graph, planets, stations, jump points, route edges, and the player's current position. Route engagement currently uses the navigation panel controls: `ENGAGE` plots a route to the current nav target when available, otherwise to the nearest planet/station fallback, and `ABORT` disengages autopilot.
 
-Autopilot uses the route state machine `IDLE -> PLOTTING -> ENGAGED -> DECELERATING -> ARRIVED`. A successful route plot shows `ROUTE PLOTTED: <TARGET>` while `PLOTTING` resolves the course, then the ship moves through graph waypoints under autopilot control. Long segments can spool hyperspeed from normal cruise up toward an 80x multiplier; final approach drops back to normal speed before arrival.
+Autopilot uses the route state machine `IDLE -> PLOTTING -> ENGAGED -> DECELERATING -> ARRIVED`. A successful route plot shows the route mode (`VIA GATE NETWORK`, `HYPERSPACE DIRECT`, or `LOCAL ROUTE`) while `PLOTTING` resolves the course, then the ship moves through graph waypoints under autopilot control. Long segments can spool hyperspeed from normal cruise up toward an 80x multiplier; final approach drops back to normal speed before arrival.
 
 If plotting fails, the HUD reports `NO NAV ROUTE AVAILABLE` or the autopilot `blockedReason` such as `NO ROUTE FOUND`. Manual override, landing/docking, boss activity, nearby hostiles, hull-critical state, target loss, or hostile interdiction can interrupt travel and set messages such as `AUTOPILOT DISENGAGED: HOSTILE INTERDICTION`.
 
