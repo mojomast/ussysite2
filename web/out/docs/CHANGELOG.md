@@ -1,5 +1,8 @@
 # Changelog
 
+## Flight Fix — mission restore and boss spawn hardening
+- Dropped malformed persisted active missions before restore and cancelled delayed boss spawns when combat state resets before the timeout fires.
+
 ## Flight Fix — route autopilot and project overlays
 - Fixed `Y` to toggle the route autopilot path, stopped flight-mode project-node drift, refreshed relationship edges when console nodes move, and hid project labels during flight.
 

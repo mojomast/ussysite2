@@ -322,6 +322,8 @@ export function checkBossSpawnThreshold(state = combatState, enemyPool = enemies
 export function triggerBossEncounter(state = combatState, enemyPool = enemies, flightState = {}) {
   const { addKillFeedEntry, flightForward, showGameMessage, windowRef = globalThis } = requireDeps();
   if (!state || state.bossActive) return false;
+  const spawnGeneration = (state.bossSpawnGeneration ?? 0) + 1;
+  state.bossSpawnGeneration = spawnGeneration;
   state.bossActive = true;
   state.bossEnemyRef = null;
   showGameMessage?.({
@@ -338,6 +340,7 @@ export function triggerBossEncounter(state = combatState, enemyPool = enemies, f
   }), 1000);
   addKillFeedEntry?.('DREADNOUGHT INBOUND');
   windowRef.setTimeout?.(() => {
+    if (!state.bossActive || state.bossSpawnGeneration !== spawnGeneration) return;
     const boss = enemyPool.find(enemy => !enemy.userData?.active);
     if (!boss) {
       state.bossActive = false;
@@ -391,6 +394,7 @@ export function handleBossDeath(state = combatState, boss, flightState = {}, opt
   if (!boss?.userData?.isBoss) return false;
   const { addCombatCredits, addKillFeedEntry, showGameMessage } = options;
   state.bossActive = false;
+  state.bossSpawnGeneration = (state.bossSpawnGeneration ?? 0) + 1;
   state.bossEnemyRef = null;
   flightState.score = (flightState.score || 0) + 1200;
   addCombatCredits?.(1200);

@@ -29,9 +29,25 @@ function stringArray(value) {
   return Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0);
 }
 
+function isValidMissionRecord(item) {
+  return isObject(item)
+    && typeof item.id === 'string'
+    && typeof item.type === 'string'
+    && typeof item.status === 'string'
+    && isObject(item.objective)
+    && nonNegativeInteger(item.objective.current)
+    && Number.isInteger(item.objective.required)
+    && item.objective.required > 0
+    && item.objective.current <= item.objective.required
+    && finiteNumber(item.reward)
+    && isObject(item.reputationReward)
+    && typeof item.reputationReward.faction === 'string'
+    && finiteNumber(item.reputationReward.amount);
+}
+
 function cloneMissions(value) {
   if (!Array.isArray(value)) return [];
-  const missions = value.filter(item => isObject(item) && typeof item.id === 'string' && typeof item.type === 'string' && typeof item.status === 'string');
+  const missions = value.filter(isValidMissionRecord);
   return typeof structuredClone === 'function' ? structuredClone(missions) : JSON.parse(JSON.stringify(missions));
 }
 
@@ -40,7 +56,7 @@ function clonePersistedState(value) {
 }
 
 function missionArray(value) {
-  return Array.isArray(value) && value.every(item => isObject(item) && typeof item.id === 'string' && typeof item.type === 'string' && typeof item.status === 'string');
+  return Array.isArray(value) && value.every(isValidMissionRecord);
 }
 
 function getVectorClass() {

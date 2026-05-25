@@ -62,6 +62,7 @@ export const combatState = {
   killFeedDirty: false,
   bossActive: false,
   bossEnemyRef: null,
+  bossSpawnGeneration: 0,
   bossThresholdIdx: 0,
   activeBountyHunter: null,
   activeIntercept: null,
@@ -83,6 +84,7 @@ export function reset(state = combatState) {
   state.killFeedDirty = false;
   state.bossActive = false;
   state.bossEnemyRef = null;
+  state.bossSpawnGeneration = (state.bossSpawnGeneration ?? 0) + 1;
   state.bossThresholdIdx = 0;
   state.activeIntercept = null;
   state.lastNodeArrival = null;

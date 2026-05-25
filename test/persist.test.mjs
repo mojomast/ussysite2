@@ -119,8 +119,8 @@ describe('run state session persistence', () => {
     assert.deepEqual(loaded.flight.surface, { state: 'NONE', planetId: null });
   });
 
-  it('returns null for malformed v2 data and leaves input unchanged', () => {
-    const malformedMission = { id: 'mission-1', type: 'DELIVERY', status: 'ACTIVE', failClone: () => {} };
+  it('drops malformed v2 active missions and leaves input unchanged', () => {
+    const malformedMission = { id: 'mission-1', type: 'DELIVERY', status: 'ACTIVE' };
     const input = validState({
       v: 2,
       trader: {
@@ -130,7 +130,8 @@ describe('run state session persistence', () => {
 
     const migrated = migrateRunState(input);
 
-    assert.equal(migrated, null);
+    assert.equal(migrated.v, 3);
+    assert.deepEqual(migrated.trader.activeMissions, []);
     assert.equal(input.v, 2);
     assert.deepEqual(input.trader.activeMissions, [malformedMission]);
   });
@@ -237,7 +238,15 @@ describe('run state session persistence', () => {
   });
 
   it('round-trips active missions through save and apply', () => {
-    const mission = { id: 'mission-1', type: 'DELIVERY', status: 'ACTIVE', progress: { delivered: false } };
+    const mission = {
+      id: 'mission-1',
+      type: 'DELIVERY',
+      status: 'ACTIVE',
+      objective: { action: 'deliver', current: 0, required: 1 },
+      reward: 700,
+      reputationReward: { faction: 'tools', amount: 3 },
+      progress: { delivered: false }
+    };
     const traderState = { activeMissions: [mission], completedMissionIds: ['mission-0'] };
     const restoredTraderState = {};
 
@@ -254,6 +263,20 @@ describe('run state session persistence', () => {
     assert.equal(applyRunState(saved, { ownedWeapons: new Set(), unlocked: new Set() }, restoredTraderState, {}, { unlocked: new Set() }), true);
     assert.deepEqual(restoredTraderState.activeMissions, [mission]);
     assert.deepEqual(restoredTraderState.completedMissionIds, ['mission-0']);
+  });
+
+  it('does not apply active missions missing completion fields', () => {
+    const traderState = { activeMissions: [{ stale: true }] };
+    const restored = {};
+    const state = validState({
+      trader: {
+        activeMissions: [{ id: 'legacy-1', type: 'DELIVERY', status: 'ACTIVE' }]
+      }
+    });
+
+    assert.equal(applyRunState(state, { ownedWeapons: new Set(), unlocked: new Set() }, restored, {}, { unlocked: new Set() }), true);
+    assert.deepEqual(restored.activeMissions, []);
+    assert.deepEqual(traderState.activeMissions, [{ stale: true }]);
   });
 
   it('round-trips bountyLevel through save and apply', () => {

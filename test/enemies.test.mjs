@@ -175,6 +175,33 @@ test('checkBossSpawnThreshold increments threshold and spawns boss encounter', (
   assert.deepEqual(killFeed, ['DREADNOUGHT INBOUND', 'DREADNOUGHT SPAWNED']);
 });
 
+test('pending boss spawn is cancelled when combat state resets', () => {
+  const boss = new globalThis.THREE.Group();
+  const timers = [];
+  configureEnemies({
+    addKillFeedEntry: () => {},
+    flightForward: new globalThis.THREE.Vector3(0, 0, -1),
+    flightState: { pos: new globalThis.THREE.Vector3(), score: BOSS_SCORE_THRESHOLDS[0] },
+    getEnemyFireCooldown: () => 1000,
+    getVoicePersona: () => ({}),
+    missionState: { step: 'freeRoam' },
+    showGameMessage: () => {},
+    ttsEngine: { speak: () => {} },
+    windowRef: { setTimeout: fn => { timers.push(fn); } }
+  });
+  const state = { bossActive: false, bossEnemyRef: null, bossThresholdIdx: 0, bossSpawnGeneration: 0 };
+
+  assert.equal(checkBossSpawnThreshold(state, [boss], { pos: new globalThis.THREE.Vector3(), score: BOSS_SCORE_THRESHOLDS[0] }), true);
+  assert.equal(state.bossActive, true);
+  resetCombatState(state);
+  timers.forEach(fn => fn());
+
+  assert.equal(state.bossActive, false);
+  assert.equal(state.bossEnemyRef, null);
+  assert.equal(boss.userData.isBoss, undefined);
+  assert.equal(boss.userData.active, undefined);
+});
+
 test('updateBossAttackPhase changes boss burst pattern by hull ratio', () => {
   const boss = new globalThis.THREE.Group();
   applyBossOverrides(boss);
