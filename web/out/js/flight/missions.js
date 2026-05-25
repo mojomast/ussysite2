@@ -253,6 +253,16 @@ function arrivedAtTarget(mission, flightState = {}) {
   return flightState.autopilot?.state === 'ARRIVED' && flightState.autopilot?.targetId === mission.targetId;
 }
 
+function isAtMissionTarget(mission, flightState = {}, traderState = {}) {
+  if (arrivedAtTarget(mission, flightState)) return true;
+  const targetId = mission.targetId;
+  if (!targetId) return false;
+  if (traderState.docked && traderState.dockedStation === targetId) return true;
+  if (flightState.landed && traderState.dockedStation === targetId) return true;
+  if (flightState.landed && flightState.currentDockedProject?.id === targetId) return true;
+  return flightState.surface?.state === 'SURFACE' && flightState.surface?.planetId === targetId;
+}
+
 function scanInRange(mission, flightState = {}, navGraph) {
   const target = getNavNode(navGraph, mission.targetId);
   return distance(flightState.pos, target?.pos) <= 500;
@@ -280,7 +290,7 @@ export function checkMissionProgress(traderState, flightState = {}, combatState 
     }
     if (mission.objective.current >= mission.objective.required) continue;
     let progressed = false;
-    if ([MISSION_TYPES.DELIVERY, MISSION_TYPES.PATROL, MISSION_TYPES.ESCORT].includes(mission.type) && arrivedAtTarget(mission, flightState)) {
+    if ([MISSION_TYPES.DELIVERY, MISSION_TYPES.PATROL, MISSION_TYPES.ESCORT].includes(mission.type) && isAtMissionTarget(mission, flightState, traderState)) {
       mission.objective.current = mission.objective.required;
       progressed = true;
     } else if (mission.type === MISSION_TYPES.SCAN && scanInRange(mission, flightState, navGraph)) {

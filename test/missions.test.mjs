@@ -140,6 +140,28 @@ describe('mission board core', () => {
     }
   });
 
+  it('progresses delivery and escort from docked or surface target fallback signals', () => {
+    const navGraph = graph();
+    const delivery = generateMissionsForStation(STATIONS.find(item => item.id === 'hub-alpha'), navGraph, 3)
+      .find(mission => mission.type === MISSION_TYPES.DELIVERY && mission.targetId);
+    const escort = generateMissionsForStation(STATIONS.find(item => item.id === 'hub-alpha'), navGraph, 3)
+      .find(mission => mission.type === MISSION_TYPES.ESCORT && mission.targetId);
+    const traderState = {
+      docked: true,
+      dockedStation: delivery.targetId,
+      activeMissions: [
+        { ...delivery, status: 'ACTIVE', acceptedAt: 0 },
+        { ...escort, status: 'ACTIVE', acceptedAt: 0 }
+      ]
+    };
+
+    checkMissionProgress(traderState, { autopilot: { state: 'IDLE', targetId: delivery.targetId } }, {}, navGraph, 1000);
+    assert.equal(traderState.activeMissions[0].objective.current, traderState.activeMissions[0].objective.required);
+
+    checkMissionProgress(traderState, { surface: { state: 'SURFACE', planetId: escort.targetId } }, {}, navGraph, 1000);
+    assert.equal(traderState.activeMissions[1].objective.current, traderState.activeMissions[1].objective.required);
+  });
+
   it('progresses scan proximity and bounty kills by last killed type', () => {
     const navGraph = graph();
     const scan = generateMissionsForStation(STATIONS.find(item => item.id === 'hub-alpha'), navGraph, 4).find(mission => mission.type === MISSION_TYPES.SCAN);

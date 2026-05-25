@@ -1775,6 +1775,8 @@ function handleGameMessageChoice(event) {
 
 function handleFlightUndock() {
   closeMissionBoard({ flightState, documentRef: document });
+  traderState.docked = false;
+  traderState.dockedStation = null;
   sfxEngine.stopStationAmbient();
   sfxEngine.startEngineHum();
 }
@@ -2998,7 +3000,7 @@ function restockAtProject(project) {
 }
 
 function stationName(projectId) {
-  return USSY_PROJECTS.find(project => project.id === projectId)?.name || 'UNKNOWN';
+  return USSY_PROJECTS.find(project => project.id === projectId)?.name || STATIONS.find(station => station.id === projectId)?.name || 'UNKNOWN';
 }
 
 function getStationCategory(projectId) {

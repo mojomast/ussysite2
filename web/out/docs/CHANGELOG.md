@@ -1,5 +1,9 @@
 # Changelog
 
+## Flight Fix — mission docking fallbacks
+- Delivery and escort missions now complete from docked, landed, or surface-at-target signals if final approach cancels before autopilot reports arrival.
+- Pointer-lock undocking now clears stale dock state, and standalone station service menus show station names instead of `UNKNOWN`.
+
 ## API Hardening — JSON media type and quota retry hints
 - API POST endpoints now accept only the exact `application/json` media type with optional parameters, reject `application/jsonp`, and include `Retry-After: 60` on quota responses.
 
