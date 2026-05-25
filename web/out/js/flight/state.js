@@ -1,8 +1,5 @@
 // --- USSYVERSE 3D CYBERNETIC ENGINE --- //
 
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { COMMODITIES, configureTrader, openTradeMenu, refuelAt, tickPriceDrift, traderState } from '../economy/trader.js';
 import { getStationLore, getStationMissions } from '../economy/lore.js';
 import { gainReputation, getEnemyAggressionMultiplier, loseReputation, normalizeCategory, reputationState } from '../economy/reputation.js';
@@ -3675,15 +3672,8 @@ function onWindowResize() {
 }
 
 function configurePostProcessing() {
-  composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    (prefersReducedMotion || settingsState.reducedMotion) ? 0 : settingsState.bloomStrength,
-    settingsState.bloomRadius,
-    settingsState.bloomThreshold
-  );
-  composer.addPass(bloomPass);
+  composer = null;
+  bloomPass = null;
 }
 
 export function setBloomStrength(value) {

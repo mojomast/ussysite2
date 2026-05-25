@@ -4,7 +4,7 @@
 
 ```text
 index.html
-  -> import-map Three singleton bootstrap
+  -> classic Three singleton bootstrap
   -> projects.js
   -> js/main.js
        -> first-paint dynamic import js/flight/runtime.js

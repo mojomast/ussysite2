@@ -10,11 +10,10 @@ test('main lazily imports flight runtime after launch code', async () => {
   assert.match(source, /DOMContentLoaded/);
 });
 
-test('index uses ESM Three singleton bootstrap only', async () => {
+test('index uses classic Three runtime without addon imports', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-  assert.doesNotMatch(html, /three\.min\.js/);
-  assert.match(html, /import \* as THREE from 'three';/);
-  assert.match(html, /globalThis\.THREE = THREE;/);
+  assert.match(html, /three\.min\.js/);
+  assert.doesNotMatch(html, /three\/addons/);
   assert.match(html, /id="flight-loading-overlay"/);
 });

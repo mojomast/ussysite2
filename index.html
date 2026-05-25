@@ -786,23 +786,12 @@
   <!-- Dynamic floating HTML labels for 3D scene overlays -->
   <div id="labels-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: hidden;"></div>
 
-  <!-- ThreeJS import map; module bootstrap exposes the singleton as global THREE. -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
-      }
-    }
-  </script>
+  <!-- ThreeJS runtime -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   
   <!-- App JavaScript files -->
   <script src="projects.js"></script>
-  <script type="module">
-    import * as THREE from 'three';
-    globalThis.THREE = THREE;
-    import('./js/main.js?v=startup-hotfix-20260525');
-  </script>
+  <script type="module" src="js/main.js?v=three-classic-hotfix-20260525"></script>
 
   <!-- Lucide Icon Renderer -->
   <script>
