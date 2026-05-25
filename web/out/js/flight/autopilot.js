@@ -18,6 +18,9 @@ const ACTIVE_STATES = new Set([
 ]);
 
 const PLOT_DELAY_SECONDS = 0.8;
+const tempWaypoint = THREE?.Vector3 ? new THREE.Vector3() : { x: 0, y: 0, z: 0 };
+const tempDirection = THREE?.Vector3 ? new THREE.Vector3() : { x: 0, y: 0, z: 0 };
+const tempVelocityTarget = THREE?.Vector3 ? new THREE.Vector3() : { x: 0, y: 0, z: 0 };
 
 export function createAutopilotState() {
   return {
@@ -71,6 +74,15 @@ function clonePos(pos) {
   if (typeof pos.clone === 'function') return pos.clone();
   if (THREE?.Vector3) return new THREE.Vector3(pos.x ?? 0, pos.y ?? 0, pos.z ?? 0);
   return { x: pos.x ?? 0, y: pos.y ?? 0, z: pos.z ?? 0 };
+}
+
+function copyPos(pos, out) {
+  if (!pos) return null;
+  if (typeof out.copy === 'function') return out.copy(pos);
+  out.x = pos.x ?? 0;
+  out.y = pos.y ?? 0;
+  out.z = pos.z ?? 0;
+  return out;
 }
 
 function distance(a, b) {
@@ -167,13 +179,26 @@ export function disengage(flightState, reason = 'MANUAL') {
   return autopilot;
 }
 
-function vectorToward(from, to) {
+function vectorToward(from, to, out) {
   const dx = (to.x ?? 0) - (from.x ?? 0);
   const dy = (to.y ?? 0) - (from.y ?? 0);
   const dz = (to.z ?? 0) - (from.z ?? 0);
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-  if (THREE?.Vector3) return new THREE.Vector3(dx / len, dy / len, dz / len);
-  return { x: dx / len, y: dy / len, z: dz / len };
+  if (typeof out.set === 'function') return out.set(dx / len, dy / len, dz / len);
+  out.x = dx / len;
+  out.y = dy / len;
+  out.z = dz / len;
+  return out;
+}
+
+function setScaledVector(out, dir, scalar) {
+  if (typeof out.copy === 'function' && typeof out.multiplyScalar === 'function') {
+    return out.copy(dir).multiplyScalar(scalar);
+  }
+  out.x = (dir.x ?? 0) * scalar;
+  out.y = (dir.y ?? 0) * scalar;
+  out.z = (dir.z ?? 0) * scalar;
+  return out;
 }
 
 function addScaled(pos, dir, scalar) {
@@ -204,7 +229,7 @@ export function updateAutopilot(flightState, combatState, dt, navGraph) {
   if (autopilot.state !== AUTOPILOT_STATES.ENGAGED && autopilot.state !== AUTOPILOT_STATES.DECELERATING) return autopilot;
 
   const waypointId = autopilot.route?.[autopilot.routeIndex ?? 1] || autopilot.targetId;
-  const waypoint = clonePos(getNodePos(getNavNode(navGraph, waypointId))) || autopilot.targetPos;
+  const waypoint = copyPos(getNodePos(getNavNode(navGraph, waypointId)), tempWaypoint) || autopilot.targetPos;
   if (!waypoint || !flightState?.pos) return disengage(flightState, 'TARGET LOST');
 
   const dist = distance(flightState.pos, waypoint);
@@ -245,11 +270,11 @@ export function updateAutopilot(flightState, combatState, dt, navGraph) {
     dt / (autopilot.hyperspeedTarget > 1 ? 2 : 1.5)
   );
 
-  const dir = vectorToward(flightState.pos, waypoint);
+  const dir = vectorToward(flightState.pos, waypoint, tempDirection);
   const speed = (flightState.thrust ?? 14) * Math.max(1, autopilot.hyperspeedMult ?? 1);
   addScaled(flightState.pos, dir, Math.min(dist, speed * dt));
   if (flightState.vel?.lerp && THREE?.Vector3) {
-    flightState.vel.lerp(dir.clone().multiplyScalar(speed), Math.min(1, dt * 2.5));
+    flightState.vel.lerp(setScaledVector(tempVelocityTarget, dir, speed), Math.min(1, dt * 2.5));
   }
   return autopilot;
 }
