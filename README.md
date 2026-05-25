@@ -39,7 +39,7 @@ Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, 
 | `Y` | Toggle autopilot |
 | `J` | Activate jump gate in range |
 | `H` | Hyperspace jump when unlocked |
-| `M` | System map |
+| `M` | System map; click nodes to plot routes |
 | `L` | Surface approach / land |
 | `F1` | Help overlay in flight |
 | `O` | Objectives panel |
@@ -143,6 +143,10 @@ To switch back to GPT Audio, set `OPENROUTER_TTS_MODEL=openai/gpt-audio`. See `d
 ## Economy
 
 The hidden flight mode includes a lightweight TradeWars/Elite-style economy. The player starts with credits, fuel, and an empty cargo hold. Project-backed planets and standalone stations expose deterministic markets, lore-specific merchants, a docked services grid, and mission boards that turn real project relationships into delivery, recon, intel, and escort contracts.
+
+## Navigation
+
+The in-flight system map releases mouselook while open and accepts node clicks. Click any rendered planet, station, jump point, or gate to plot an autopilot route; project-backed planets also become the normal nav target when their scene node is available.
 
 ## Objectives
 

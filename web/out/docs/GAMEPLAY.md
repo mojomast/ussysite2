@@ -40,7 +40,7 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 | `Y` | Toggle autopilot |
 | `J` | Activate jump gate in range |
 | `H` | Hyperspace jump when unlocked |
-| `M` | System map |
+| `M` | System map; click nodes to plot routes |
 | `L` | Surface approach / land |
 
 ### HUD & Menus
@@ -108,7 +108,7 @@ Six physical jump gates form the public transit network for long-distance flight
 
 ## Navigation
 
-Press `M` in flight to toggle the system map overlay. The overlay draws the navigation graph, planets, stations, jump points, route edges, and the player's current position. Route engagement currently uses the navigation panel controls: `ENGAGE` plots a route to the current nav target when available, otherwise to the nearest planet/station fallback, and `ABORT` disengages autopilot.
+Press `M` in flight to toggle the system map overlay. Opening the map releases mouselook and clears held inputs so thrust/fire do not continue while the pointer is on the HUD. The overlay draws the navigation graph, planets, stations, jump points, gates, route edges, and the player's current position. Click any rendered node to plot a route to it; project-backed planets also become the normal nav target when their scene node is available. The navigation panel controls still work: `ENGAGE` plots a route to the current nav target when available, otherwise to the nearest planet/station fallback, and `ABORT` disengages autopilot.
 
 Autopilot uses the route state machine `IDLE -> PLOTTING -> ENGAGED -> DECELERATING -> ARRIVED`. A successful route plot shows the route mode (`VIA GATE NETWORK`, `HYPERSPACE DIRECT`, or `LOCAL ROUTE`) while `PLOTTING` resolves the course, then the ship moves through graph waypoints under autopilot control. Long segments can spool hyperspeed from normal cruise up toward an 80x multiplier; final approach drops back to normal speed before arrival.
 

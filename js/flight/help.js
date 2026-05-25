@@ -35,7 +35,7 @@ export const HELP_CONTROLS = {
     ['Y', 'Toggle autopilot'],
     ['J', 'Activate jump gate in range'],
     ['H', 'Hyperspace jump (when unlocked)'],
-    ['M', 'System map'],
+    ['M', 'System map; click nodes to plot routes'],
     ['L', 'Surface approach / land']
   ],
   UI: [
@@ -63,7 +63,7 @@ export const HELP_TIPS = [
   'Dock often to restock ammo, missiles, shields, armor, energy, and fuel.',
   'Toggle O to review current and available objectives during free roam.',
   'Use B for the mission board only outside active modal text or messages.',
-  'Use M to read station, planet, jump point, and route context before long travel.',
+  'Use M to open the map, release mouselook, and click planets, stations, jump points, or gates to plot routes.',
   'Engine skills unlock afterburner and cold jump behaviors that change escape options.',
   'Controls are keyboard/mouse oriented; no gamepad bindings are currently assigned.'
 ];

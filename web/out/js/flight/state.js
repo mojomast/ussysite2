@@ -155,7 +155,7 @@ import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js'
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
 import { createAllJumpGates, isInJumpRange, updateJumpGateRotations } from './jumpgates.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
-import { disengage, ensureAutopilotState, isAutopilotActive, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
+import { disengage, ensureAutopilotState, hitTestSystemMapNode, isAutopilotActive, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { spawnCivilianFleet, updateCivilians } from './civilians.js';
 import { checkHunterDestroyed, checkHunterFlee, shouldTriggerIntercept, triggerIntercept } from './hunters.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
@@ -1907,9 +1907,37 @@ function setSystemMapVisible(visible) {
   if (!overlay) return false;
   overlay.classList.toggle('hidden', !visible);
   overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
-  if (visible) renderActiveSystemMap(performance.now());
-  else lastSystemMapRenderAt = 0;
+  if (visible) {
+    flightState.keys.clear();
+    flightState.mouseButtons.clear();
+    if (document.pointerLockElement === renderer?.domElement && document.exitPointerLock) document.exitPointerLock();
+    renderActiveSystemMap(performance.now());
+  } else {
+    lastSystemMapRenderAt = 0;
+  }
   return true;
+}
+
+function handleSystemMapNodeClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  flightState.keys.clear();
+  flightState.mouseButtons.clear();
+  const { canvas } = getSystemMapElements();
+  const node = hitTestSystemMapNode(canvas, navGraph, event.clientX, event.clientY);
+  if (!node) return;
+  flightState.hyperspaceUnlocked = skillTree.unlocked.has('hyperspace');
+  const autopilot = ensureAutopilotState(flightState);
+  const plotted = plotCourse(flightState, navGraph, node.id);
+  const projectNode = node.type === 'planet' ? projectNodeById.get(node.id) : null;
+  if (projectNode?.position && projectNode?.userData?.project) setNavigationTarget(projectNode, 'map');
+  const nodeName = node.name || node.id;
+  flightState.status = plotted
+    ? `${autopilot.routeModeLabel || 'ROUTE PLOTTED'}: ${nodeName.toUpperCase()}`
+    : `${autopilot.blockedReason || 'NO ROUTE FOUND'}: ${nodeName.toUpperCase()}`;
+  flightState.statusUntil = performance.now() + 2600;
+  updateFlightHud(true);
+  renderActiveSystemMap(performance.now());
 }
 
 function toggleSystemMap() {
@@ -2044,12 +2072,25 @@ function registerNavigationPanelControls() {
   const engageBtn = document.getElementById('nav-engage-btn');
   const abortBtn = document.getElementById('nav-abort-btn');
   const mapCloseBtn = document.getElementById('system-map-close');
+  const mapOverlay = document.getElementById('system-map-overlay');
+  const mapCanvas = document.getElementById('system-map-canvas');
   engageBtn?.addEventListener('click', engageRouteAutopilot);
   abortBtn?.addEventListener('click', () => {
     disengage(flightState, 'MANUAL');
     updateFlightHud(true);
   });
-  mapCloseBtn?.addEventListener('click', () => setSystemMapVisible(false));
+  mapOverlay?.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    flightState.keys.clear();
+    flightState.mouseButtons.clear();
+  });
+  mapCanvas?.addEventListener('pointerdown', handleSystemMapNodeClick);
+  mapCloseBtn?.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSystemMapVisible(false);
+  });
 }
 
 function registerSurfacePanelControls() {

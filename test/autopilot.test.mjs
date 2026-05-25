@@ -17,6 +17,8 @@ const {
   canEngageAutopilot,
   createAutopilotState,
   disengage,
+  getSystemMapNodeHitTargets,
+  hitTestSystemMapNode,
   plotCourse,
   updateAutopilot
 } = await import('../js/flight/autopilot.js');
@@ -87,4 +89,23 @@ test('hyperspeed lerp after 2s approaches max multiplier', () => {
   flightState.autopilot = { ...createAutopilotState(), state: 'ENGAGED', targetId: 'c', route: ['a', 'b', 'c'], routeIndex: 1 };
   updateAutopilot(flightState, {}, 2, graph());
   assert.equal(flightState.autopilot.hyperspeedMult, HYPERSPEED_MULTIPLIER_MAX);
+});
+
+test('system map hit targets use rendered node projection', () => {
+  const canvas = { width: 600, height: 600 };
+  const targets = getSystemMapNodeHitTargets(canvas, graph());
+  assert.deepEqual(targets.map(target => target.node.id), ['a', 'b', 'c']);
+  assert.equal(targets[0].x, 300);
+  assert.equal(targets[0].y, 300);
+  assert.equal(targets[2].x, 528);
+});
+
+test('system map hit test converts client coordinates through canvas bounds', () => {
+  const canvas = {
+    width: 600,
+    height: 600,
+    getBoundingClientRect: () => ({ left: 10, top: 20, width: 300, height: 300 })
+  };
+  assert.equal(hitTestSystemMapNode(canvas, graph(), 274, 170)?.id, 'c');
+  assert.equal(hitTestSystemMapNode(canvas, graph(), 25, 35), null);
 });

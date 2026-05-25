@@ -38,7 +38,7 @@ export const KEY_MAP = Object.freeze({
   Y: 'Toggle autopilot',
   J: 'Activate jump gate in range',
   H: 'Hyperspace jump (when unlocked)',
-  M: 'System map',
+  M: 'System map; click nodes to plot routes',
   L: 'Surface approach / land',
   F1: 'Help overlay in flight',
   O: 'Objectives panel',
@@ -455,7 +455,13 @@ function onGlobalKeyUp(event) {
 function onPointerDown(event) {
   const { documentRef = document, isConsoleActive, isFlightActive, playFireSfx, radioChain, renderer, unlockAudio } = requireDeps();
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
+  const interactiveHudTarget = event.target.closest && event.target.closest('.hud-panel, .hud-interactive');
   if (isFlightActive()) {
+    if (interactiveHudTarget) {
+      event.preventDefault();
+      clearFlightInput();
+      return;
+    }
     if (flightState.paused) return;
     if (typeof unlockAudio === 'function') unlockAudio();
     if (event.button === 0 || event.button === 2) {
@@ -463,13 +469,13 @@ function onPointerDown(event) {
       flightState.mouseButtons.add(event.button);
       if (typeof playFireSfx === 'function') playFireSfx(event.button === 0 ? 'laser' : 'missile');
     }
-    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock && !(event.target.closest && event.target.closest('.hud-panel, .hud-interactive'))) {
+    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock) {
       renderer.domElement.requestPointerLock();
     }
     return;
   }
   if (!isConsoleActive() || event.button !== 0) return;
-  if (event.target.closest && (event.target.closest('.hud-panel') || event.target.closest('.hud-interactive'))) return;
+  if (interactiveHudTarget) return;
 
   beginOrbitDrag(event);
 }

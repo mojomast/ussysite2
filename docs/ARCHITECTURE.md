@@ -164,7 +164,7 @@ type NavNode = {
 type NavGraph = Map<string, NavNode>;
 ```
 
-`findRoute(graph, fromId, toId)` runs A* with straight-line distance as the heuristic and returns an ordered array of node ids or `null`; with the current small graph this is O(V^2 + E) because the open set is scanned directly instead of using a heap. `plotCourse()` chooses the nearest graph node to the player as the route origin, stores the route on `flightState.autopilot`, and starts the `PLOTTING` state. If the `hyperspace` skill is unlocked, `plotCourse()` records a direct route; otherwise low-cost gate edges produce a waypoint queue through the jump-gate network when that path is cheaper.
+`findRoute(graph, fromId, toId)` runs A* with straight-line distance as the heuristic and returns an ordered array of node ids or `null`; with the current small graph this is O(V^2 + E) because the open set is scanned directly instead of using a heap. `plotCourse()` chooses the nearest graph node to the player as the route origin, stores the route on `flightState.autopilot`, and starts the `PLOTTING` state. If the `hyperspace` skill is unlocked, `plotCourse()` records a direct route; otherwise low-cost gate edges produce a waypoint queue through the jump-gate network when that path is cheaper. `renderSystemMap()` and the exported map hit-test helpers share the same projection math, letting `state.js` translate map canvas clicks into graph-node route plots without coupling tests to DOM drawing.
 
 ## Jump Gates And Hyperspace
 

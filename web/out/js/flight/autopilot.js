@@ -375,16 +375,47 @@ function getMapAutopilotState(flightState) {
     : createAutopilotState();
 }
 
-export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null, activeIntercept = null, now = globalThis.performance?.now?.() ?? Date.now(), hostiles = []) {
-  const ctx = canvas?.getContext?.('2d');
-  if (!ctx) return false;
-  const w = canvas.width || 600;
-  const h = canvas.height || 600;
+function getSystemMapProjection(canvas, navGraph) {
+  const w = canvas?.width || 600;
+  const h = canvas?.height || 600;
   const center = { x: w / 2, y: h / 2 };
   const nodes = [...(navGraph?.values?.() ?? [])];
   const max = Math.max(1, ...nodes.map(node => Math.max(Math.abs(getNodePos(node)?.x ?? 0), Math.abs(getNodePos(node)?.z ?? 0))));
   const scale = (Math.min(w, h) * 0.38) / max;
   const project = pos => ({ x: center.x + (pos?.x ?? 0) * scale, y: center.y + (pos?.z ?? 0) * scale });
+  return { w, h, nodes, project };
+}
+
+export function getSystemMapNodeHitTargets(canvas, navGraph) {
+  const { nodes, project } = getSystemMapProjection(canvas, navGraph);
+  return nodes
+    .map(node => ({ node, x: project(getNodePos(node)).x, y: project(getNodePos(node)).y, radius: node?.type === 'planet' ? 12 : 14 }))
+    .filter(target => target.node?.id);
+}
+
+export function hitTestSystemMapNode(canvas, navGraph, clientX, clientY) {
+  if (!canvas?.getBoundingClientRect) return null;
+  const rect = canvas.getBoundingClientRect();
+  const width = rect.width || canvas.width || 1;
+  const height = rect.height || canvas.height || 1;
+  const x = ((clientX - rect.left) / width) * (canvas.width || width);
+  const y = ((clientY - rect.top) / height) * (canvas.height || height);
+  let best = null;
+  for (const target of getSystemMapNodeHitTargets(canvas, navGraph)) {
+    const dist = Math.hypot(x - target.x, y - target.y);
+    if (dist > target.radius) continue;
+    if (!best || dist < best.dist) best = { ...target, dist };
+  }
+  return best?.node ?? null;
+}
+
+export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null, activeIntercept = null, now = globalThis.performance?.now?.() ?? Date.now(), hostiles = []) {
+  const ctx = canvas?.getContext?.('2d');
+  if (!ctx) return false;
+  const { w, h, nodes, project } = getSystemMapProjection(canvas, navGraph);
+  const center = { x: w / 2, y: h / 2 };
+  const max = Math.max(1, ...nodes.map(node => Math.max(Math.abs(getNodePos(node)?.x ?? 0), Math.abs(getNodePos(node)?.z ?? 0))));
+  const scale = (Math.min(w, h) * 0.38) / max;
   const autopilot = getMapAutopilotState(flightState);
   const targetId = autopilot.targetId || flightState?.navNode?.userData?.project?.id || null;
   const targetNode = targetId ? getNavNode(navGraph, targetId) : null;

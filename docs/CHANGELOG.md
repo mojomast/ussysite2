@@ -1,5 +1,9 @@
 # Changelog
 
+## Flight Feature — clickable system map routes
+- Opening the system map now releases mouselook, clears held flight inputs, and treats the map as interactive HUD UI.
+- Clicking map nodes plots routes to planets, stations, jump points, and gates; project-backed planets also update the normal nav target when available.
+
 ## Docs Fix — browser-local TTS controls
 - Clarified that TTS rate and pitch are browser-local controls and backend voices may ignore them.
 
