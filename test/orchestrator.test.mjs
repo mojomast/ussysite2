@@ -70,6 +70,65 @@ test('/api/orchestrate returns no event when ORCHESTRATOR_ENABLED=false', async 
   }
 });
 
+test('/api/orchestrate rejects JSONP content type without quota accounting', async () => {
+  const server = createAppServer();
+  const baseUrl = await listen(server);
+  try {
+    const statuses = [];
+    for (let i = 0; i < 21; i += 1) {
+      const response = await fetch(`${baseUrl}/api/orchestrate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/jsonp',
+          'Origin': baseUrl,
+          'X-Forwarded-For': '198.51.100.20'
+        },
+        body: JSON.stringify({ gameState: { tutorialComplete: true } })
+      });
+      statuses.push(response.status);
+    }
+    assert.deepEqual(statuses, Array(21).fill(415));
+  } finally {
+    server.close();
+  }
+});
+
+test('/api/orchestrate rate limit ignores non-JSON requests and includes Retry-After', async () => {
+  const server = createAppServer();
+  const baseUrl = await listen(server);
+  try {
+    for (let i = 0; i < 21; i += 1) {
+      const nonJson = await fetch(`${baseUrl}/api/orchestrate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+          'Origin': baseUrl,
+          'X-Forwarded-For': '198.51.100.21'
+        },
+        body: 'x'
+      });
+      assert.equal(nonJson.status, 415);
+    }
+
+    let response;
+    for (let i = 0; i < 21; i += 1) {
+      response = await fetch(`${baseUrl}/api/orchestrate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Origin': baseUrl,
+          'X-Forwarded-For': '198.51.100.21'
+        },
+        body: JSON.stringify({})
+      });
+    }
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get('retry-after'), '60');
+  } finally {
+    server.close();
+  }
+});
+
 test('response schema validation parses valid LLM JSON', () => {
   const parsed = validateOrchestratorResponse(JSON.stringify({
     fire: true,

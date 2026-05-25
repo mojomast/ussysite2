@@ -123,6 +123,52 @@ test('TTS rate limit ignores non-JSON requests before quota accounting', async (
   }
 });
 
+test('TTS endpoint rejects JSONP content type without quota accounting', async () => {
+  const server = createAppServer();
+  const baseUrl = await listen(server);
+  try {
+    const statuses = [];
+    for (let i = 0; i < 11; i += 1) {
+      const response = await fetch(`${baseUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/jsonp',
+          'Origin': baseUrl,
+          'X-Forwarded-For': '198.51.100.12'
+        },
+        body: JSON.stringify({ text: 'Radio check.' })
+      });
+      statuses.push(response.status);
+    }
+    assert.deepEqual(statuses, Array(11).fill(415));
+  } finally {
+    server.close();
+  }
+});
+
+test('TTS rate limit responses include Retry-After', async () => {
+  const server = createAppServer();
+  const baseUrl = await listen(server);
+  try {
+    let response;
+    for (let i = 0; i < 11; i += 1) {
+      response = await fetch(`${baseUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Origin': baseUrl,
+          'X-Forwarded-For': '198.51.100.13'
+        },
+        body: JSON.stringify({ text: '' })
+      });
+    }
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get('retry-after'), '60');
+  } finally {
+    server.close();
+  }
+});
+
 test('TTS accepts upstream octet-stream audio as browser audio', async () => {
   const previousKey = process.env.OPENROUTER_API_KEY;
   const previousFetch = globalThis.fetch;

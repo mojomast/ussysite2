@@ -109,9 +109,10 @@ const contentTypes = {
   '.txt': 'text/plain; charset=utf-8'
 };
 
-function sendJson(res, status, body) {
+function sendJson(res, status, body, headers = {}) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
+    ...headers,
     ...commonSecurityHeaders
   });
   res.end(JSON.stringify(body));
@@ -168,14 +169,16 @@ function checkRateLimit(req, bucketName, maxRequests) {
 
 function enforceRateLimit(req, res, bucketName, maxRequests) {
   if (checkRateLimit(req, bucketName, maxRequests)) return true;
-  sendJson(res, 429, { error: 'Rate limit exceeded. Try again shortly.' });
+  sendJson(res, 429, { error: 'Rate limit exceeded. Try again shortly.' }, {
+    'Retry-After': String(Math.ceil(rateLimitWindowMs / 1000))
+  });
   return false;
 }
 
 // HARDENING: Only accept JSON request bodies on POST API endpoints.
 function enforceJsonContentType(req, res) {
-  const contentType = String(req.headers['content-type'] || '').toLowerCase();
-  if (contentType.startsWith('application/json')) return true;
+  const mediaType = String(req.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+  if (mediaType === 'application/json') return true;
   sendJson(res, 415, { error: 'Unsupported Media Type' });
   return false;
 }

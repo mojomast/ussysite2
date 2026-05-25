@@ -1,5 +1,8 @@
 # Changelog
 
+## API Hardening — JSON media type and quota retry hints
+- API POST endpoints now accept only the exact `application/json` media type with optional parameters, reject `application/jsonp`, and include `Retry-After: 60` on quota responses.
+
 ## Flight Fix — tutorial overlay controls
 - Updated the tutorial overlay so `H` shows hyperspace and `F1` shows in-flight help.
 
