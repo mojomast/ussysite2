@@ -87,7 +87,7 @@ import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, toggleHelpMenu } from
 import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
 import { applySettings, loadSettings, saveSettings, settingsState } from './settings.js';
 import { configureTutorialOverlay, hideTutorialOverlay, isTutorialOverlayVisible, showTutorialOverlay } from './tutorial-overlay.js';
-import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
+import { activateEnemyWave, buildOrchestratorGameState, dispatchOrchestratorEvent, shouldFireEvent, startMissionContract as startOrchestratorMissionContract } from './orchestrator.js';
 import {
   MISSION_INTRO_TEXT,
   applyMissionProgress,
@@ -3269,6 +3269,7 @@ function fireOrchestratedEvent(event) {
     objectiveText: event.objectiveText || '',
     objectiveTarget: event.objectiveTarget || null
   };
+  if (!shouldFireEvent(buildOrchestratorPayload(), normalizedEvent.type)) return;
   gameOrchestrator.lastEventTime = performance.now();
   gameOrchestrator.lastEventId = normalizedEvent.id;
 

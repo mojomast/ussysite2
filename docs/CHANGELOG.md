@@ -1,5 +1,8 @@
 # Changelog
 
+## API Hardening — orchestrator and TTS gates
+- Moved same-origin/content-type checks ahead of API quota accounting, applied orchestrator safety gates to live responses, accepted upstream octet-stream TTS audio, and stopped returning upstream TTS details to clients.
+
 ## Flight Fix — mission restore and boss spawn hardening
 - Dropped malformed persisted active missions before restore and cancelled delayed boss spawns when combat state resets before the timeout fires.
 

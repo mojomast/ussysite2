@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { isIP } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { shouldFireEvent } from './js/flight/orchestrator.js';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 // HARDENING: Keep a separator-suffixed root for safe static path prefix checks.
@@ -383,6 +384,14 @@ async function fetchOpenRouterSpeech(payload, origin = 'http://localhost') {
     };
   }
 
+  if (contentType.startsWith('application/octet-stream')) {
+    return {
+      status: 200,
+      contentType: 'audio/wav',
+      buffer: Buffer.from(await response.arrayBuffer())
+    };
+  }
+
   if (contentType.includes('text/event-stream')) {
     const pcmBuffer = parseOpenRouterAudioStream(await response.text());
     if (!pcmBuffer.length) return { status: 502, error: 'OpenRouter stream did not include audio data' };
@@ -434,7 +443,11 @@ export async function fetchOpenRouterOrchestration(gameState, origin = 'http://l
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content;
     if (!content) return { status: 502, error: 'OpenRouter response did not include orchestrator content' };
-    return { status: 200, data: validateOrchestratorResponse(content) };
+    const validated = validateOrchestratorResponse(content);
+    if (validated.fire && !shouldFireEvent(normalizeOrchestratorGameState(gameState), validated.event?.type)) {
+      return { status: 200, data: { fire: false, event: null } };
+    }
+    return { status: 200, data: validated };
   }
 
   return lastError || { status: 502, error: 'OpenRouter orchestrator request failed' };
@@ -462,9 +475,6 @@ function normalizeOrchestratorGameState(gameState) {
 }
 
 async function handleOrchestrate(req, res) {
-  // HARDENING: Apply orchestrator API rate limit before expensive validation/upstream calls.
-  if (!enforceRateLimit(req, res, 'orchestrator', 20)) return;
-
   if (!isAllowedSameOrigin(req)) {
     sendJson(res, 403, { error: 'Orchestrator endpoint only accepts same-origin browser requests' });
     return;
@@ -472,6 +482,9 @@ async function handleOrchestrate(req, res) {
 
   // HARDENING: Reject non-JSON orchestrator POST bodies before parsing.
   if (!enforceJsonContentType(req, res)) return;
+
+  // HARDENING: Count only same-origin JSON requests against the API quota.
+  if (!enforceRateLimit(req, res, 'orchestrator', 20)) return;
 
   let body;
   try {
@@ -505,9 +518,6 @@ async function handleOrchestrate(req, res) {
 }
 
 async function handleTTS(req, res) {
-  // HARDENING: Apply TTS API rate limit before expensive validation/upstream calls.
-  if (!enforceRateLimit(req, res, 'tts', 10)) return;
-
   if (!isAllowedSameOrigin(req)) {
     sendJson(res, 403, { error: 'TTS endpoint only accepts same-origin browser requests' });
     return;
@@ -515,6 +525,9 @@ async function handleTTS(req, res) {
 
   // HARDENING: Reject non-JSON TTS POST bodies before parsing.
   if (!enforceJsonContentType(req, res)) return;
+
+  // HARDENING: Count only same-origin JSON requests against the API quota.
+  if (!enforceRateLimit(req, res, 'tts', 10)) return;
 
   let body;
   try {
@@ -540,7 +553,8 @@ async function handleTTS(req, res) {
     const origin = req.headers.origin || `http://${req.headers.host || 'localhost'}`;
     const result = await fetchOpenRouterSpeech(payload, origin);
     if (!result.buffer) {
-      sendJson(res, result.status, { error: result.error, details: result.details });
+      if (result.details) console.warn('OpenRouter TTS upstream error:', result.details);
+      sendJson(res, result.status, { error: result.error });
       return;
     }
 
@@ -551,7 +565,8 @@ async function handleTTS(req, res) {
     });
     res.end(result.buffer);
   } catch (error) {
-    sendJson(res, 502, { error: 'TTS backend failed', details: error.message });
+    console.warn('TTS backend failed:', error);
+    sendJson(res, 502, { error: 'TTS backend failed' });
   }
 }
 

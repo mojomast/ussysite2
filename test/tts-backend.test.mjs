@@ -89,7 +89,7 @@ test('TTS endpoint rejects non-browser or cross-origin requests', async () => {
   }
 });
 
-test('TTS rate limit uses forwarded client IP only from local proxy', async () => {
+test('TTS rate limit ignores non-JSON requests before quota accounting', async () => {
   const server = createAppServer();
   const baseUrl = await listen(server);
   try {
@@ -106,8 +106,7 @@ test('TTS rate limit uses forwarded client IP only from local proxy', async () =
       });
       statuses.push(response.status);
     }
-    assert.deepEqual(statuses.slice(0, 10), Array(10).fill(415));
-    assert.equal(statuses[10], 429);
+    assert.deepEqual(statuses, Array(11).fill(415));
 
     const otherIp = await fetch(`${baseUrl}/api/tts`, {
       method: 'POST',
@@ -121,6 +120,68 @@ test('TTS rate limit uses forwarded client IP only from local proxy', async () =
     assert.equal(otherIp.status, 415);
   } finally {
     server.close();
+  }
+});
+
+test('TTS accepts upstream octet-stream audio as browser audio', async () => {
+  const previousKey = process.env.OPENROUTER_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.OPENROUTER_API_KEY = 'test-key';
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith('https://openrouter.ai/')) {
+      return new Response(new Uint8Array([1, 2, 3, 4]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/octet-stream' }
+      });
+    }
+    return previousFetch(url, options);
+  };
+  const server = createAppServer();
+  const baseUrl = await listen(server);
+  try {
+    const response = await fetch(`${baseUrl}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Origin': baseUrl },
+      body: JSON.stringify({ text: 'Radio check.' })
+    });
+    const body = await response.arrayBuffer();
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'audio/wav');
+    assert.equal(body.byteLength, 4);
+  } finally {
+    server.close();
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previousKey;
+  }
+});
+
+test('TTS errors do not expose upstream details to clients', async () => {
+  const previousKey = process.env.OPENROUTER_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.OPENROUTER_API_KEY = 'test-key';
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith('https://openrouter.ai/')) {
+      return new Response('secret upstream diagnostic', { status: 502 });
+    }
+    return previousFetch(url, options);
+  };
+  const server = createAppServer();
+  const baseUrl = await listen(server);
+  try {
+    const response = await fetch(`${baseUrl}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Origin': baseUrl },
+      body: JSON.stringify({ text: 'Radio check.' })
+    });
+    const body = await response.json();
+    assert.equal(response.status, 502);
+    assert.deepEqual(body, { error: 'OpenRouter TTS request failed' });
+  } finally {
+    server.close();
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previousKey;
   }
 });
 

@@ -120,10 +120,46 @@ test('fetchOpenRouterOrchestration parses a mock valid LLM response', async () =
     }]
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   try {
-    const result = await fetchOpenRouterOrchestration({ tutorialComplete: true }, 'http://127.0.0.1');
+    const result = await fetchOpenRouterOrchestration({ tutorialComplete: true, timeSinceLastEvent: 999 }, 'http://127.0.0.1');
     assert.equal(result.status, 200);
     assert.equal(result.data.fire, true);
     assert.equal(result.data.event.type, 'SILENCE');
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previousKey;
+  }
+});
+
+test('fetchOpenRouterOrchestration blocks validated live events that fail safety gates', async () => {
+  const previousKey = process.env.OPENROUTER_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.OPENROUTER_API_KEY = 'test-key';
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    choices: [{
+      message: {
+        content: JSON.stringify({
+          fire: true,
+          event: {
+            id: 'unsafe_combat',
+            type: 'COMBAT',
+            source: 'RAIDERS',
+            title: 'CONTACT',
+            text: 'Hostiles inbound.',
+            choices: [],
+            spawnEnemies: 2,
+            creditReward: 0,
+            fuelReward: 0,
+            urgency: 'high'
+          }
+        })
+      }
+    }]
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  try {
+    const result = await fetchOpenRouterOrchestration({ tutorialComplete: true, shield: 20, timeSinceLastEvent: 999 }, 'http://127.0.0.1');
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.data, { fire: false, event: null });
   } finally {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.OPENROUTER_API_KEY;
