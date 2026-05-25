@@ -1,5 +1,8 @@
 # Changelog
 
+## Flight Fix — route autopilot and project overlays
+- Fixed `Y` to toggle the route autopilot path, stopped flight-mode project-node drift, refreshed relationship edges when console nodes move, and hid project labels during flight.
+
 ## Flight Map — useful live system view
 - System map (`M`) now refreshes while open instead of rendering a stale snapshot.
 - Added route highlighting, current target/nearest labels, gate/station shapes, range rings, player heading, hostile markers, and an inline legend.

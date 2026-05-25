@@ -25,7 +25,6 @@ import {
   getProjectNodeName,
   setNavigationFromCrosshair,
   setNavigationTarget,
-  toggleAutopilot,
   updateAutopilot,
   updateFlightNavLine,
   updateFlightNavigation,
@@ -156,7 +155,7 @@ import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js'
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
 import { createAllJumpGates, isInJumpRange, updateJumpGateRotations } from './jumpgates.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
-import { disengage, ensureAutopilotState, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
+import { disengage, ensureAutopilotState, isAutopilotActive, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { getCivilianMapData, spawnCivilianFleet, updateCivilians } from './civilians.js';
 import { checkHunterDestroyed, checkHunterFlee, shouldTriggerIntercept, triggerIntercept } from './hunters.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
@@ -956,7 +955,7 @@ export function init() {
     setNavigationFromCrosshair,
     showFactionMission,
     telemetryCoord,
-    toggleAutopilot,
+    toggleAutopilot: toggleRouteAutopilot,
     toggleFlightTts,
     toggleFlightView,
     toggleHelpMenu,
@@ -1943,6 +1942,17 @@ function engageRouteAutopilot() {
   flightState.statusUntil = performance.now() + 2200;
   updateFlightHud(true);
   return true;
+}
+
+function toggleRouteAutopilot() {
+  if (isAutopilotActive(flightState)) {
+    disengage(flightState, 'MANUAL');
+    flightState.status = 'AUTOPILOT DISENGAGED: MANUAL';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+    return false;
+  }
+  return engageRouteAutopilot();
 }
 
 function triggerWarpFlash() {
@@ -3618,18 +3628,23 @@ export function tick(time = 0) {
   // Floating nodes orbits (slow drift)
   const orbitSpeed = isConsoleActive ? 0.0003 : 0.00012;
   let nodesMoved = false;
-  projectNodes.forEach(node => {
-    if (!prefersReducedMotion && selectedNode !== node) {
-      const pos = node.position;
-      const x = pos.x * Math.cos(orbitSpeed) - pos.z * Math.sin(orbitSpeed);
-      const z = pos.x * Math.sin(orbitSpeed) + pos.z * Math.cos(orbitSpeed);
-      pos.x = x;
-      pos.z = z;
-      
-      nodesMoved = true;
-    }
-  });
-  if (nodesMoved) updateCoreConnectionLines();
+  if (!isFlightActive) {
+    projectNodes.forEach(node => {
+      if (!prefersReducedMotion && selectedNode !== node) {
+        const pos = node.position;
+        const x = pos.x * Math.cos(orbitSpeed) - pos.z * Math.sin(orbitSpeed);
+        const z = pos.x * Math.sin(orbitSpeed) + pos.z * Math.cos(orbitSpeed);
+        pos.x = x;
+        pos.z = z;
+        
+        nodesMoved = true;
+      }
+    });
+  }
+  if (nodesMoved) {
+    updateCoreConnectionLines();
+    markEdgesDirty();
+  }
   if (_edgesNeedUpdate) {
     updateRelationshipEdges();
     _edgesNeedUpdate = false;
@@ -3751,7 +3766,11 @@ export function tick(time = 0) {
   if (prefersReducedMotion || !composer) renderer.render(scene, camera);
   else composer.render();
 
-  renderProjectLabels();
+  if (isFlightActive) {
+    projectLabels.forEach(label => { label.element.style.opacity = 0; });
+  } else {
+    renderProjectLabels();
+  }
 
   // Telemetry framerate diagnostics
   const endTime = performance.now();
