@@ -9,6 +9,9 @@ import { worldToThree } from './world.js';
 let deps = {};
 let radarLastUpdate = 0;
 let killFeedLastUpdate = 0;
+let leadPipToEnemyVec = null;
+let leadPipPredictedVec = null;
+let leadPipProjectedVec = null;
 
 const KILL_FEED_MAX_ENTRIES = 4;
 const KILL_FEED_MAX_AGE_MS = 4000;
@@ -44,6 +47,38 @@ const HUD_TOUCH_HINTS = [
   ['🗺️', 'MAP'],
   ['🚪', 'EXIT']
 ];
+
+function createReusableVector3(source) {
+  const VectorCtor = typeof source?.constructor === 'function' ? source.constructor : globalThis.THREE?.Vector3;
+  if (!VectorCtor) return null;
+  try {
+    return new VectorCtor();
+  } catch {
+    return null;
+  }
+}
+
+function copyVector3(target, source) {
+  if (typeof target?.copy === 'function') {
+    target.copy(source);
+    return target;
+  }
+  if (typeof target?.set === 'function') {
+    target.set(source.x ?? 0, source.y ?? 0, source.z ?? 0);
+    return target;
+  }
+  target.x = source.x ?? 0;
+  target.y = source.y ?? 0;
+  target.z = source.z ?? 0;
+  return target;
+}
+
+function ensureLeadPipVectors(source) {
+  leadPipToEnemyVec ||= createReusableVector3(source);
+  leadPipPredictedVec ||= createReusableVector3(source);
+  leadPipProjectedVec ||= createReusableVector3(source);
+  return leadPipToEnemyVec && leadPipPredictedVec && leadPipProjectedVec;
+}
 
 function createHint(documentRef, key, action, secondary = false) {
   const hint = documentRef.createElement('span');
@@ -562,31 +597,35 @@ export function updateFlightHud(force = false) {
     if (nearestEnemy?.userData?.active && nearestEnemy.userData.velocity && camera) {
       const primaryDef = getWeaponDef(combatState.primaryWeapon);
       const bulletSpeed = primaryDef?.projectileSpeed > 0 ? primaryDef.projectileSpeed : 130;
-      const toEnemy = nearestEnemy.position.clone().sub(flightState.pos);
-      const dist = toEnemy.length();
-      const tof = dist / bulletSpeed;
-      const predicted = nearestEnemy.position.clone();
-      predicted.addScaledVector(nearestEnemy.userData.velocity, tof);
-      const projected = predicted.clone().project(camera);
-      const containerEl = leadPip.parentElement;
-      if (containerEl) {
-        const view = documentRef.defaultView || globalThis;
-        const rect = containerEl.getBoundingClientRect();
-        const cx = rect.width / 2;
-        const cy = rect.height / 2;
-        const vpW = view.innerWidth || rect.width;
-        const vpH = view.innerHeight || rect.height;
-        const screenX = (projected.x * 0.5 + 0.5) * vpW;
-        const screenY = (1 - (projected.y * 0.5 + 0.5)) * vpH;
-        const containerCenterX = rect.left + cx;
-        const containerCenterY = rect.top + cy;
-        const offsetX = screenX - containerCenterX + cx;
-        const offsetY = screenY - containerCenterY + cy;
-        const clampedX = Math.max(8, Math.min(rect.width - 8, offsetX));
-        const clampedY = Math.max(8, Math.min(rect.height - 8, offsetY));
-        leadPip.style.left = `${clampedX}px`;
-        leadPip.style.top = `${clampedY}px`;
-        leadPip.style.opacity = dist < 60 ? '1' : '0';
+      if (!ensureLeadPipVectors(nearestEnemy.position)) {
+        leadPip.style.opacity = '0';
+      } else {
+        const toEnemy = copyVector3(leadPipToEnemyVec, nearestEnemy.position).sub(flightState.pos);
+        const dist = toEnemy.length();
+        const tof = dist / bulletSpeed;
+        const predicted = copyVector3(leadPipPredictedVec, nearestEnemy.position);
+        predicted.addScaledVector(nearestEnemy.userData.velocity, tof);
+        const projected = copyVector3(leadPipProjectedVec, predicted).project(camera);
+        const containerEl = leadPip.parentElement;
+        if (containerEl) {
+          const view = documentRef.defaultView || globalThis;
+          const rect = containerEl.getBoundingClientRect();
+          const cx = rect.width / 2;
+          const cy = rect.height / 2;
+          const vpW = view.innerWidth || rect.width;
+          const vpH = view.innerHeight || rect.height;
+          const screenX = (projected.x * 0.5 + 0.5) * vpW;
+          const screenY = (1 - (projected.y * 0.5 + 0.5)) * vpH;
+          const containerCenterX = rect.left + cx;
+          const containerCenterY = rect.top + cy;
+          const offsetX = screenX - containerCenterX + cx;
+          const offsetY = screenY - containerCenterY + cy;
+          const clampedX = Math.max(8, Math.min(rect.width - 8, offsetX));
+          const clampedY = Math.max(8, Math.min(rect.height - 8, offsetY));
+          leadPip.style.left = `${clampedX}px`;
+          leadPip.style.top = `${clampedY}px`;
+          leadPip.style.opacity = dist < 60 ? '1' : '0';
+        }
       }
     } else {
       leadPip.style.opacity = '0';

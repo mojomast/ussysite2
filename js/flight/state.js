@@ -1293,22 +1293,24 @@ function updateSelectedRelationEdges() {
     return;
   }
 
-  const selectedEdges = getRelatedEdgesForProject(selectedNode.userData.project.id)
-    .filter(edge => edge.fromNode.visible && edge.toNode.visible)
-    .slice(0, selectedEdgeLimit);
+  const projectId = selectedNode.userData.project.id;
   const positions = selectedEdgesMesh.geometry.attributes.position.array;
   positions.fill(0);
 
-  selectedEdges.forEach((edge, idx) => {
-    const offset = idx * 6;
+  let selectedEdgeCount = 0;
+  for (let i = 0; i < relationshipEdges.length && selectedEdgeCount < selectedEdgeLimit; i++) {
+    const edge = relationshipEdges[i];
+    if ((edge.from !== projectId && edge.to !== projectId) || !edge.fromNode.visible || !edge.toNode.visible) continue;
+    const offset = selectedEdgeCount * 6;
     positions[offset] = edge.fromNode.position.x;
     positions[offset + 1] = edge.fromNode.position.y;
     positions[offset + 2] = edge.fromNode.position.z;
     positions[offset + 3] = edge.toNode.position.x;
     positions[offset + 4] = edge.toNode.position.y;
     positions[offset + 5] = edge.toNode.position.z;
-  });
-  selectedEdgesMesh.geometry.setDrawRange(0, selectedEdges.length * 2);
+    selectedEdgeCount++;
+  }
+  selectedEdgesMesh.geometry.setDrawRange(0, selectedEdgeCount * 2);
   selectedEdgesMesh.geometry.attributes.position.needsUpdate = true;
 }
 
