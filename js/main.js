@@ -1,4 +1,4 @@
-globalThis.__USSY_BUILD__ = 'sfx-tune-20260522';
+globalThis.__USSY_BUILD__ = 'startup-hotfix-20260525';
 
 let runtimePromise = null;
 let runtime = null;
