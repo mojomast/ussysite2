@@ -199,6 +199,7 @@ let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, c
 let debrisField, dustField;
 let systemStarfield = null;
 let systemPlanets = [];
+let surfacePlanetDefinitions = null;
 let systemStations = [];
 let systemJumpGates = [];
 let navGraph = null;
@@ -1819,7 +1820,7 @@ function getSurfacePlanetDefinition(planetObject) {
 }
 
 function getSurfacePlanetsForHUD() {
-  return systemPlanets.map(getSurfacePlanetDefinition);
+  return surfacePlanetDefinitions ?? systemPlanets.map(getSurfacePlanetDefinition);
 }
 
 function getSystemStationDefinitions() {
@@ -1878,6 +1879,7 @@ function updateSurfaceVisuals() {
 function createSystemWorldObjects() {
   systemStarfield = createStarfield(scene, THREE);
   systemPlanets = createAllPlanets(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
+  surfacePlanetDefinitions = systemPlanets.map(getSurfacePlanetDefinition);
   systemStations = createAllStations(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
   systemJumpGates = createAllJumpGates(scene, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
   navGraph = buildNavGraph(getSurfacePlanetsForHUD(), getSystemStationDefinitions(), undefined, getJumpGateDefinitions());
