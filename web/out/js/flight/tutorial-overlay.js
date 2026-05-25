@@ -41,7 +41,8 @@ const combatNavRows = [
   ['Y', 'Toggle autopilot'],
   ['M', 'System map'],
   ['L', 'Land / dock'],
-  ['H / F1', 'Help overlay'],
+  ['H', 'Hyperspace jump'],
+  ['F1', 'Help overlay'],
   ['TAB', 'Settings'],
   ['ESC', 'Exit flight'],
   ['Space', 'Dismiss message']

@@ -1,5 +1,8 @@
 # Changelog
 
+## Flight Fix — tutorial overlay controls
+- Updated the tutorial overlay so `H` shows hyperspace and `F1` shows in-flight help.
+
 ## Docs Fix — flight controls and deployed mirrors
 - Aligned flight help, settings controls, gameplay docs, and TTS notes with `H` hyperspace, `F1` in-flight help, `J` jump gates, `Tab` settings, `Shift+M` quick TTS mute, and hash-backed `:cfg:` settings persistence.
 
