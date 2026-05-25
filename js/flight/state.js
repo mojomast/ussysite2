@@ -133,12 +133,15 @@ import { projectHitTargets as engineProjectHitTargets, projectLabels as enginePr
 import { createAmbientLighting as createEngineAmbientLighting, createCameraAnimationState, createSceneGroups, initScene as initEngineScene, resizeScene, setRenderPixelRatio } from '../engine/scene.js';
 import {
   animateDeepSpaceEffects,
+  createAmbientParticleField as createEngineAmbientParticleField,
   createDebrisField as createEngineDebrisField,
   createDeepSpaceEffects as createEngineDeepSpaceEffects,
   createDustField as createEngineDustField,
   createRadialGlowTexture as createEngineRadialGlowTexture,
   randomizeDebrisInstance as randomizeEngineDebrisInstance,
   randomizeDustParticle as randomizeEngineDustParticle,
+  randomizeAmbientParticle as randomizeEngineAmbientParticle,
+  updateAmbientParticleField as updateEngineAmbientParticleField,
   updateDebrisField as updateEngineDebrisField,
   updateDebrisMatrix as updateEngineDebrisMatrix,
   updateDeepSpaceAnchor as updateEngineDeepSpaceAnchor,
@@ -196,7 +199,7 @@ let isConsoleActive = false; // Hero state by default
 let isFlightActive = false;
 let pointLight1, pointLight2; // Global lights for scroll snap neon shifts
 let starField, milkyWayField, brightStarField, dataRibbonGroup, selectionRing, coreLinesMesh, relationshipEdgesMesh, selectedEdgesMesh;
-let debrisField, dustField;
+let debrisField, dustField, ambientField;
 let systemStarfield = null;
 let systemPlanets = [];
 let surfacePlanetDefinitions = null;
@@ -273,12 +276,16 @@ const flightBounds = SYSTEM_RADIUS * FLIGHT_WORLD_DISTANCE_SCALE;
 const radarRange = 140;
 const debrisCount = prefersReducedMotion ? 72 : (isCoarsePointer ? 210 : 300);
 const dustParticleCount = prefersReducedMotion ? 180 : (isCoarsePointer ? 420 : 600);
+const ambientParticleCount = prefersReducedMotion ? 180 : (isCoarsePointer ? 520 : 900);
 const debrisPositions = new Float32Array(debrisCount * 3);
 const debrisAxes = new Float32Array(debrisCount * 3);
 const debrisAngles = new Float32Array(debrisCount);
 const debrisSpinRates = new Float32Array(debrisCount);
 let dustPositions = null;
 let dustSpeeds = null;
+let ambientPositions = null;
+let ambientColors = null;
+let ambientSpeeds = null;
 let lastTriangleWarnAt = 0;
 let radarLastUpdate = 0;
 let lastPriceDriftTick = 0;
@@ -1026,7 +1033,8 @@ function createDeepSpaceEffects() {
     isCoarsePointer,
     flightTempVec,
     createDebrisField,
-    createDustField
+    createDustField,
+    createAmbientParticleField
   }));
 }
 
@@ -1067,6 +1075,28 @@ function createDustField() {
 
 function randomizeDustParticle(index, forwardDistance = 60) {
   randomizeEngineDustParticle({ index, forwardDistance, flightState, flightForward, flightRight, flightUp, dustPositions, dustSpeeds });
+}
+
+function createAmbientParticleField() {
+  ambientPositions = new Float32Array(ambientParticleCount * 3);
+  ambientColors = new Float32Array(ambientParticleCount * 3);
+  ambientSpeeds = new Float32Array(ambientParticleCount);
+  ({ ambientField, ambientPositions, ambientColors, ambientSpeeds } = createEngineAmbientParticleField({
+    THREE,
+    documentRef: document,
+    scene,
+    ambientParticleCount,
+    isCoarsePointer,
+    updateFlightBasis,
+    randomizeAmbient: randomizeAmbientParticle,
+    ambientPositions,
+    ambientColors,
+    ambientSpeeds
+  }));
+}
+
+function randomizeAmbientParticle(index) {
+  randomizeEngineAmbientParticle({ index, flightState, flightForward, flightRight, flightUp, ambientPositions, ambientColors, ambientSpeeds });
 }
 
 function createFlightGameObjects() {
@@ -1480,7 +1510,7 @@ function resetCategoryFilterForFlight() {
   return resetCategoryFilterForFlightModule();
 }
 
-function enterFlightMode() {
+export function enterFlightMode() {
   if (!renderer || !renderer.domElement) return;
   sfxEngine.init();
   sfxEngine.stopStationAmbient();
@@ -3585,8 +3615,10 @@ function updateSpaceEnvironment(dt) {
     scene,
     debrisField,
     dustField,
+    ambientField,
     updateDebris: updateDebrisField,
     updateDust: updateDustField,
+    updateAmbient: updateAmbientParticleField,
     flightState,
     combatState
   });
@@ -3619,6 +3651,21 @@ function updateDustField(dt) {
     flightForward,
     combatState,
     randomizeDust: randomizeDustParticle
+  });
+}
+
+function updateAmbientParticleField(dt) {
+  updateEngineAmbientParticleField({
+    THREE,
+    dt,
+    ambientField,
+    ambientPositions,
+    ambientSpeeds,
+    ambientParticleCount,
+    flightState,
+    flightForward,
+    randomizeAmbient: randomizeAmbientParticle,
+    combatState
   });
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## Flight Performance — lazy startup, controls close, and ambience
+- Typing `ussy` now shows an initialization status and loads the heavy flight runtime on demand instead of during the initial page shell.
+- Three.js now uses the ESM import-map instance as the single global runtime, removing the duplicate Three warning from mixed UMD/ESM loading.
+- Closing the first-flight controls overlay immediately relocks mouselook so the camera and manual controls keep responding.
+- Space ambience now includes a fixed-size, player-relative particulate pool with deterministic region tinting so dust/debris persists throughout long-distance travel without unbounded object creation.
+
 ## Flight Feature — clickable system map routes
 - Opening the system map now releases mouselook, clears held flight inputs, and treats the map as interactive HUD UI.
 - Clicking map nodes plots routes to planets, stations, jump points, and gates; project-backed planets also update the normal nav target when available.

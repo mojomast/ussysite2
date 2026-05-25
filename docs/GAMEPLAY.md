@@ -2,7 +2,7 @@
 
 ## Flight Loop
 
-Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust and strafing. Dock at project nodes to refuel, trade, manage inventory, and accept contracts.
+Type `ussy` to load and enter flight mode. A small initialization status appears while the cockpit, navigation, and ambience systems load on demand. The ship uses mouse look plus keyboard thrust and strafing. Dock at project nodes to refuel, trade, manage inventory, and accept contracts.
 
 ## Controls Reference
 
@@ -70,11 +70,13 @@ Press `Tab` in console or flight mode to open the six-tab settings menu: Audio, 
 
 ## Tutorial Overlay
 
-On first flight entry, the controls reference overlay appears when `gameOrchestrator.tutorialComplete` is false and `tutorialOverlayDismissed` is false. It can be dismissed for the run or marked `DON'T SHOW AGAIN`, which writes the setting through the hash-backed settings store. The overlay does not pause the game loop.
+On first flight entry, the controls reference overlay appears when `gameOrchestrator.tutorialComplete` is false and `tutorialOverlayDismissed` is false. It can be dismissed for the run or marked `DON'T SHOW AGAIN`, which writes the setting through the hash-backed settings store. The overlay does not pause the game loop, and dismissing it immediately relocks mouselook on pointer-lock devices.
 
 ## Star System
 
 The expanded flight system is authored in `js/flight/world.js` with system-space coordinates in `[x, y, z]` units. `worldToThree(posArray, THREE)` is the canonical converter from authored world coordinates to Three.js vectors, and project nodes, planet meshes, proximity checks, navigation, starfield exclusions, stations, HUD nearest-body logic, and persistence all use that unified world-space model.
+
+Ambient dust and fine particles recycle around the player instead of filling the full 50k system with geometry. Region cells tint the particulate field deterministically so long flights retain visual texture without growing object counts.
 
 ### Planets
 

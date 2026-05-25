@@ -85,6 +85,7 @@ function buildOverlay(documentRef) {
         <button class="tutorial-button" id="tutorial-never" type="button">[DON'T SHOW AGAIN]</button>
       </footer>
     </section>`;
+  overlay.addEventListener('pointerdown', event => event.stopPropagation());
   documentRef.body.appendChild(overlay);
   return overlay;
 }
@@ -142,11 +143,11 @@ export function hideTutorialOverlay() {
     autoDismissTimer = null;
   }
   _visible = false;
+  if (deps.isFlightActive?.()) deps.requestPointerLock?.();
   const finish = () => {
     overlay.hidden = true;
     overlay.setAttribute('aria-hidden', 'true');
     overlay.style.opacity = '';
-    if (deps.isFlightActive?.()) deps.requestPointerLock?.();
   };
   animateOverlay(overlay, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in' }, finish) || finish();
   return true;

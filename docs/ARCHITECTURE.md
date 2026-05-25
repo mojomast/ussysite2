@@ -4,16 +4,19 @@
 
 ```text
 index.html
+  -> import-map Three singleton bootstrap
   -> projects.js
   -> js/main.js
-       -> js/engine/core.js
-       -> js/engine/nodes.js
-       -> js/engine/scene.js
-       -> js/engine/starfield.js
-        -> js/economy/trader.js
-        -> js/flight/mission.js
-        -> js/flight/orchestrator.js
-             -> js/tts/engine.js
+       -> typed `ussy` launcher and loading overlay
+       -> dynamic import js/flight/runtime.js
+            -> js/engine/core.js
+            -> js/engine/nodes.js
+            -> js/engine/scene.js
+            -> js/engine/starfield.js
+             -> js/economy/trader.js
+             -> js/flight/mission.js
+             -> js/flight/orchestrator.js
+                  -> js/tts/engine.js
 
 js/flight/state.js
   -> flight integration, mission/director wave spawns, camera roll application
@@ -85,7 +88,7 @@ js/engine/*, js/flight/*, js/ui/*
   -> module boundaries for scene, flight, HUD, mission, messages, and UI code
 ```
 
-`main.js` is the integration point. It binds DOM input, runs animation, and wires modular scene, node registry, mission, trader, combat, and orchestrator systems into the existing flight loop.
+`main.js` is the lightweight launch shell. It listens for the typed `ussy` easter egg, shows the flight loading overlay, dynamically imports `js/flight/runtime.js`, then initializes the scene, DOM input, animation loop, node registry, mission, trader, combat, and orchestrator systems.
 
 ## Flight Data Flow
 
@@ -132,7 +135,7 @@ Actual planet LOD levels are `48 x 32` at distance `0`, `16 x 12` at `LOD_MID`, 
 
 Project node rendering uses `MeshStandardMaterial` on the high-detail LOD, keeps lower LODs on lightweight basic/sprite materials, and uses a Fresnel `ShaderMaterial` glow shell instead of an inverted BackSide approximation. Core node-to-origin lines are batched into a single `LineSegments` geometry, while relationship edges remain a separate batched `LineSegments` mesh with dirty-flagged position buffer updates and a material opacity pulse.
 
-Flight mode adds camera-relative depth cues only while `isFlightActive` is true: three existing `THREE.Points` star layers use different parallax factors, one `InstancedMesh` debris field recycles up to 300 low-poly rocks around the ship, and one `BufferGeometry` dust stream recycles up to 600 particles ahead of the camera. Debris writes `instanceMatrix.needsUpdate` once after the per-instance update loop. Nebula sprites are static additive canvas-gradient backdrops.
+Flight mode adds camera-relative depth cues only while `isFlightActive` is true: three existing `THREE.Points` star layers use different parallax factors, one `InstancedMesh` debris field recycles up to 300 low-poly rocks around the ship, one `BufferGeometry` dust stream recycles up to 600 particles ahead of the camera, and one fixed `Points` ambience pool recycles up to 900 region-tinted particles around the player. Debris writes `instanceMatrix.needsUpdate` once after the per-instance update loop, and ambience uses deterministic cell styling without allocating universe-scale geometry. Nebula sprites are static additive canvas-gradient backdrops.
 
 Weapon VFX use fixed pools: four muzzle lights, six impact rings, four death explosions, long sci-fi laser trail line buffers, and missile exhaust particle buffers. Pool exhaustion logs a warning instead of allocating or throwing, and frame-lifetime updates return objects to the pool automatically. Enemy movement records per-tick velocity on `enemy.userData.velocity` so HUD lead prediction and match-speed assist can use the same combat-object data. Formation roles are assigned on spawn: `aggressor` steers directly toward the player, `flanker` steers toward a side-offset orbit target, and `support` holds longer range. Elites that are not support units add a `flightRight`-relative strafe oscillation after their base role movement.
 
@@ -204,7 +207,7 @@ Mission comms and short barks use separate scheduling channels, but both route t
 
 `js/ui/settings-menu.js` injects `#settings-menu` on configuration and exposes `configureSettingsMenu(deps)`, `openSettingsMenu()`, `closeSettingsMenu()`, and `isSettingsMenuOpen()`. The menu has Audio, Graphics, Gameplay, TTS, Controls, and Accessibility tabs; the Graphics tab exposes bloom strength, threshold, radius, pixel ratio, and particle density. Global keyboard routing stays in `js/input.js`, so settings-menu does not register its own Escape listener.
 
-`js/flight/tutorial-overlay.js` injects `#tutorial-overlay` and exposes `configureTutorialOverlay(deps)`, `showTutorialOverlay()`, `hideTutorialOverlay()`, and `isTutorialOverlayVisible()`. `enterFlightMode()` shows it after startup messages when `gameOrchestrator.tutorialComplete` is false and `settingsState.tutorialOverlayDismissed` is false. It does not pause the game loop.
+`js/flight/tutorial-overlay.js` injects `#tutorial-overlay` and exposes `configureTutorialOverlay(deps)`, `showTutorialOverlay()`, `hideTutorialOverlay()`, and `isTutorialOverlayVisible()`. `enterFlightMode()` shows it after startup messages when `gameOrchestrator.tutorialComplete` is false and `settingsState.tutorialOverlayDismissed` is false. It does not pause the game loop, and dismiss requests pointer lock synchronously from the user action before the fade-out completes.
 
 ## Objectives And Missions
 

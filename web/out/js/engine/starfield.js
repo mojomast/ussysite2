@@ -44,7 +44,8 @@ export function createDeepSpaceEffects({
   isCoarsePointer = false,
   flightTempVec,
   createDebrisField = null,
-  createDustField = null
+  createDustField = null,
+  createAmbientParticleField = null
 } = {}) {
   const starCount = prefersReducedMotion ? 900 : (isCoarsePointer ? 1100 : 2400);
   const starGeo = new Three.BufferGeometry();
@@ -201,6 +202,7 @@ export function createDeepSpaceEffects({
 
   if (typeof createDebrisField === 'function') createDebrisField();
   if (typeof createDustField === 'function') createDustField();
+  if (typeof createAmbientParticleField === 'function') createAmbientParticleField();
 
   const dataRibbonGroup = new Three.Group();
   const ribbonCount = prefersReducedMotion || isCoarsePointer ? 0 : 1;
@@ -361,6 +363,91 @@ export function createDustField({
   return { dustField, dustPositions: targetDustPositions, dustSpeeds: targetDustSpeeds };
 }
 
+export function getAmbientRegionStyle(x = 0, z = 0, cellSize = 9000) {
+  const cellX = Math.floor(x / cellSize);
+  const cellZ = Math.floor(z / cellSize);
+  const hash = Math.abs((cellX * 73856093) ^ (cellZ * 19349663));
+  const palette = [
+    [0.50, 0.95, 1.00],
+    [1.00, 0.76, 0.42],
+    [0.80, 0.56, 1.00],
+    [0.54, 1.00, 0.72]
+  ];
+  return {
+    color: palette[hash % palette.length],
+    speedScale: 0.72 + ((hash >> 3) % 7) * 0.06,
+    verticalBias: (((hash >> 7) % 9) - 4) * 3
+  };
+}
+
+export function randomizeAmbientParticle({
+  index,
+  shellRadius = 1100,
+  flightState,
+  flightForward,
+  flightRight,
+  flightUp,
+  ambientPositions,
+  ambientColors,
+  ambientSpeeds
+} = {}) {
+  const offset = index * 3;
+  const style = getAmbientRegionStyle(flightState.pos.x, flightState.pos.z);
+  const forward = (Math.random() - 0.24) * shellRadius * 1.55;
+  const lateral = (Math.random() - 0.5) * shellRadius * 1.9;
+  const vertical = (Math.random() - 0.5) * shellRadius * 1.12 + style.verticalBias;
+  ambientPositions[offset] = flightState.pos.x + flightForward.x * forward + flightRight.x * lateral + flightUp.x * vertical;
+  ambientPositions[offset + 1] = flightState.pos.y + flightForward.y * forward + flightRight.y * lateral + flightUp.y * vertical;
+  ambientPositions[offset + 2] = flightState.pos.z + flightForward.z * forward + flightRight.z * lateral + flightUp.z * vertical;
+  ambientColors[offset] = style.color[0];
+  ambientColors[offset + 1] = style.color[1];
+  ambientColors[offset + 2] = style.color[2];
+  ambientSpeeds[index] = (0.35 + Math.random() * 1.25) * style.speedScale;
+}
+
+export function createAmbientParticleField({
+  THREE: Three = THREE,
+  documentRef = document,
+  scene,
+  ambientParticleCount,
+  isCoarsePointer = false,
+  updateFlightBasis,
+  randomizeAmbient,
+  ambientPositions,
+  ambientColors,
+  ambientSpeeds
+} = {}) {
+  const ambientGeo = new Three.BufferGeometry();
+  const targetPositions = ambientPositions || new Float32Array(ambientParticleCount * 3);
+  const targetColors = ambientColors || new Float32Array(ambientParticleCount * 3);
+  const targetSpeeds = ambientSpeeds || new Float32Array(ambientParticleCount);
+  const texture = createRadialGlowTexture({
+    THREE: Three,
+    documentRef,
+    inner: 'rgba(255,255,255,0.85)',
+    mid: 'rgba(125,252,255,0.34)',
+    outer: 'rgba(0,0,0,0)',
+    size: 64
+  });
+  updateFlightBasis();
+  for (let i = 0; i < ambientParticleCount; i += 1) randomizeAmbient(i);
+  ambientGeo.setAttribute('position', new Three.BufferAttribute(targetPositions, 3));
+  ambientGeo.setAttribute('color', new Three.BufferAttribute(targetColors, 3));
+  const ambientField = new Three.Points(ambientGeo, new Three.PointsMaterial({
+    size: isCoarsePointer ? 1.15 : 0.82,
+    map: texture,
+    transparent: true,
+    opacity: 0.20,
+    blending: Three.AdditiveBlending,
+    depthWrite: false,
+    vertexColors: true,
+    fog: true
+  }));
+  ambientField.visible = false;
+  scene.add(ambientField);
+  return { ambientField, ambientPositions: targetPositions, ambientColors: targetColors, ambientSpeeds: targetSpeeds };
+}
+
 export function updateDebrisField({
   dt,
   debrisField,
@@ -418,6 +505,40 @@ export function updateDustField({
   dustField.material.opacity = Three.MathUtils.clamp(0.24 + speed * 0.018, 0.28, combatState.afterburnerActive ? 0.82 : 0.58);
 }
 
+export function updateAmbientParticleField({
+  THREE: Three = THREE,
+  dt,
+  ambientField,
+  ambientPositions,
+  ambientSpeeds,
+  ambientParticleCount,
+  flightState,
+  flightForward,
+  randomizeAmbient,
+  combatState
+} = {}) {
+  if (!ambientField || !ambientPositions) return;
+  ambientField.visible = true;
+  const speed = flightState.vel.length();
+  const drift = (0.8 + speed * 0.06) * (combatState.afterburnerActive ? 1.5 : 1);
+  const recycleDistanceSq = 1450 * 1450;
+  for (let i = 0; i < ambientParticleCount; i += 1) {
+    const offset = i * 3;
+    ambientPositions[offset] -= flightForward.x * (drift + ambientSpeeds[i]) * dt;
+    ambientPositions[offset + 1] -= flightForward.y * (drift + ambientSpeeds[i]) * dt;
+    ambientPositions[offset + 2] -= flightForward.z * (drift + ambientSpeeds[i]) * dt;
+    const dx = ambientPositions[offset] - flightState.pos.x;
+    const dy = ambientPositions[offset + 1] - flightState.pos.y;
+    const dz = ambientPositions[offset + 2] - flightState.pos.z;
+    const forward = dx * flightForward.x + dy * flightForward.y + dz * flightForward.z;
+    const distSq = dx * dx + dy * dy + dz * dz;
+    if (forward < -720 || distSq > recycleDistanceSq) randomizeAmbient(i);
+  }
+  ambientField.geometry.attributes.position.needsUpdate = true;
+  ambientField.geometry.attributes.color.needsUpdate = true;
+  ambientField.material.opacity = Three.MathUtils.clamp(0.16 + speed * 0.004, 0.16, combatState.afterburnerActive ? 0.36 : 0.28);
+}
+
 export function updateSpaceEnvironment({
   THREE: Three = THREE,
   dt,
@@ -425,18 +546,22 @@ export function updateSpaceEnvironment({
   scene,
   debrisField,
   dustField,
+  ambientField,
   updateDebris,
   updateDust,
+  updateAmbient,
   flightState,
   combatState
 } = {}) {
   if (!isFlightActive) {
     if (debrisField) debrisField.visible = false;
     if (dustField) dustField.visible = false;
+    if (ambientField) ambientField.visible = false;
     return;
   }
   updateDebris(dt);
   updateDust(dt);
+  updateAmbient(dt);
   if (scene.fog) {
     const speed = flightState.vel.length();
     const targetDensity = combatState.afterburnerActive || speed > 16 ? 0.022 : 0.012;

@@ -58,6 +58,54 @@ body {
   position: relative;
 }
 
+.flight-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(0, 240, 255, 0.10), rgba(3, 6, 15, 0.54) 46%, rgba(3, 6, 15, 0.78));
+}
+
+.flight-loading-overlay[hidden] {
+  display: none;
+}
+
+.flight-loading-panel {
+  min-width: min(420px, calc(100vw - 40px));
+  padding: 22px 24px;
+  border: 1px solid rgba(0, 240, 255, 0.42);
+  background: linear-gradient(135deg, rgba(5, 11, 27, 0.94), rgba(12, 7, 24, 0.88));
+  box-shadow: 0 0 34px rgba(0, 240, 255, 0.20), inset 0 0 22px rgba(0, 240, 255, 0.06);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.flight-loading-kicker,
+.flight-loading-panel small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.flight-loading-panel strong {
+  display: block;
+  margin: 8px 0 10px;
+  color: var(--text-cyan);
+  font-size: clamp(1rem, 3vw, 1.35rem);
+}
+
+.flight-loading-overlay.failed .flight-loading-panel {
+  border-color: rgba(255, 0, 85, 0.58);
+  box-shadow: 0 0 34px rgba(255, 0, 85, 0.20), inset 0 0 22px rgba(255, 0, 85, 0.08);
+}
+
+.flight-loading-overlay.failed .flight-loading-panel strong {
+  color: var(--text-pink);
+}
+
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;

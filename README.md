@@ -10,7 +10,7 @@ Optional local server, backend TTS, and AI gameplay orchestration use `server.mj
 
 ## Easter Egg
 
-Type `ussy` anywhere outside an input field to enter dogfight mode.
+Type `ussy` anywhere outside an input field to lazy-load and enter dogfight mode. A small status overlay appears while flight systems initialize.
 
 ## Combat
 
@@ -58,7 +58,7 @@ Press `Tab` in console or flight mode to open the settings menu. It has Audio, G
 
 ## Tutorial Overlay
 
-Flight mode can show a dismissable controls reference overlay on first entry when the tutorial has not been completed and `tutorialOverlayDismissed` is false. `DISMISS` hides it for the current run; `DON'T SHOW AGAIN` writes the setting into the `:cfg:` hash-backed settings payload.
+Flight mode can show a dismissable controls reference overlay on first entry when the tutorial has not been completed and `tutorialOverlayDismissed` is false. `DISMISS` hides it for the current run and immediately relocks mouselook; `DON'T SHOW AGAIN` writes the setting into the `:cfg:` hash-backed settings payload.
 
 ## File Structure
 
