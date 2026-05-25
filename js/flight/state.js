@@ -176,6 +176,12 @@ import {
 } from '../ui/console.js';
 import { configureNodesOverlay, renderProjectLabels, updateNodeHoverSelection } from '../ui/nodes-overlay.js';
 
+Object.defineProperty(combatState, 'enemies', {
+  value: enemies,
+  enumerable: false,
+  configurable: true
+});
+
 const USSY_PROJECTS = window.USSY_PROJECTS || [];
 const USSY_CATEGORIES = window.USSY_CATEGORIES || {};
 
@@ -3666,7 +3672,7 @@ export function tick(time = 0) {
     updateStationRotations(systemStations, frameDt);
     updateJumpGateRotations(systemJumpGates, frameDt);
       if (!simulationPaused) {
-        updateRouteAutopilot(flightState, { ...combatState, enemies }, frameDt, navGraph);
+        updateRouteAutopilot(flightState, combatState, frameDt, navGraph);
         const gate = isInJumpRange(flightState.pos, systemJumpGates);
         if (gate && performance.now() > flightState.statusUntil) flightState.status = `[ ACTIVATE JUMP GATE: J ] ${gate.userData.name}`;
         // Hunter cooldowns are wall-clock based; do not pass the frame/performance clock.
