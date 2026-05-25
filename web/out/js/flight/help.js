@@ -34,17 +34,17 @@ export const HELP_CONTROLS = {
     ['V', 'Set nav target from crosshair'],
     ['Y', 'Toggle autopilot'],
     ['J', 'Activate jump gate in range'],
-    ['H', 'Hyperspace jump (when unlocked; F1 always opens help)'],
+    ['H', 'Hyperspace jump (when unlocked)'],
     ['M', 'System map'],
     ['L', 'Surface approach / land']
   ],
   UI: [
-    ['H / F1', 'Help overlay'],
+    ['F1', 'Help overlay in flight'],
     ['O', 'Objectives panel'],
     ['I', 'Inventory / manifest'],
     ['B', 'Mission board (when docked or no modal active)'],
     ['U', 'Upgrades / skills (when landed)'],
-    ['[TAB]', 'Settings menu (NEW - added in this feature)'],
+    ['Tab', 'Settings menu'],
     ['Escape', 'Close topmost overlay / exit flight (pointer unlocked)'],
     ['Space', 'Dismiss message / activate focused UI'],
     ['1-6', 'Modal/menu choices']

@@ -37,9 +37,11 @@ Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, 
 | `C` | Evasion roll |
 | `V` | Set nav target from crosshair |
 | `Y` | Toggle autopilot |
+| `J` | Activate jump gate in range |
+| `H` | Hyperspace jump when unlocked |
 | `M` | System map |
 | `L` | Surface approach / land |
-| `H` / `F1` | Help overlay |
+| `F1` | Help overlay in flight |
 | `O` | Objectives panel |
 | `I` | Inventory / manifest |
 | `B` | Mission board when docked or no modal active |

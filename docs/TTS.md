@@ -76,7 +76,7 @@ All in-game voices that play through the main app are routed through this chain.
 
 ## Audio Settings
 
-Open the in-flight audio settings menu with `M`. Use `Shift+M` for the quick TTS mute toggle. Settings are persisted in `localStorage` under `ussy.flight.settings.v1`.
+Open the settings menu with `Tab` and use the Audio or TTS tab for voice settings. Use `Shift+M` for the quick TTS mute toggle. Settings persist in the URL hash `:cfg:` slot.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |

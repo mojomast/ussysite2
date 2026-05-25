@@ -47,7 +47,7 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 
 | Key | Action |
 | --- | --- |
-| `H` / `F1` | Help overlay |
+| `F1` | Help overlay in flight |
 | `O` | Objectives panel |
 | `I` | Inventory / manifest |
 | `B` | Mission board (when docked or no modal active) |
@@ -197,7 +197,7 @@ Mission-capable stations allow `B` to open the board from the docked/landed stat
 
 ## Help Menu
 
-The in-flight pilot manual opens with `H` or `F1`. It contains `CONTROLS`, `HOW TO PLAY`, `UNIVERSE`, and `TIPS & TRICKS` tabs, pauses flight while open, and closes before other overlays when `Escape` is pressed.
+The in-flight pilot manual opens with `F1`; outside flight, `H` can also open help. It contains `CONTROLS`, `HOW TO PLAY`, `UNIVERSE`, and `TIPS & TRICKS` tabs, pauses flight while open, and closes before other overlays when `Escape` is pressed.
 
 ## Post-Combat Debrief
 

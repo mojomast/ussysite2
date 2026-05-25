@@ -88,8 +88,9 @@ function createHelpDocument() {
   };
 }
 
-test('H opens/closes help from input', () => {
+test('H activates hyperspace in flight and F1 toggles help', () => {
   let open = false;
+  let hyperspaceActivations = 0;
   const listeners = {};
   const documentRef = {
     hidden: false,
@@ -102,6 +103,7 @@ test('H opens/closes help from input', () => {
   configureHeroUI({ heroContainer: null });
   configureInput({
     activateConsoleMode() {},
+    activateHyperspaceTravel() { hyperspaceActivations += 1; },
     camTarget: {},
     camera: {},
     canvasContainer,
@@ -142,12 +144,14 @@ test('H opens/closes help from input', () => {
   registerInputListeners();
 
   listeners.keydown({ code: 'KeyH', key: 'h', target: null, preventDefault() { this.prevented = true; } });
-  assert.equal(open, true);
-  listeners.keydown({ code: 'KeyH', key: 'h', target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(hyperspaceActivations, 1);
   assert.equal(open, false);
-  listeners.keydown({ code: '', key: 'H', target: null, preventDefault() { this.prevented = true; } });
-  assert.equal(open, true);
+  listeners.keydown({ code: 'KeyH', key: 'h', repeat: true, target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(hyperspaceActivations, 1);
+  assert.equal(open, false);
   listeners.keydown({ code: '', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(open, true);
+  listeners.keydown({ code: 'F1', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
   assert.equal(open, false);
 });
 

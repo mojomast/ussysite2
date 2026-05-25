@@ -1,5 +1,8 @@
 # Changelog
 
+## Docs Fix — flight controls and deployed mirrors
+- Aligned flight help, settings controls, gameplay docs, and TTS notes with `H` hyperspace, `F1` in-flight help, `J` jump gates, `Tab` settings, `Shift+M` quick TTS mute, and hash-backed `:cfg:` settings persistence.
+
 ## API Hardening — orchestrator and TTS gates
 - Moved same-origin/content-type checks ahead of API quota accounting, applied orchestrator safety gates to live responses, accepted upstream octet-stream TTS audio, and stopped returning upstream TTS details to clients.
 
