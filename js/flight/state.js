@@ -198,6 +198,7 @@ let systemStations = [];
 let systemJumpGates = [];
 let navGraph = null;
 let systemMapKeyWasDown = false;
+let lastSystemMapRenderAt = 0;
 let navigationPanelControlsRegistered = false;
 let surfacePanelControlsRegistered = false;
 let missionBoardControlsRegistered = false;
@@ -684,7 +685,7 @@ export function init() {
     isCoarsePointer,
     isFlightActive: () => isFlightActive,
     missionState,
-    playerShip,
+    playerShip: () => playerShip,
     projectNodes,
     radarCtx,
     radarRange,
@@ -1073,13 +1074,16 @@ function buildProjectNodes() {
     const catColor = cat ? cat.color : '#00f0ff';
     const hexColor = parseInt(catColor.replace('#', '0x'));
     const worldPos = worldToThree(proj.planet?.pos, THREE, DEFAULT_VIEW_WORLD_SCALE);
+    const flightWorldPos = worldToThree(proj.planet?.pos, THREE, FLIGHT_WORLD_DISTANCE_SCALE);
 
     const nodeMesh = createPlanetNodeLOD(hexColor);
     nodeMesh.position.copy(worldPos);
     Object.assign(nodeMesh.userData, {
       project: proj,
       baseScale: nodeBaseScale,
-      worldPos
+      worldPos,
+      compactWorldPos: worldPos.clone(),
+      flightWorldPos
     });
     nodeMesh.userData.visualRadius = planetNodeRadius;
     nodeMesh.scale.setScalar(nodeBaseScale);
@@ -1237,6 +1241,8 @@ function applyFlightUniverseScale(scale) {
   const flightScaleActive = scale === flightUniverseScale;
   const visualScale = flightScaleActive ? planetNodeFlightScale : 1;
   projectNodes.forEach(node => {
+    const targetPos = flightScaleActive ? node.userData.flightWorldPos : node.userData.compactWorldPos;
+    if (targetPos) node.position.copy(targetPos);
     node.scale.setScalar((node.userData.baseScale ?? nodeBaseScale) * visualScale);
     if (node.userData.distantHalo) node.userData.distantHalo.visible = flightScaleActive;
   });
@@ -1878,12 +1884,20 @@ function getSystemMapElements() {
   return { overlay, canvas };
 }
 
-function setSystemMapVisible(visible) {
+function renderActiveSystemMap(now = performance.now()) {
   const { overlay, canvas } = getSystemMapElements();
+  if (!canvas || overlay?.classList.contains('hidden')) return false;
+  lastSystemMapRenderAt = now;
+  return renderSystemMap(canvas, navGraph, flightState, getSurfacePlanetsForHUD(), getSystemStationDefinitions(), getCivilianMapData(flightState.civilianTraffic?.ships), combatState.activeIntercept, now, enemies);
+}
+
+function setSystemMapVisible(visible) {
+  const { overlay } = getSystemMapElements();
   if (!overlay) return false;
   overlay.classList.toggle('hidden', !visible);
   overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
-  if (visible) renderSystemMap(canvas, navGraph, flightState, getSurfacePlanetsForHUD(), getSystemStationDefinitions(), getCivilianMapData(flightState.civilianTraffic?.ships), combatState.activeIntercept);
+  if (visible) renderActiveSystemMap(performance.now());
+  else lastSystemMapRenderAt = 0;
   return true;
 }
 
@@ -2106,9 +2120,12 @@ function handleMissionBoardDecline(result) {
 }
 
 function updateSystemMapInput() {
+  const now = performance.now();
   const keyDown = flightState.keys.has('KeyM');
   if (keyDown && !systemMapKeyWasDown) toggleSystemMap();
   systemMapKeyWasDown = keyDown;
+  const { overlay } = getSystemMapElements();
+  if (overlay && !overlay.classList.contains('hidden') && now - lastSystemMapRenderAt > 250) renderActiveSystemMap(now);
 }
 
 function dockAtSystemStation(stationObject) {
@@ -2869,8 +2886,7 @@ function handleEnemyDestroyed(enemy) {
   } else if (missionState.active && missionState.step !== 'killTutorialBogeys') {
     deactivateCombatObject(enemy);
   } else {
-    if (bountyReward) deactivateCombatObject(enemy);
-    else spawnEnemy(enemy, flightState.score, 1.2 + Math.random() * 2.2);
+    deactivateCombatObject(enemy);
   }
 }
 

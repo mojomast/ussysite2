@@ -66,6 +66,7 @@ export function createWeaponProjectilePools({ THREE: ThreeRef = THREE, gameRoot,
     bullet.userData = {
       active: false,
       velocity: new ThreeRef.Vector3(),
+      prevPosition: new ThreeRef.Vector3(),
       life: 0,
       radius: 0.22,
       maxDistanceSq: playerLaserMaxDistanceSq,
@@ -84,7 +85,7 @@ export function createWeaponProjectilePools({ THREE: ThreeRef = THREE, gameRoot,
   for (let i = 0; i < maxEnemyBullets; i++) {
     const bullet = new ThreeRef.Mesh(enemyBulletGeo, enemyBulletMat.clone());
     bullet.visible = false;
-    bullet.userData = { active: false, velocity: new ThreeRef.Vector3(), life: 0, radius: 0.2 };
+    bullet.userData = { active: false, velocity: new ThreeRef.Vector3(), prevPosition: new ThreeRef.Vector3(), life: 0, radius: 0.2 };
     gameRoot.add(bullet);
     enemyBullets.push(bullet);
   }
@@ -94,7 +95,7 @@ export function createWeaponProjectilePools({ THREE: ThreeRef = THREE, gameRoot,
   for (let i = 0; i < maxPlayerMissiles; i++) {
     const missile = new ThreeRef.Mesh(missileGeo, missileMat.clone());
     missile.visible = false;
-    missile.userData = { active: false, velocity: new ThreeRef.Vector3(), life: 0, radius: 0.36, target: null };
+    missile.userData = { active: false, velocity: new ThreeRef.Vector3(), prevPosition: new ThreeRef.Vector3(), life: 0, radius: 0.36, target: null };
     createMissileExhaust(missile, ThreeRef);
     gameRoot.add(missile);
     playerMissiles.push(missile);
@@ -287,6 +288,7 @@ export function fireBullet(pool, origin, direction, speed, life, options = {}) {
   const bullet = pool.find(item => !item.userData.active);
   if (!bullet) return false;
   bullet.position.copy(origin);
+  bullet.userData.prevPosition?.copy(origin);
   bullet.userData.velocity.copy(direction).multiplyScalar(speed);
   bullet.userData.life = life;
   bullet.userData.damage = options.damage ?? 12;
@@ -312,6 +314,7 @@ export function fireMissile(origin, direction, options = {}) {
   const missile = playerMissiles.find(item => !item.userData.active);
   if (!missile) return false;
   missile.position.copy(origin);
+  missile.userData.prevPosition?.copy(origin);
   missile.userData.velocity.copy(direction).multiplyScalar(options.speed ?? 17);
   missile.userData.life = options.life ?? 4.2;
   missile.userData.damage = options.damage ?? 60;
@@ -451,11 +454,13 @@ export function fireSecondaryWeapon(time) {
 export function updateBullet(bullet, dt) {
   const { flightState } = requireDeps();
   if (!bullet.userData.active) return;
+  bullet.userData.expiredAfterMove = false;
+  bullet.userData.prevPosition?.copy(bullet.position);
   bullet.position.addScaledVector(bullet.userData.velocity, dt);
   updateBulletTrail(bullet);
   bullet.userData.life -= dt;
   if (bullet.userData.life <= 0 || bullet.position.distanceToSquared(flightState.pos) > (bullet.userData.maxDistanceSq ?? 3600)) {
-    deactivateCombatObject(bullet);
+    bullet.userData.expiredAfterMove = true;
   }
 }
 
@@ -480,12 +485,14 @@ export function updateBulletTrail(bullet) {
 export function updateMissile(missile, dt) {
   const { flightState, flightTempVec } = requireDeps();
   if (!missile.userData.active) return;
+  missile.userData.expiredAfterMove = false;
   const target = missile.userData.target && missile.userData.target.userData.active ? missile.userData.target : findNearestEnemy();
   missile.userData.target = target;
   if (target) {
     flightTempVec.copy(target.position).sub(missile.position).normalize();
     missile.userData.velocity.lerp(flightTempVec.multiplyScalar(24), 0.045);
   }
+  missile.userData.prevPosition?.copy(missile.position);
   missile.position.addScaledVector(missile.userData.velocity, dt);
   updateMissileExhaust(missile, dt);
   if (missile.userData.velocity.lengthSq() > 0.001) {
@@ -494,7 +501,7 @@ export function updateMissile(missile, dt) {
   }
   missile.userData.life -= dt;
   if (missile.userData.life <= 0 || missile.position.distanceToSquared(flightState.pos) > 4900) {
-    deactivateCombatObject(missile);
+    missile.userData.expiredAfterMove = true;
   }
 }
 

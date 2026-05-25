@@ -276,10 +276,18 @@ test('renderSystemMap draws active intercept hunters as red triangles', () => {
     obj[name] = (...args) => calls.push([name, ...args]);
     return obj;
   }, {});
+  let fillStyle = null;
+  Object.defineProperty(ctx, 'fillStyle', {
+    get: () => fillStyle,
+    set: value => {
+      fillStyle = value;
+      calls.push(['fillStyle', value]);
+    }
+  });
   const canvas = { width: 400, height: 400, getContext: () => ctx };
   const intercept = { hunters: [{ position: new Vector3(500, 0, 0), userData: { active: true, tier: 'SCOUT' } }] };
 
   assert.equal(renderSystemMap(canvas, navGraph(), flightState(), [], [], [], intercept, 0), true);
-  assert.equal(ctx.fillStyle, '#ff2233');
+  assert.ok(calls.some(call => call[0] === 'fillStyle' && call[1] === '#ff2233'));
   assert.ok(calls.some(call => call[0] === 'closePath'));
 });

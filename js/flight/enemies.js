@@ -32,6 +32,36 @@ function isHyperspeedCombatImmune(flightState) {
   return Boolean(autopilot && typeof autopilot === 'object' && (autopilot.hyperspeedMult ?? 1) > 5);
 }
 
+function segmentIntersectsPoint(projectile, target, radius) {
+  const start = projectile.userData?.prevPosition;
+  const end = projectile.position;
+  if (!end || !target) return false;
+  if (!start) return end.distanceToSquared?.(target) < radius * radius;
+  const sx = start.x;
+  const sy = start.y;
+  const sz = start.z;
+  const dx = end.x - sx;
+  const dy = end.y - sy;
+  const dz = end.z - sz;
+  const lenSq = dx * dx + dy * dy + dz * dz;
+  let t = 1;
+  if (lenSq > 0.000001) {
+    t = ((target.x - sx) * dx + (target.y - sy) * dy + (target.z - sz) * dz) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+  }
+  const cx = sx + dx * t;
+  const cy = sy + dy * t;
+  const cz = sz + dz * t;
+  const ex = target.x - cx;
+  const ey = target.y - cy;
+  const ez = target.z - cz;
+  return (ex * ex + ey * ey + ez * ez) < radius * radius;
+}
+
+function projectileIntersectsEnemy(projectile, enemy, radius) {
+  return segmentIntersectsPoint(projectile, enemy.position, radius);
+}
+
 export function configureEnemies(options) {
   deps = options;
 }
@@ -958,7 +988,7 @@ export function updateCombatObjects(dt) {
     enemies.forEach(enemy => {
       if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0 || !bullet.userData.active) return;
       const radius = enemy.userData.radius + bullet.userData.radius;
-      if (bullet.position.distanceToSquared(enemy.position) < radius * radius) {
+      if (projectileIntersectsEnemy(bullet, enemy, radius)) {
         triggerImpactFlash(bullet.position);
         deactivateCombatObject(bullet);
         if (shouldEnemyEvadeHit(enemy)) return;
@@ -971,7 +1001,7 @@ export function updateCombatObjects(dt) {
   enemyBullets.forEach(bullet => {
     if (!bullet.userData.active) return;
     if (isHyperspeedCombatImmune(flightState)) return;
-    if (bullet.position.distanceToSquared(flightState.pos) < 0.55) {
+    if (segmentIntersectsPoint(bullet, flightState.pos, Math.sqrt(0.55))) {
       deactivateCombatObject(bullet);
       if (combatState.unlocked.has('hull_5') && Math.random() < 0.20) {
         triggerImpactFlash(flightState.pos);
@@ -988,7 +1018,7 @@ export function updateCombatObjects(dt) {
     enemies.forEach(enemy => {
       if (!enemy.userData.active || !enemy.visible || enemy.userData.spawnDelay > 0 || !missile.userData.active) return;
       const radius = enemy.userData.radius + missile.userData.radius;
-      if (missile.position.distanceToSquared(enemy.position) < radius * radius) {
+      if (projectileIntersectsEnemy(missile, enemy, radius)) {
         triggerImpactFlash(missile.position);
         deactivateCombatObject(missile);
         if (shouldEnemyEvadeHit(enemy)) return;
@@ -997,6 +1027,10 @@ export function updateCombatObjects(dt) {
       }
     });
   });
+
+  playerBullets.forEach(bullet => { if (bullet.userData.active && bullet.userData.expiredAfterMove) deactivateCombatObject(bullet); });
+  enemyBullets.forEach(bullet => { if (bullet.userData.active && bullet.userData.expiredAfterMove) deactivateCombatObject(bullet); });
+  playerMissiles.forEach(missile => { if (missile.userData.active && missile.userData.expiredAfterMove) deactivateCombatObject(missile); });
 
   if (flightState.armor <= 0) {
     flightState.status = 'HULL BREACH // LAND FOR REPAIRS';

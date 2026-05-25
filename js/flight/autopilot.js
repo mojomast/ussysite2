@@ -287,7 +287,70 @@ function drawCivilianContact(ctx, point, contact) {
   }
 }
 
-export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null, activeIntercept = null, now = globalThis.performance?.now?.() ?? Date.now()) {
+function nodeColor(node) {
+  if (node?.type === 'station') return '#ffcc00';
+  if (node?.type === 'gate') return '#44ffee';
+  if (node?.type === 'jump') return '#b026ff';
+  return '#00f0ff';
+}
+
+function formatMapDistance(value) {
+  if (!Number.isFinite(value)) return '--';
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}kU` : `${Math.round(value)}u`;
+}
+
+function nearestMapNode(nodes, pos) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const node of nodes) {
+    const dist = distance(pos, getNodePos(node));
+    if (dist < bestDist) {
+      best = node;
+      bestDist = dist;
+    }
+  }
+  return { node: best, dist: bestDist };
+}
+
+function drawMapLabel(ctx, text, x, y, color = 'rgba(226, 246, 255, 0.86)', align = 'left') {
+  if (!ctx.fillText || !text) return;
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.fillText(text, x, y);
+}
+
+function drawMapNode(ctx, node, point, isTarget = false, isNearest = false) {
+  const color = nodeColor(node);
+  const size = isTarget ? 7 : (node?.type === 'planet' ? 4 : 5);
+  ctx.fillStyle = color;
+  ctx.strokeStyle = isTarget ? '#ffffff' : color;
+  ctx.lineWidth = isTarget || isNearest ? 2 : 1;
+  if (node?.type === 'station') {
+    ctx.fillRect(point.x - size, point.y - size, size * 2, size * 2);
+  } else if (node?.type === 'gate' || node?.type === 'jump') {
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y - size);
+    ctx.lineTo(point.x + size, point.y);
+    ctx.lineTo(point.x, point.y + size);
+    ctx.lineTo(point.x - size, point.y);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(point.x, point.y, size, 0, Math.PI * 2); ctx.fill();
+  }
+  if (isTarget || isNearest) {
+    ctx.beginPath(); ctx.arc(point.x, point.y, size + 5, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+function getMapAutopilotState(flightState) {
+  const current = flightState?.autopilot;
+  return current && typeof current === 'object'
+    ? { ...createAutopilotState(), ...current, route: Array.isArray(current.route) ? current.route : [] }
+    : createAutopilotState();
+}
+
+export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null, activeIntercept = null, now = globalThis.performance?.now?.() ?? Date.now(), hostiles = []) {
   const ctx = canvas?.getContext?.('2d');
   if (!ctx) return false;
   const w = canvas.width || 600;
@@ -295,36 +358,89 @@ export function renderSystemMap(canvas, navGraph, flightState, planets = [], sta
   const center = { x: w / 2, y: h / 2 };
   const nodes = [...(navGraph?.values?.() ?? [])];
   const max = Math.max(1, ...nodes.map(node => Math.max(Math.abs(getNodePos(node)?.x ?? 0), Math.abs(getNodePos(node)?.z ?? 0))));
-  const scale = (Math.min(w, h) * 0.42) / max;
+  const scale = (Math.min(w, h) * 0.38) / max;
   const project = pos => ({ x: center.x + (pos?.x ?? 0) * scale, y: center.y + (pos?.z ?? 0) * scale });
+  const autopilot = getMapAutopilotState(flightState);
+  const targetId = autopilot.targetId || flightState?.navNode?.userData?.project?.id || null;
+  const targetNode = targetId ? getNavNode(navGraph, targetId) : null;
+  const nearest = nearestMapNode(nodes, flightState?.pos);
+  const intercept = activeIntercept || flightState?.activeIntercept || flightState?.combatState?.activeIntercept;
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = 'rgba(3, 6, 15, 0.92)';
   ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(0,240,255,0.18)';
+  ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(0,240,255,0.10)';
+  ctx.setLineDash?.([4, 8]);
+  for (let ring = 0.25; ring <= 1; ring += 0.25) {
+    ctx.beginPath(); ctx.arc(center.x, center.y, max * scale * ring, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.setLineDash?.([]);
+  const edgeSeen = new Set();
   for (const node of nodes) {
     const a = project(getNodePos(node));
     for (const edge of node.edges ?? []) {
       const bNode = getNavNode(navGraph, edge.targetId);
       if (!bNode) continue;
+      const key = node.id < bNode.id ? `${node.id}:${bNode.id}` : `${bNode.id}:${node.id}`;
+      if (edgeSeen.has(key)) continue;
+      edgeSeen.add(key);
       const b = project(getNodePos(bNode));
+      const gateEdge = node.type === 'gate' && bNode.type === 'gate';
+      ctx.strokeStyle = gateEdge ? 'rgba(68, 255, 238, 0.42)' : 'rgba(0,240,255,0.12)';
+      ctx.lineWidth = gateEdge ? 2 : 1;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  }
+  if (autopilot.route?.length > 1) {
+    const routePoints = autopilot.route
+      .map(id => getNavNode(navGraph, id))
+      .filter(Boolean)
+      .map(node => project(getNodePos(node)));
+    ctx.strokeStyle = autopilot.routeType === 'HYPERSPACE' ? '#ffffff' : (autopilot.routeType === 'GATE' ? '#44ffee' : '#ffcc00');
+    ctx.lineWidth = 3;
+    if (routePoints.length > 1) {
+      ctx.beginPath();
+      routePoints.forEach((p, index) => {
+        if (index === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
     }
   }
   for (const node of nodes) {
     const p = project(getNodePos(node));
-    ctx.fillStyle = node.type === 'station' ? '#ffcc00' : (node.type === 'jump' ? '#b026ff' : '#00f0ff');
-    ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+    drawMapNode(ctx, node, p, node.id === targetId, node.id === nearest.node?.id);
+    if (node.type === 'gate' || node.type === 'station' || node.id === targetId || node.id === nearest.node?.id) {
+      drawMapLabel(ctx, node.name || node.id, p.x + 8, p.y - 7, node.id === targetId ? '#ffffff' : nodeColor(node));
+    }
   }
   if (flightState?.pos) {
     const p = project(flightState.pos);
     ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill();
+    if (flightState.vel?.lengthSq?.() > 0.01) {
+      const heading = flightState.vel.clone().normalize();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + heading.x * 28, p.y + heading.z * 28); ctx.stroke();
+    }
+    drawMapLabel(ctx, 'YOU', p.x + 9, p.y + 4, '#ffffff');
   }
   for (const contact of civilianContacts || flightState?.civilianTraffic?.mapContacts || []) {
     const p = project(contact.pos);
     drawCivilianContact(ctx, p, contact);
   }
-  const intercept = activeIntercept || flightState?.activeIntercept || flightState?.combatState?.activeIntercept;
+  const interceptHunters = new Set(intercept?.hunters ?? []);
+  for (const enemy of hostiles || []) {
+    if (interceptHunters.has(enemy)) continue;
+    if (!(enemy?.userData?.active ?? enemy?.active ?? true) || enemy.visible === false) continue;
+    const pos = enemy.position || enemy.pos;
+    if (!pos) continue;
+    const p = project(pos);
+    ctx.fillStyle = '#ff3355';
+    drawMapTriangle(ctx, p.x, p.y, enemy.userData?.isBoss ? 8 : 5);
+  }
   if (intercept?.hunters?.length) {
     const blinkAlpha = Math.floor(now / 350) % 2 === 0 ? 1 : 0.38;
     if (ctx.save) ctx.save();
@@ -339,5 +455,17 @@ export function renderSystemMap(canvas, navGraph, flightState, planets = [], sta
     }
     if (ctx.restore) ctx.restore();
   }
+  ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(3, 6, 15, 0.68)';
+  ctx.fillRect(12, 12, 214, 96);
+  ctx.strokeStyle = 'rgba(0,240,255,0.22)';
+  ctx.strokeRect?.(12, 12, 214, 96);
+  drawMapLabel(ctx, 'SYSTEM MAP [M]', 22, 30, '#ffffff');
+  drawMapLabel(ctx, 'white: you / route target', 22, 47, 'rgba(226, 246, 255, 0.82)');
+  drawMapLabel(ctx, 'cyan: gates + planets', 22, 64, '#44ffee');
+  drawMapLabel(ctx, 'yellow: stations / red: hostiles', 22, 81, '#ffcc00');
+  drawMapLabel(ctx, `nearest: ${nearest.node?.name || '--'} ${formatMapDistance(nearest.dist)}`, 22, 98, 'rgba(226, 246, 255, 0.86)');
+  const routeText = targetNode ? `${autopilot.routeModeLabel || 'TARGET'} -> ${targetNode.name || targetNode.id}` : 'no nav target';
+  drawMapLabel(ctx, routeText, 16, h - 18, targetNode ? '#ffcc00' : 'rgba(226, 246, 255, 0.58)');
   return true;
 }

@@ -87,6 +87,10 @@ export function configureHud(options = {}) {
   renderHudControlsBar(deps.documentRef || document);
 }
 
+function resolveLiveValue(value) {
+  return typeof value === 'function' ? value() : value;
+}
+
 export function addKillFeedEntry(text, colorOrOptions = 'var(--cyber-cyan)') {
   if (!text) return combatState.killFeed;
   const options = typeof colorOrOptions === 'object' && colorOrOptions !== null ? colorOrOptions : {};
@@ -448,12 +452,13 @@ export function updateFlightHud(force = false) {
     flightState,
     getProjectNodeName,
     isFlightActive,
-    playerShip,
+    playerShip: playerShipRef,
     skillTree,
     syncCombatCreditsFromTrader,
     ttsEngine
   } = deps;
   if (!flightState || !skillTree) return traderState.fuel;
+  const playerShip = resolveLiveValue(playerShipRef);
   const now = performance.now();
   updateKillFeed(now, documentRef);
   updateBountyHUD(traderState, documentRef);
@@ -592,7 +597,9 @@ export function updateFlightHud(force = false) {
   if (flightThreatEl) {
     const nearestEnemy = typeof findNearestEnemy === 'function' ? findNearestEnemy() : null;
     if (nearestEnemy?.userData?.active) {
-      flightThreatEl.textContent = `${(nearestEnemy.userData.classId || 'scout').toUpperCase()} [${Math.round(playerShip.position.distanceTo(nearestEnemy.position))}u]`;
+      const playerPos = playerShip?.position ?? flightState.pos;
+      const threatDistance = playerPos?.distanceTo ? Math.round(playerPos.distanceTo(nearestEnemy.position)) : 0;
+      flightThreatEl.textContent = `${(nearestEnemy.userData.classId || 'scout').toUpperCase()} [${threatDistance}u]`;
       flightThreatEl.style.color = '#ff3355';
     } else {
       flightThreatEl.textContent = 'NO THREAT';
@@ -668,7 +675,8 @@ export function updateTtsStatusIndicator() {
 }
 
 export function updateFlightCamera() {
-  const { camTarget, flightForward, flightQuat, flightState, flightUp, playerShip, updateFlightBasis } = deps;
+  const { camTarget, flightForward, flightQuat, flightState, flightUp, playerShip: playerShipRef, updateFlightBasis } = deps;
+  const playerShip = resolveLiveValue(playerShipRef);
   updateFlightBasis?.();
   if (playerShip) {
     playerShip.position.copy(flightState.pos);

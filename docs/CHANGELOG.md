@@ -1,5 +1,16 @@
 # Changelog
 
+## Flight Map — useful live system view
+- System map (`M`) now refreshes while open instead of rendering a stale snapshot.
+- Added route highlighting, current target/nearest labels, gate/station shapes, range rings, player heading, hostile markers, and an inline legend.
+- Review hardening: map rendering no longer mutates autopilot state, stale route IDs are ignored safely, hunter markers are not double-drawn, and fast enemy bullets now use swept collision against the player.
+
+## Flight Fix — combat kills and separated planets
+- Fixed free-roam enemy deaths so destroyed ships deactivate instead of instantly respawning in place.
+- Flight mode now moves project nodes from compact portfolio coordinates to FLIGHT_WORLD_DISTANCE_SCALE coordinates, while the main site keeps DEFAULT_VIEW_WORLD_SCALE framing.
+- Fixed tutorial combat startup HUD threat-distance crash by resolving the live player ship lazily and falling back to flight position.
+- Fixed fast player projectiles tunneling through enemies by checking bullet/missile travel segments instead of only the end-of-frame point.
+
 ## Camera Fix — Full ussyverse visible on load
 - Recalculated camera Z from DEFAULT_VIEW_WORLD_SCALE × outermost planet extent
 - sectionCamPositions tightened to preserve full cluster visibility
