@@ -233,8 +233,9 @@ function buildMenu(documentRef) {
         </section>
         <section id="settings-panel-tts" class="settings-panel">
           ${settingToggle('ttsBackendEnabled', 'TTS Backend Enabled')}
-          ${settingRange('ttsRate', 'TTS Rate', 0.5, 2, 0.1)}
-          ${settingRange('ttsPitch', 'TTS Pitch', 0.5, 1.5, 0.05)}
+          ${settingRange('ttsRate', 'Browser TTS Rate', 0.5, 2, 0.1)}
+          ${settingRange('ttsPitch', 'Browser TTS Pitch', 0.5, 1.5, 0.05)}
+          <p class="settings-note">Backend voices may ignore browser rate/pitch.</p>
           <button class="settings-action" id="settings-test-voice" type="button">[TEST VOICE]</button>
         </section>
         <section id="settings-panel-controls" class="settings-panel settings-controls-panel">${renderControlsReference()}</section>

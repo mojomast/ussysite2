@@ -66,7 +66,7 @@ Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust 
 
 ## Settings
 
-Press `Tab` in console or flight mode to open the six-tab settings menu: Audio, Graphics, Gameplay, TTS, Controls, and Accessibility. Settings persist in the URL hash `:cfg:` slot and are restored before flight resources are applied. The menu controls SFX/radio/chatter/TTS volume, TTS backend/rate/pitch, bloom strength/threshold/radius, pixel ratio, particle density, flight assist default, mouse invert, mouse sensitivity, crosshair style, reduced motion, and HUD scale. Graphics slider changes debounce for 80ms before applying renderer and bloom setters.
+Press `Tab` in console or flight mode to open the six-tab settings menu: Audio, Graphics, Gameplay, TTS, Controls, and Accessibility. Settings persist in the URL hash `:cfg:` slot and are restored before flight resources are applied. The menu controls SFX/radio/chatter/TTS volume, backend TTS, browser-local TTS rate/pitch, bloom strength/threshold/radius, pixel ratio, particle density, flight assist default, mouse invert, mouse sensitivity, crosshair style, reduced motion, and HUD scale. Backend TTS voices may ignore the browser-local rate/pitch controls. Graphics slider changes debounce for 80ms before applying renderer and bloom setters.
 
 ## Tutorial Overlay
 

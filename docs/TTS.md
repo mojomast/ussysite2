@@ -76,7 +76,7 @@ All in-game voices that play through the main app are routed through this chain.
 
 ## Audio Settings
 
-Open the settings menu with `Tab` and use the Audio or TTS tab for voice settings. Use `Shift+M` for the quick TTS mute toggle. Settings persist in the URL hash `:cfg:` slot.
+Open the settings menu with `Tab` and use the Audio or TTS tab for voice settings. Use `Shift+M` for the quick TTS mute toggle. Browser TTS rate/pitch are local speech controls; backend voices may ignore them. Settings persist in the URL hash `:cfg:` slot.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |

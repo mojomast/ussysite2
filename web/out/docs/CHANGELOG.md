@@ -1,5 +1,8 @@
 # Changelog
 
+## Docs Fix — browser-local TTS controls
+- Clarified that TTS rate and pitch are browser-local controls and backend voices may ignore them.
+
 ## Flight Fix — mission docking fallbacks
 - Delivery and escort missions now complete from docked, landed, or surface-at-target signals if final approach cancels before autopilot reports arrival.
 - Pointer-lock undocking now clears stale dock state, and standalone station service menus show station names instead of `UNKNOWN`.

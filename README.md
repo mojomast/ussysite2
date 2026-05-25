@@ -156,7 +156,7 @@ The orchestrator now dispatches event types into contracts instead of only showi
 
 ## Audio Settings
 
-Press `Tab` and open the Audio or TTS tabs for radio volume, combat chatter volume, SFX volume, TTS mute, backend TTS, voice rate, and pitch. Radio transmissions and combat barks route through the radio filter chain so clean and distorted voice paths do not mix.
+Press `Tab` and open the Audio or TTS tabs for radio volume, combat chatter volume, SFX volume, TTS mute, backend TTS, and browser-local voice rate/pitch. Backend TTS voices may ignore browser rate/pitch. Radio transmissions and combat barks route through the radio filter chain so clean and distorted voice paths do not mix.
 
 ## SFX Engine
 
