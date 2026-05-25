@@ -156,7 +156,7 @@ import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './sta
 import { createAllJumpGates, isInJumpRange, updateJumpGateRotations } from './jumpgates.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
 import { disengage, ensureAutopilotState, isAutopilotActive, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
-import { getCivilianMapData, spawnCivilianFleet, updateCivilians } from './civilians.js';
+import { spawnCivilianFleet, updateCivilians } from './civilians.js';
 import { checkHunterDestroyed, checkHunterFlee, shouldTriggerIntercept, triggerIntercept } from './hunters.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
 import { bindMissionBoardControls, closeMissionBoard, configureMissionBoardUI, openMissionBoard as openMissionBoardOverlay, renderMissionBoard } from './missionUI.js';
@@ -1899,7 +1899,7 @@ function renderActiveSystemMap(now = performance.now()) {
   const { overlay, canvas } = getSystemMapElements();
   if (!canvas || overlay?.classList.contains('hidden')) return false;
   lastSystemMapRenderAt = now;
-  return renderSystemMap(canvas, navGraph, flightState, getSurfacePlanetsForHUD(), getSystemStationDefinitions(), getCivilianMapData(flightState.civilianTraffic?.ships), combatState.activeIntercept, now, enemies);
+  return renderSystemMap(canvas, navGraph, flightState, undefined, undefined, flightState.civilianTraffic?.mapContacts, combatState.activeIntercept, now, enemies);
 }
 
 function setSystemMapVisible(visible) {
