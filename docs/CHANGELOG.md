@@ -1,7 +1,7 @@
 # Changelog
 
 ## Flight Performance — lazy startup, controls close, and ambience
-- Typing `ussy` now shows an initialization status and loads the heavy flight runtime on demand instead of during the initial page shell.
+- The app shell now waits until first paint before dynamically importing the shared runtime that builds the visible Ussyverse scene.
 - Three.js now uses the ESM import-map instance as the single global runtime, removing the duplicate Three warning from mixed UMD/ESM loading.
 - Closing the first-flight controls overlay immediately relocks mouselook so the camera and manual controls keep responding.
 - Space ambience now includes a fixed-size, player-relative particulate pool with deterministic region tinting so dust/debris persists throughout long-distance travel without unbounded object creation.

@@ -29,7 +29,7 @@ npm run test:tts:contract
 
 `combat-state.test.mjs` covers pure combat phase transitions, death detection, respawn restoration, and orchestrator client-side event gating.
 
-`flight-startup-contract.test.mjs` covers the lazy `ussy` bootstrap contract and the single ESM Three bootstrap markup.
+`flight-startup-contract.test.mjs` covers the dynamic runtime import contract and the single ESM Three bootstrap markup.
 
 `tutorial-overlay.test.mjs` covers pointer-lock relock ordering when the first-flight controls overlay closes.
 

@@ -10,7 +10,7 @@ Optional local server, backend TTS, and AI gameplay orchestration use `server.mj
 
 ## Easter Egg
 
-Type `ussy` anywhere outside an input field to lazy-load and enter dogfight mode. A small status overlay appears while flight systems initialize.
+Type `ussy` anywhere outside an input field to enter dogfight mode.
 
 ## Combat
 

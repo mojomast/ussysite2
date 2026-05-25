@@ -4,7 +4,6 @@ let runtimePromise = null;
 let runtime = null;
 let initialized = false;
 let animationStarted = false;
-let launchBuffer = '';
 
 function animationLoop(time) {
   requestAnimationFrame(animationLoop);
@@ -35,16 +34,16 @@ function nextPaint() {
   return new Promise(resolve => requestAnimationFrame(resolve));
 }
 
-async function loadFlightRuntime() {
+async function loadFlightRuntime({ showLoading = true } = {}) {
   if (!runtimePromise) {
-    setFlightLoading('Initializing flight systems...');
+    if (showLoading) setFlightLoading('Initializing flight systems...');
     await nextPaint();
     runtimePromise = import('./flight/runtime.js');
   }
   runtime = await runtimePromise;
   globalThis.__USSY_SFX__ = runtime.sfxEngine;
   if (!initialized) {
-    setFlightLoading('Calibrating starfield and controls...');
+    if (showLoading) setFlightLoading('Calibrating starfield and controls...');
     await nextPaint();
     runtime.init();
     initialized = true;
@@ -58,7 +57,7 @@ async function loadFlightRuntime() {
 
 async function launchFlight() {
   try {
-    const loadedRuntime = await loadFlightRuntime();
+    const loadedRuntime = await loadFlightRuntime({ showLoading: true });
     hideFlightLoading();
     loadedRuntime.enterFlightMode();
   } catch (error) {
@@ -67,24 +66,11 @@ async function launchFlight() {
   }
 }
 
-function isTypingTarget(target) {
-  const tag = target?.tagName?.toLowerCase?.();
-  return tag === 'input' || tag === 'textarea' || target?.isContentEditable;
-}
-
-function onLaunchKeydown(event) {
-  if (event.defaultPrevented || event.repeat || isTypingTarget(event.target)) return;
-  if (event.key.length !== 1) return;
-  launchBuffer = `${launchBuffer}${event.key.toLowerCase()}`.slice(-4);
-  if (launchBuffer === 'ussy') {
-    launchBuffer = '';
-    event.preventDefault();
-    launchFlight();
-  }
-}
-
 function bootstrap() {
-  document.addEventListener('keydown', onLaunchKeydown);
+  loadFlightRuntime({ showLoading: false }).catch(error => {
+    console.error('Ussyverse failed to initialize', error);
+    setFlightLoading('Ussyverse failed to initialize. Reload and try again.', true);
+  });
 }
 
 document.addEventListener('DOMContentLoaded', bootstrap, { once: true });

@@ -7,8 +7,7 @@ index.html
   -> import-map Three singleton bootstrap
   -> projects.js
   -> js/main.js
-       -> typed `ussy` launcher and loading overlay
-       -> dynamic import js/flight/runtime.js
+       -> first-paint dynamic import js/flight/runtime.js
             -> js/engine/core.js
             -> js/engine/nodes.js
             -> js/engine/scene.js
@@ -88,7 +87,7 @@ js/engine/*, js/flight/*, js/ui/*
   -> module boundaries for scene, flight, HUD, mission, messages, and UI code
 ```
 
-`main.js` is the lightweight launch shell. It listens for the typed `ussy` easter egg, shows the flight loading overlay, dynamically imports `js/flight/runtime.js`, then initializes the scene, DOM input, animation loop, node registry, mission, trader, combat, and orchestrator systems.
+`main.js` is the lightweight browser shell. It waits for the first paint, dynamically imports `js/flight/runtime.js`, then initializes the visible scene, DOM input, animation loop, node registry, mission, trader, combat, and orchestrator systems. The current portfolio scene and flight systems still share this runtime boundary.
 
 ## Flight Data Flow
 

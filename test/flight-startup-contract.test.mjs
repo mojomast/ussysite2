@@ -7,7 +7,7 @@ test('main lazily imports flight runtime after launch code', async () => {
 
   assert.doesNotMatch(source, /^import\s+.*['"]\.\/flight\/runtime\.js['"]/m);
   assert.match(source, /import\('\.\/flight\/runtime\.js'\)/);
-  assert.match(source, /launchBuffer === 'ussy'/);
+  assert.match(source, /DOMContentLoaded/);
 });
 
 test('index uses ESM Three singleton bootstrap only', async () => {

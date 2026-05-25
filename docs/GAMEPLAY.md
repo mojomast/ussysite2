@@ -2,7 +2,7 @@
 
 ## Flight Loop
 
-Type `ussy` to load and enter flight mode. A small initialization status appears while the cockpit, navigation, and ambience systems load on demand. The ship uses mouse look plus keyboard thrust and strafing. Dock at project nodes to refuel, trade, manage inventory, and accept contracts.
+Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust and strafing. Dock at project nodes to refuel, trade, manage inventory, and accept contracts.
 
 ## Controls Reference
 
