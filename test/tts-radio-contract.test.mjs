@@ -23,6 +23,16 @@ const model = extractStringConfig('model');
 const voiceId = extractStringConfig('voiceId');
 const audioFormat = extractStringConfig('audioFormat');
 
+async function importAudioForBehaviorTest() {
+  globalThis.window ??= {};
+  globalThis.window.speechSynthesis ??= { cancel() {}, getVoices: () => [] };
+  globalThis.window.setTimeout ??= setTimeout;
+  globalThis.window.clearTimeout ??= clearTimeout;
+  globalThis.document ??= { addEventListener() {} };
+  globalThis.SpeechSynthesisUtterance ??= class SpeechSynthesisUtterance {};
+  return import(`../js/flight/audio.js?behavior=${Date.now()}-${Math.random()}`);
+}
+
 test('browser TTS config uses the local backend endpoint', () => {
   assert.equal(model, 'hexgrad/kokoro-82m');
   assert.equal(voiceId, 'onyx');
@@ -49,6 +59,26 @@ test('browser request builder sends only speech options to backend', () => {
   assert.match(appSource, /voiceId: persona\.voiceId \|\| ttsConfig\.voiceId/);
   assert.match(appSource, /format: ttsConfig\.audioFormat/);
   assert.match(appSource, /speed: persona\.rate \?\? 1\.0/);
+});
+
+test('radio text preprocessing removes markup and speaks ratios naturally', async () => {
+  const { preprocessRadioText } = await importAudioForBehaviorTest();
+
+  assert.equal(
+    preprocessRadioText('OBJECTIVE **Dock** at [Project Relay](/map) 3/5 & confirm / launch'),
+    'OBJECTIVE, Dock at Project Relay three of five and confirm, launch'
+  );
+});
+
+test('TTS priority helper ranks mission/high above normal and bark/low below', async () => {
+  const { getTtsPriorityRank } = await importAudioForBehaviorTest();
+
+  assert.equal(getTtsPriorityRank('mission'), 2);
+  assert.equal(getTtsPriorityRank('high'), 2);
+  assert.equal(getTtsPriorityRank('normal'), 1);
+  assert.equal(getTtsPriorityRank(), 1);
+  assert.equal(getTtsPriorityRank('bark'), 0);
+  assert.equal(getTtsPriorityRank('low'), 0);
 });
 
 test('game messages wait for TTS audio start before typewriter text advances', () => {

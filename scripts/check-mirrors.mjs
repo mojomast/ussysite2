@@ -7,12 +7,20 @@ const mirrorPairs = [
   ['docs/ARCHITECTURE.md', 'web/out/docs/ARCHITECTURE.md'],
   ['docs/CHANGELOG.md', 'web/out/docs/CHANGELOG.md'],
   ['docs/GAMEPLAY.md', 'web/out/docs/GAMEPLAY.md'],
+  ['index.css', 'web/out/index.css'],
+  ['index.html', 'web/out/index.html'],
   ['js/engine', 'web/out/js/engine'],
+  ['js/input.js', 'web/out/js/input.js'],
+  ['js/main.js', 'web/out/js/main.js'],
+  ['js/ui', 'web/out/js/ui'],
+  ['js/flight/runtime.js', 'web/out/js/flight/runtime.js'],
   ['js/flight/state.js', 'web/out/js/flight/state.js'],
   ['js/flight/missions.js', 'web/out/js/flight/missions.js'],
   ['js/flight/hud.js', 'web/out/js/flight/hud.js'],
   ['js/flight/autopilot.js', 'web/out/js/flight/autopilot.js'],
-  ['js/ui/nodes-overlay.js', 'web/out/js/ui/nodes-overlay.js'],
+  ['js/flight/planets.js', 'web/out/js/flight/planets.js'],
+  ['js/flight/starfield.js', 'web/out/js/flight/starfield.js'],
+  ['js/flight/navgraph.js', 'web/out/js/flight/navgraph.js'],
 ];
 
 async function pathType(relativePath) {
