@@ -8,19 +8,23 @@ class Vector3 {
   addScaledVector(v, s) { this.x += v.x * s; this.y += v.y * s; this.z += v.z * s; return this; }
   multiplyScalar(s) { this.x *= s; this.y *= s; this.z *= s; return this; }
   lerp(v, t) { this.x += (v.x - this.x) * t; this.y += (v.y - this.y) * t; this.z += (v.z - this.z) * t; return this; }
+  copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
+  set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
 }
 
 globalThis.THREE = { Vector3 };
 
 const {
   AUTOPILOT_STATES,
+  appendCourse,
   canEngageAutopilot,
   createAutopilotState,
   disengage,
   getSystemMapNodeHitTargets,
   hitTestSystemMapNode,
   plotCourse,
-  updateAutopilot
+  updateAutopilot,
+  updateStarfieldWarp
 } = await import('../js/flight/autopilot.js');
 const { COMBAT_ZONE_RADIUS, HYPERSPEED_MULTIPLIER_MAX } = await import('../js/flight/world.js');
 
@@ -49,6 +53,32 @@ test('plotCourse returns false and sets blockedReason when no route found', () =
   const navGraph = graph();
   navGraph.get('a').edges = [];
   assert.equal(plotCourse(flightState, navGraph, 'c'), false);
+  assert.equal(flightState.autopilot.blockedReason, 'NO ROUTE FOUND');
+});
+
+test('appendCourse extends an existing plotted route without duplicating the seam', () => {
+  const flightState = state();
+  assert.equal(plotCourse(flightState, graph(), 'b'), true);
+  assert.deepEqual(flightState.autopilot.route, ['a', 'b']);
+  assert.equal(appendCourse(flightState, graph(), 'c'), true);
+  assert.deepEqual(flightState.autopilot.route, ['a', 'b', 'c']);
+  assert.equal(flightState.autopilot.targetId, 'c');
+  assert.equal(flightState.autopilot.routeModeLabel, 'MULTI-STOP ROUTE');
+});
+
+test('appendCourse falls back to plotCourse when no route exists', () => {
+  const flightState = state();
+  assert.equal(appendCourse(flightState, graph(), 'c'), true);
+  assert.deepEqual(flightState.autopilot.route, ['a', 'b', 'c']);
+});
+
+test('appendCourse leaves the current route intact when extension is unreachable', () => {
+  const flightState = state();
+  const navGraph = graph();
+  assert.equal(plotCourse(flightState, navGraph, 'b'), true);
+  navGraph.get('b').edges = [];
+  assert.equal(appendCourse(flightState, navGraph, 'c'), false);
+  assert.deepEqual(flightState.autopilot.route, ['a', 'b']);
   assert.equal(flightState.autopilot.blockedReason, 'NO ROUTE FOUND');
 });
 
@@ -91,6 +121,70 @@ test('hyperspeed lerp after 2s approaches max multiplier', () => {
   assert.equal(flightState.autopilot.hyperspeedMult, HYPERSPEED_MULTIPLIER_MAX);
 });
 
+test('gate waypoints wait for activation range before jumping', () => {
+  const navGraph = new Map([
+    ['start', { id: 'start', type: 'station', pos: new Vector3(0, 0, 0), edges: [] }],
+    ['gate-a', { id: 'gate-a', type: 'gate', pos: new Vector3(1000, 0, 0), activationRange: 12, edges: [] }],
+    ['gate-b', { id: 'gate-b', type: 'gate', pos: new Vector3(5000, 0, 0), activationRange: 12, edges: [] }],
+    ['end', { id: 'end', type: 'station', pos: new Vector3(5100, 0, 0), activationRange: 120, edges: [] }]
+  ]);
+  const flightState = state(new Vector3(850, 0, 0));
+  flightState.autopilot = { ...createAutopilotState(), state: 'ENGAGED', targetId: 'end', route: ['start', 'gate-a', 'gate-b', 'end'], routeIndex: 1 };
+
+  updateAutopilot(flightState, {}, 0.1, navGraph);
+  assert.equal(flightState.autopilot.routeIndex, 1);
+  assert.ok(flightState.pos.x > 850 && flightState.pos.x < 1000);
+
+  flightState.pos = new Vector3(989, 0, 0);
+  updateAutopilot(flightState, {}, 0.1, navGraph);
+  assert.equal(flightState.autopilot.routeIndex, 3);
+  assert.equal(flightState.pos.x, 5000);
+});
+
+test('station destinations do not arrive outside docking range', () => {
+  const navGraph = graph();
+  navGraph.get('c').activationRange = 120;
+  const flightState = state(new Vector3(1850, 0, 0));
+  flightState.autopilot = { ...createAutopilotState(), state: 'ENGAGED', targetId: 'c', route: ['b', 'c'], routeIndex: 1 };
+
+  updateAutopilot(flightState, {}, 0.1, navGraph);
+  assert.notEqual(flightState.autopilot.state, AUTOPILOT_STATES.ARRIVED);
+});
+
+test('final station arrival stops velocity and shows arrival status', () => {
+  const navGraph = graph();
+  navGraph.get('c').activationRange = 120;
+  navGraph.get('c').name = 'Hub Alpha';
+  const flightState = state(new Vector3(1900, 0, 0));
+  flightState.vel = new Vector3(9, 0, 0);
+  flightState.autopilot = { ...createAutopilotState(), state: 'ENGAGED', targetId: 'c', route: ['b', 'c'], routeIndex: 1, hyperspeedMult: 5 };
+
+  updateAutopilot(flightState, {}, 0.1, navGraph);
+
+  assert.equal(flightState.autopilot.state, AUTOPILOT_STATES.ARRIVED);
+  assert.equal(flightState.autopilot.hyperspeedMult, 1);
+  assert.deepEqual({ x: flightState.vel.x, y: flightState.vel.y, z: flightState.vel.z }, { x: 0, y: 0, z: 0 });
+  assert.equal(flightState.status, 'ARRIVED: Hub Alpha');
+  assert.equal(flightState.autopilot.arrivalNodeId, 'c');
+});
+
+test('updateStarfieldWarp drives shader uniform and streak opacity', () => {
+  const starfield = {
+    material: { uniforms: { uWarp: { value: 0 } } },
+    scale: { z: 1 },
+    streaks: { visible: false, material: { opacity: 0 } },
+    updateStreaksCalled: false,
+    updateStreaks() { this.updateStreaksCalled = true; }
+  };
+
+  updateStarfieldWarp(starfield, new Vector3(0, 0, -1), HYPERSPEED_MULTIPLIER_MAX);
+
+  assert.equal(starfield.material.uniforms.uWarp.value, 1);
+  assert.equal(starfield.streaks.visible, true);
+  assert.ok(starfield.streaks.material.opacity > 0.8);
+  assert.equal(starfield.updateStreaksCalled, true);
+});
+
 test('system map hit targets use rendered node projection', () => {
   const canvas = { width: 600, height: 600 };
   const targets = getSystemMapNodeHitTargets(canvas, graph());
@@ -108,4 +202,13 @@ test('system map hit test converts client coordinates through canvas bounds', ()
   };
   assert.equal(hitTestSystemMapNode(canvas, graph(), 274, 170)?.id, 'c');
   assert.equal(hitTestSystemMapNode(canvas, graph(), 25, 35), null);
+});
+
+test('system map projection respects zoom and pan viewport', () => {
+  const canvas = { width: 600, height: 600 };
+  const targets = getSystemMapNodeHitTargets(canvas, graph(), { zoom: 2, offsetX: -20, offsetY: 10 });
+
+  assert.equal(targets[0].x, 280);
+  assert.equal(targets[0].y, 310);
+  assert.equal(targets[2].x, 736);
 });

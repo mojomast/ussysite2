@@ -369,22 +369,46 @@ export function updateNavHUD(flightState, combatStateArg, force = false, documen
   const el = id => documentRef?.getElementById?.(id);
   const text = (id, value) => { const node = el(id); if (node && node.textContent !== value) node.textContent = value; };
   const active = isAutopilotActive(flightState);
-  const targetName = autopilot.targetId || (flightState.navNode ? (deps.getProjectNodeName?.(flightState.navNode) || 'TARGET') : '-- NO TARGET --');
-  const distance = Number.isFinite(flightState.navDistance) ? `${Math.round(flightState.navDistance)}u` : '--';
-  const hops = Array.isArray(autopilot.route) && autopilot.route.length ? `${Math.max(0, autopilot.route.length - 1)} HOPS` : '--';
+  const route = Array.isArray(autopilot.route) ? autopilot.route : [];
+  const nodeLabel = id => deps.getNavNodeLabel?.(id) || id || 'UNKNOWN';
+  const nodeType = id => deps.getNavNodeType?.(id) || 'unknown';
+  const targetName = autopilot.targetId ? nodeLabel(autopilot.targetId) : (flightState.navNode ? (deps.getProjectNodeName?.(flightState.navNode) || 'TARGET') : '-- NO TARGET --');
+  const routeDistance = autopilot.targetPos && flightState.pos?.distanceTo ? flightState.pos.distanceTo(autopilot.targetPos) : NaN;
+  const distance = Number.isFinite(routeDistance)
+    ? `${Math.round(routeDistance)}u`
+    : (Number.isFinite(flightState.navDistance) ? `${Math.round(flightState.navDistance)}u` : '--');
+  const hops = route.length ? `${Math.max(0, route.length - 1)} HOPS` : '--';
   const status = autopilot.blockedReason || (active ? `AUTOPILOT ${autopilot.state}` : 'AUTOPILOT OFFLINE');
+  let eta = flightState.navEta || '--';
+  if ((!eta || eta === '--') && autopilot.targetPos && flightState.pos?.distanceTo) {
+    const speed = Math.max(1, (flightState.thrust ?? 14) * Math.max(1, autopilot.hyperspeedMult ?? 1));
+    eta = `${Math.ceil(flightState.pos.distanceTo(autopilot.targetPos) / speed)}s`;
+  }
+  const routeIndex = Math.max(0, Math.min(route.length - 1, autopilot.routeIndex ?? 0));
+  const itinerary = route.length
+    ? route.map((id, index) => {
+      const marker = index < routeIndex ? '✓' : (index === routeIndex ? '▶' : '•');
+      const type = nodeType(id).toUpperCase();
+      return `${marker} ${nodeLabel(id)} [${type}]`;
+    }).join('\n')
+    : '--';
   text('nav-target-name', targetName);
   text('nav-distance', distance);
-  text('nav-eta', `ETA ${flightState.navEta || '--'}`);
+  text('nav-eta', `ETA ${eta}`);
   text('nav-route-hops', hops);
   text('nav-autopilot-status', status);
   text('nav-panel-state', autopilot.state);
   text('nav-panel-target', targetName);
-  text('nav-panel-route', Array.isArray(autopilot.route) && autopilot.route.length ? autopilot.route.join(' > ') : '--');
+  text('nav-panel-route', route.length ? route.map(nodeLabel).join(' > ') : '--');
+  text('nav-route-list', itinerary);
   text('nav-panel-speed', `${(autopilot.hyperspeedMult ?? 1).toFixed(1)}x`);
   text('nav-panel-blocked', autopilot.blockedReason || (combatStateArg?.bossActive ? 'BOSS ACTIVE' : '--'));
   const panel = el('nav-panel');
-  if (panel) panel.classList.toggle('autopilot-active', active);
+  if (panel) {
+    panel.classList.toggle('hidden', !(active || route.length || flightState.navNode));
+    panel.classList.toggle('autopilot-active', active);
+    panel.classList.toggle('gate-route', autopilot.routeType === 'GATE');
+  }
   el('nav-engage-btn')?.classList.toggle('hidden', active);
   el('nav-abort-btn')?.classList.toggle('hidden', !active);
   return true;
@@ -476,6 +500,20 @@ export function updateSurfaceHUD(flightState, planets = [], documentRef = deps.d
   text('surface-planet', name.toUpperCase());
   text('surface-services', serviceText);
   return { state, planet, services };
+}
+
+export function updateStationDockHUD(flightState, station = null, distance = Infinity, documentRef = deps.documentRef || document) {
+  const el = id => documentRef?.getElementById?.(id);
+  const panel = el('station-dock-hint');
+  const active = Boolean(station && !flightState?.landed && Number.isFinite(distance));
+  setPanelActive(panel, active);
+  const name = station?.userData?.name || station?.name || station?.id || '--';
+  const range = Number.isFinite(distance) ? `${Math.round(distance)}u` : '--';
+  const nameEl = el('station-dock-name');
+  const rangeEl = el('station-dock-range');
+  if (nameEl) nameEl.textContent = String(name).toUpperCase();
+  if (rangeEl) rangeEl.textContent = range;
+  return { active, station, distance };
 }
 
 export function updateFlightHud(force = false) {
@@ -574,6 +612,10 @@ export function updateFlightHud(force = false) {
   text('flight-sp', `SP:${combatState.skillPoints}`);
   text('flight-weapon-primary', WEAPON_DEFS.find(weapon => weapon.id === combatState.primaryWeapon)?.name || '--');
   text('flight-weapon-secondary', WEAPON_DEFS.find(weapon => weapon.id === combatState.secondaryWeapon)?.name || '--');
+  text('flight-crosshair-c', flightState.crosshairNode ? `${getProjectNodeName(flightState.crosshairNode)} // PRESS V` : 'NO PROJECT');
+  text('flight-nav-target-c', flightState.navNode ? `${getProjectNodeName(flightState.navNode)} ${Math.round(flightState.navDistance)}u` : (autopilot.targetId ? `ROUTE ${deps.getNavNodeLabel?.(autopilot.targetId) || autopilot.targetId}` : 'NONE'));
+  text('flight-weapon-primary-c', WEAPON_DEFS.find(weapon => weapon.id === combatState.primaryWeapon)?.name || '--');
+  text('flight-weapon-secondary-c', WEAPON_DEFS.find(weapon => weapon.id === combatState.secondaryWeapon)?.name || '--');
 
   const reticleShieldArch = el('reticle-shield-arch');
   if (reticleShieldArch) reticleShieldArch.style.strokeDashoffset = String(Math.max(0, 220 - (220 * (flightState.shield / maxShield))));

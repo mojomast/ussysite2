@@ -253,7 +253,7 @@ export function updateFlight(time = 0) {
     || (flightState.throttleEnabled && flightState.throttleLevel > 0)
     || isAutopilotActive(flightState);
   const fuelDrainScale = 1 + flightState.vel.length() * 0.012;
-  if (updateFuelDrain(dt * fuelDrainScale, isThrusting) && !flightState.fuelDepleted) {
+  if (updateFuelDrain(dt * fuelDrainScale, shouldDrainFuelForFlight(flightState, isThrusting)) && !flightState.fuelDepleted) {
     flightState.fuelDepleted = true;
     flightState.thrust = 2;
     flightState.strafe = 1;
@@ -307,6 +307,12 @@ export function drainFuelForThrust(fuelState, dt, isThrusting) {
   fuelState.fuel = Math.max(0, fuelState.fuel - (fuelState.fuelPerSecond ?? 0.35) * dt);
   fuelState.fuelDepleted = fuelState.fuel <= 0;
   return fuelState;
+}
+
+export function shouldDrainFuelForFlight(state, isThrusting) {
+  if (!isThrusting) return false;
+  const autopilot = state?.autopilot && typeof state.autopilot === 'object' ? state.autopilot : null;
+  return !(isAutopilotActive(state) && autopilot?.routeType === 'GATE');
 }
 
 export function applyVelocityCapAndDrag(state, dt, boost = 1) {

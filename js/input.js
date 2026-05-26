@@ -37,8 +37,9 @@ export const KEY_MAP = Object.freeze({
   V: 'Set nav target from crosshair',
   Y: 'Toggle autopilot',
   J: 'Activate jump gate in range',
-  H: 'Hyperspace jump (when unlocked)',
-  M: 'System map; click nodes to plot routes',
+  H: 'Help overlay in flight',
+  'Shift+H': 'Hyperspace jump (when unlocked)',
+  M: 'System map; click nodes for waypoint actions',
   L: 'Surface approach / land',
   F1: 'Help overlay in flight',
   O: 'Objectives panel',
@@ -46,7 +47,7 @@ export const KEY_MAP = Object.freeze({
   B: 'Mission board (when docked or no modal active)',
   U: 'Upgrades / skills (when landed)',
   Tab: 'Settings menu',
-  Escape: 'Close topmost overlay / exit flight (pointer unlocked)',
+  Escape: 'Close topmost overlay / pause flight',
   Space: 'Dismiss message / activate focused UI',
   '1-6': 'Modal/menu choices',
   '"ussy" (typed)': 'Enter flight mode from console',
@@ -164,6 +165,39 @@ function isTypingTarget(target) {
   return Boolean(target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]'));
 }
 
+function isVisibleElement(element) {
+  return Boolean(element && !element.hidden && !(element.classList?.contains?.('hidden')));
+}
+
+function isFlightUiOpen(documentRef = document) {
+  const messageRoot = documentRef.getElementById?.('game-message-system');
+  if (messageRoot?.classList?.contains?.('active')) return true;
+  const selectors = [
+    'system-map-overlay',
+    'help-menu',
+    'settings-menu',
+    'inventory-panel',
+    'loadout-panel',
+    'mission-board-overlay',
+    'trade-panel',
+    'station-menu',
+    'tutorial-overlay'
+  ];
+  return selectors.some(id => isVisibleElement(documentRef.getElementById?.(id)));
+}
+
+function isFlightUiTarget(target) {
+  return Boolean(target?.closest?.('.hud-panel, .hud-interactive, #game-message-system, #system-map-overlay, #help-menu, #settings-menu, #inventory-panel, #loadout-panel, #mission-board-overlay, #trade-panel, #station-menu, #tutorial-overlay'));
+}
+
+function releasePointerLockForUi(documentRef, renderer) {
+  if (documentRef?.pointerLockElement === renderer?.domElement && documentRef.exitPointerLock) {
+    documentRef.exitPointerLock();
+  }
+  flightState.pointerLocked = false;
+  clearFlightInput();
+}
+
 export function isBackOrCloseKey(event) {
   return event?.code === 'Escape' || event?.code === 'Backspace';
 }
@@ -227,9 +261,12 @@ function onPointerLockChange() {
   documentRef.body.classList.toggle('pointer-unlocked', isFlightActive() && !flightState.pointerLocked);
   if (isFlightActive()) {
     if (flightState.pointerLocked) {
-      if (flightState.landed && typeof onUndock === 'function') onUndock();
-      flightState.landed = false;
-      flightState.status = `MOUSELOOK ${flightState.view.toUpperCase()} VIEW`;
+      if (flightState.landed) {
+        flightState.status = 'DOCKED. SELECT UNDOCK BEFORE RECAPTURING MOUSELOOK.';
+        if (documentRef.exitPointerLock) documentRef.exitPointerLock();
+      } else {
+        flightState.status = `MOUSELOOK ${flightState.view.toUpperCase()} VIEW`;
+      }
     } else if (performance.now() > flightState.statusUntil) {
       flightState.status = 'CLICK VIEWPORT TO RECAPTURE';
     }
@@ -257,10 +294,12 @@ function onGlobalKeyDown(event) {
     hideTutorialOverlay,
     openAudioSettingsMenu,
     openMissionBoard,
+    openPauseMenu,
     openSettingsMenu,
     openSkillTree,
     openStationMenu,
     radioChain,
+    renderer,
     setNavigationFromCrosshair,
     showFactionMission,
     toggleAutopilot,
@@ -309,7 +348,7 @@ function onGlobalKeyDown(event) {
     }
   }
 
-  if (isFlightActive() && event.code === 'KeyH' && typeof activateHyperspaceTravel === 'function') {
+  if (isFlightActive() && event.code === 'KeyH' && event.shiftKey && typeof activateHyperspaceTravel === 'function') {
     event.preventDefault();
     if (!event.repeat) activateHyperspaceTravel();
     return;
@@ -325,11 +364,6 @@ function onGlobalKeyDown(event) {
 
   if (!isFlightActive()) return;
   if (typeof unlockAudio === 'function') unlockAudio();
-
-  if (flightState.paused) {
-    event.preventDefault();
-    return;
-  }
 
   if (isBackOrCloseKey(event)) {
     const loadoutPanel = documentRef.getElementById('loadout-panel');
@@ -349,6 +383,10 @@ function onGlobalKeyDown(event) {
       event.preventDefault();
       systemMapOverlay.classList.add('hidden');
       systemMapOverlay.setAttribute('aria-hidden', 'true');
+      if (!isFlightUiOpen(documentRef) && renderer?.domElement?.requestPointerLock) {
+        const lockRequest = renderer.domElement.requestPointerLock();
+        lockRequest?.catch?.(() => {});
+      }
       return;
     }
   }
@@ -360,6 +398,10 @@ function onGlobalKeyDown(event) {
   if (isBackOrCloseKey(event) && gameMessageState.active) {
     event.preventDefault();
     dismissGameMessage();
+    return;
+  }
+  if (flightState.paused) {
+    event.preventDefault();
     return;
   }
   if (event.code === 'Escape' && typeof handleSurfaceEscape === 'function' && handleSurfaceEscape()) {
@@ -437,9 +479,9 @@ function onGlobalKeyDown(event) {
     }
     return;
   }
-  if (event.code === 'Escape' && !flightState.pointerLocked) {
+  if (event.code === 'Escape') {
     event.preventDefault();
-    exitFlightMode();
+    if (!event.repeat && typeof openPauseMenu === 'function') openPauseMenu();
     return;
   }
   if (manualFlightKeys.has(event.code)) disableAutopilot('AUTOPILOT MANUAL OVERRIDE');
@@ -455,22 +497,27 @@ function onGlobalKeyUp(event) {
 function onPointerDown(event) {
   const { documentRef = document, isConsoleActive, isFlightActive, playFireSfx, radioChain, renderer, unlockAudio } = requireDeps();
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
-  const interactiveHudTarget = event.target.closest && event.target.closest('.hud-panel, .hud-interactive');
+  const uiOpen = isFlightUiOpen(documentRef);
+  const interactiveHudTarget = isFlightUiTarget(event.target);
   if (isFlightActive()) {
-    if (interactiveHudTarget) {
+    if (event.defaultPrevented || uiOpen || interactiveHudTarget) {
       event.preventDefault();
+      releasePointerLockForUi(documentRef, renderer);
       clearFlightInput();
       return;
     }
     if (flightState.paused) return;
     if (typeof unlockAudio === 'function') unlockAudio();
+    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock) {
+      event.preventDefault();
+      clearFlightInput();
+      renderer.domElement.requestPointerLock();
+      return;
+    }
     if (event.button === 0 || event.button === 2) {
       event.preventDefault();
       flightState.mouseButtons.add(event.button);
       if (typeof playFireSfx === 'function') playFireSfx(event.button === 0 ? 'laser' : 'missile');
-    }
-    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock) {
-      renderer.domElement.requestPointerLock();
     }
     return;
   }
@@ -500,11 +547,22 @@ function onSceneContextMenu(event) {
 }
 
 function onSceneWheel(event) {
+  const { documentRef = document, isFlightActive, renderer } = requireDeps();
+  if (isFlightActive() && (event.defaultPrevented || isFlightUiOpen(documentRef) || isFlightUiTarget(event.target))) {
+    releasePointerLockForUi(documentRef, renderer);
+    return;
+  }
   onOrbitSceneWheel(event);
 }
 
 function onMouseMove(event) {
-  const { disableAutopilot, isFlightActive } = requireDeps();
+  const { disableAutopilot, documentRef = document, isFlightActive, renderer } = requireDeps();
+  if (isFlightActive() && isFlightUiOpen(documentRef)) {
+    releasePointerLockForUi(documentRef, renderer);
+    updateCursorPosition(event.clientX, event.clientY);
+    updatePointerFromClient(event.clientX, event.clientY);
+    return;
+  }
   if (isFlightActive() && flightState.pointerLocked) {
     if (flightState.paused) return;
     if (Math.abs(event.movementX) + Math.abs(event.movementY) > 4) disableAutopilot('AUTOPILOT MANUAL OVERRIDE');
@@ -524,9 +582,13 @@ function onTouchStart(event) {
 }
 
 function onSceneClick(event) {
-  const { isConsoleActive, isFlightActive, renderer, selectProject } = requireDeps();
+  const { documentRef = document, isConsoleActive, isFlightActive, renderer, selectProject } = requireDeps();
   if (isFlightActive()) {
-    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock && !(event.target.closest && event.target.closest('.hud-panel, .hud-interactive'))) {
+    if (event.defaultPrevented || isFlightUiOpen(documentRef) || isFlightUiTarget(event.target)) {
+      releasePointerLockForUi(documentRef, renderer);
+      return;
+    }
+    if (!flightState.pointerLocked && renderer.domElement.requestPointerLock) {
       renderer.domElement.requestPointerLock();
     }
     return;

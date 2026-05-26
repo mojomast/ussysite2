@@ -1,4 +1,5 @@
 import { AUTOPILOT_STATES, disengage, ensureAutopilotState, isAutopilotActive } from './autopilot.js';
+import { getNavNode } from './navgraph.js';
 
 export let flightNavLine = null;
 const THREE = globalThis.THREE;
@@ -25,6 +26,50 @@ export function formatEta(seconds) {
   const minutes = Math.floor(seconds / 60);
   const remainder = Math.ceil(seconds % 60).toString().padStart(2, '0');
   return `${minutes}:${remainder}`;
+}
+
+function getNodePosition(node) {
+  return node?.position || node?.pos || null;
+}
+
+function getNodeLabel(node, fallback = 'WAYPOINT') {
+  return node?.userData?.project?.name || node?.name || node?.id || fallback;
+}
+
+function getActiveNavGraph() {
+  const graph = deps?.navGraph;
+  return typeof graph === 'function' ? graph() : graph;
+}
+
+function resolveFlightNavTarget(flightState) {
+  const autopilot = ensureAutopilotState(flightState);
+  const graph = getActiveNavGraph();
+  const waypointId = autopilot.route?.[autopilot.routeIndex ?? 1] || autopilot.targetId;
+  const routeNode = waypointId ? getNavNode(graph, waypointId) : null;
+  const finalNode = autopilot.targetId ? getNavNode(graph, autopilot.targetId) : null;
+  const node = flightState?.navNode || routeNode || finalNode || null;
+  const pos = getNodePosition(node) || autopilot.targetPos || null;
+  if (!pos) return null;
+  return {
+    node,
+    pos,
+    label: getNodeLabel(node, autopilot.targetId || 'WAYPOINT'),
+    type: node?.type || node?.userData?.navType || null,
+    autopilot,
+    waypointId,
+    finalNode
+  };
+}
+
+function getDistance(a, b) {
+  if (!a || !b) return Infinity;
+  if (typeof a.distanceTo === 'function') return a.distanceTo(b);
+  return Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0), (a.z ?? 0) - (b.z ?? 0));
+}
+
+function formatRange(distance) {
+  if (!Number.isFinite(distance)) return '--';
+  return distance >= 1000 ? `${(distance / 1000).toFixed(1)}kU` : `${Math.round(distance)}u`;
 }
 
 export function getProjectNodeName(node) {
@@ -156,13 +201,26 @@ export function updateAutopilot(dt) {
 export function updateFlightNavLine() {
   const { flightForward, flightState, isFlightActive } = requireDeps();
   if (!flightNavLine) return;
-  const visible = isFlightActive() && !!flightState.navNode;
+  const target = resolveFlightNavTarget(flightState);
+  const visible = isFlightActive() && !!target;
   flightNavLine.visible = visible;
   if (!visible) return;
   const positions = flightNavLine.geometry.attributes.position;
+  const graph = getActiveNavGraph();
+  const autopilot = target.autopilot;
+  const routeIds = Array.isArray(autopilot.route) ? autopilot.route.slice(autopilot.routeIndex ?? 1) : [];
+  const routePoints = routeIds
+    .map(id => getNodePosition(getNavNode(graph, id)))
+    .filter(Boolean);
   navTempVec.copy(flightState.pos).addScaledVector(flightForward, 1.4);
-  positions.setXYZ(0, navTempVec.x, navTempVec.y, navTempVec.z);
-  positions.setXYZ(1, flightState.navNode.position.x, flightState.navNode.position.y, flightState.navNode.position.z);
+  const points = [navTempVec, ...(routePoints.length ? routePoints : [target.pos])];
+  const maxPoints = positions.count || points.length;
+  points.slice(0, maxPoints).forEach((point, index) => {
+    positions.setXYZ(index, point.x, point.y, point.z);
+  });
+  const used = Math.min(points.length, maxPoints);
+  for (let i = used; i < maxPoints; i += 1) positions.setXYZ(i, target.pos.x, target.pos.y, target.pos.z);
+  flightNavLine.geometry.setDrawRange?.(0, used);
   positions.needsUpdate = true;
   flightNavLine.geometry.computeBoundingSphere();
 }
@@ -204,15 +262,16 @@ export function updateProjectLandingTarget() {
 export function updateFlightNavMarker({ camera, flightNavMarker, isFlightActive, windowRef = window } = {}) {
   const { flightState } = requireDeps();
   if (!flightNavMarker) return;
-  if (!isFlightActive() || !flightState.navNode) {
-    flightNavMarker.classList.remove('active', 'offscreen');
+  const target = resolveFlightNavTarget(flightState);
+  if (!isFlightActive() || !target) {
+    flightNavMarker.classList.remove('active', 'onscreen', 'offscreen', 'autopilot', 'gate', 'hyperspace');
     return;
   }
 
-  navTempVec.copy(flightState.navNode.position).sub(camera.position).normalize();
+  navTempVec.copy(target.pos).sub(camera.position).normalize();
   camera.getWorldDirection(navTempVec2);
   const inFront = navTempVec.dot(navTempVec2) > 0.05;
-  navScreenVec.copy(flightState.navNode.position).project(camera);
+  navScreenVec.copy(target.pos).project(camera);
   let x = (navScreenVec.x * 0.5 + 0.5) * windowRef.innerWidth;
   let y = (-navScreenVec.y * 0.5 + 0.5) * windowRef.innerHeight;
   if (!inFront) {
@@ -225,9 +284,20 @@ export function updateFlightNavMarker({ camera, flightNavMarker, isFlightActive,
   y = THREE.MathUtils.clamp(y, margin, windowRef.innerHeight - margin);
   flightNavMarker.style.left = `${x}px`;
   flightNavMarker.style.top = `${y}px`;
-  const autopilot = ensureAutopilotState(flightState);
-  const waypoint = autopilot.route?.length > 1 ? ` // WAYPOINT ${Math.min(autopilot.routeIndex ?? 1, autopilot.route.length - 1)}/${autopilot.route.length - 1}` : '';
-  flightNavMarker.textContent = `NAV ${getProjectNodeName(flightState.navNode)}\n${Math.round(flightState.navDistance)}u // ETA ${flightState.navEta}\nAUTO ${isAutopilotActive(flightState) ? (autopilot.routeModeLabel || 'ON') : 'OFF'}${waypoint}`;
+  const angle = Math.atan2(y - (windowRef.innerHeight / 2), x - (windowRef.innerWidth / 2)) + Math.PI / 2;
+  flightNavMarker.style.setProperty('--nav-arrow-rotation', `${angle}rad`);
+  const autopilot = target.autopilot;
+  const distance = getDistance(flightState.pos, target.pos);
+  navTempVec.copy(target.pos).sub(flightState.pos);
+  if (distance > 0.001) navTempVec.multiplyScalar(1 / distance);
+  const closingSpeed = distance > 0.001 ? Math.max(0, flightState.vel?.dot?.(navTempVec) ?? 0) : 0;
+  const eta = closingSpeed > 1 ? formatEta(distance / closingSpeed) : (flightState.navEta || '--');
+  const waypoint = autopilot.route?.length > 1 ? ` // WP ${Math.min(autopilot.routeIndex ?? 1, autopilot.route.length - 1)}/${autopilot.route.length - 1}` : '';
+  flightNavMarker.textContent = `NAV ${target.label}\nRANGE ${formatRange(distance)} // ETA ${eta}\nAUTO ${isAutopilotActive(flightState) ? (autopilot.routeModeLabel || 'ON') : 'OFF'}${waypoint}`;
   flightNavMarker.classList.toggle('active', true);
+  flightNavMarker.classList.toggle('onscreen', !offscreen);
   flightNavMarker.classList.toggle('offscreen', offscreen);
+  flightNavMarker.classList.toggle('autopilot', isAutopilotActive(flightState));
+  flightNavMarker.classList.toggle('gate', target.type === 'gate' || autopilot.routeType === 'GATE');
+  flightNavMarker.classList.toggle('hyperspace', autopilot.routeType === 'HYPERSPACE');
 }

@@ -16,10 +16,14 @@ const {
   checkMissionExpiry,
   cloneMissionContracts,
   completeMissionObjective,
+  configureMission,
   createMissionState,
   createMissionFromGameState,
+  handleMissionLanding,
   resolveMissionReward,
-  serializeMissionProgress
+  serializeMissionProgress,
+  setMissionStep,
+  startTutorialMission
 } = await import('../js/flight/mission.js');
 
 describe('mission unit helpers', () => {
@@ -49,6 +53,41 @@ describe('mission unit helpers', () => {
     const abandoned = abandonMission(mission);
     assert.equal(abandoned.status, 'abandoned', 'abandoned mission should set abandoned status');
     assert.equal(abandoned.active, false, 'abandoned mission should not remain active');
+  });
+
+  it('keeps tutorial combat after nav landing and services checkpoint', () => {
+    const missionState = createMissionState();
+    let spawned = 0;
+    configureMission({
+      missionState,
+      enemies: [{}, {}, {}, {}, {}],
+      activateEnemyWave(enemies, count, spawn) {
+        enemies.slice(0, count).forEach((enemy, index) => spawn(enemy, index, 0));
+        return count;
+      },
+      spawnEnemy() { spawned += 1; },
+      showGameMessage() {},
+      updateFlightHud() {},
+      renderObjectivesPanel() {}
+    });
+
+    assert.equal(startTutorialMission(), true);
+    assert.equal(missionState.step, 'tutorialBasics');
+    assert.equal(missionState.currentObjective.id, 'tutorial-basics');
+    assert.equal(spawned, 0);
+
+    assert.equal(setMissionStep('goLandAtProject'), true);
+    assert.equal(missionState.step, 'goLandAtProject');
+    assert.equal(spawned, 0);
+
+    assert.equal(handleMissionLanding('devussy'), true);
+    assert.equal(missionState.step, 'tutorialServices');
+    assert.equal(missionState.currentObjective.id, 'tutorial-services');
+    assert.equal(spawned, 0);
+
+    assert.equal(setMissionStep('killTutorialBogeys'), true);
+    assert.equal(missionState.step, 'killTutorialBogeys');
+    assert.equal(spawned, 5);
   });
 });
 

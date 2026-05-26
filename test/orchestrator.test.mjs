@@ -6,6 +6,7 @@ import { createAppServer, fetchOpenRouterOrchestration, validateOrchestratorResp
 import { activateEnemyWave, buildOrchestratorGameState } from '../js/flight/orchestrator.js';
 
 const orchestratorSource = await readFile(new URL('../js/flight/orchestrator.js', import.meta.url), 'utf8');
+const flightStateSource = await readFile(new URL('../js/flight/state.js', import.meta.url), 'utf8');
 
 function listen(server) {
   server.listen(0, '127.0.0.1');
@@ -233,6 +234,16 @@ test('fireOrchestratedEvent with spawnEnemies activates exactly 2 enemy objects'
   });
   assert.equal(spawned, 2);
   assert.equal(enemies.filter(enemy => enemy.userData.active).length, 2);
+});
+
+test('client orchestrator offers are opt-in and do not fire directly from polling', () => {
+  assert.match(flightStateSource, /function offerOrchestratedEvent\(/);
+  assert.match(flightStateSource, /function acceptOrchestratorOffer\(/);
+  assert.match(flightStateSource, /function declineOrchestratorOffer\(/);
+  assert.match(flightStateSource, /if \(!fireOrchestratedEvent\(event\)\)[\s\S]*DIRECTOR OFFER UNAVAILABLE/);
+  assert.match(flightStateSource, /gameOrchestrator\.pendingEvent = null;[\s\S]*renderObjectivesPanel\(\);[\s\S]*return true;/);
+  assert.match(flightStateSource, /data\.fire && data\.event\)[\s\S]*offerOrchestratedEvent\(data\.event\)/);
+  assert.doesNotMatch(flightStateSource, /data\.fire && data\.event\)[\s\S]{0,120}fireOrchestratedEvent\(data\.event\)/);
 });
 
 test('live orchestrator smoke request returns JSON', { skip: !process.env.ORCHESTRATOR_LIVE }, async () => {

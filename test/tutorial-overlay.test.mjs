@@ -49,7 +49,7 @@ function createDocument() {
   };
 }
 
-test('tutorial hide requests pointer lock before fade completion', () => {
+test('tutorial hide clears overlay blocker before requesting pointer lock', () => {
   const documentRef = createDocument();
   const calls = [];
 
@@ -61,14 +61,28 @@ test('tutorial hide requests pointer lock before fade completion', () => {
   assert.equal(showTutorialOverlay(), true);
 
   const overlay = documentRef.getElementById('tutorial-overlay');
-  overlay.animate = (_frames, _options) => ({
-    addEventListener(_type, listener) {
-      calls.push('finish-registered');
-      listener();
-    }
-  });
+  overlay.animate = () => { throw new Error('hide should not defer pointer lock behind fade'); };
 
   assert.equal(hideTutorialOverlay(), true);
-  assert.deepEqual(calls, ['lock', 'finish-registered']);
+  assert.deepEqual(calls, ['lock']);
   assert.equal(overlay.hidden, true);
+  assert.equal(overlay.inert, true);
+  assert.equal(overlay.attributes['aria-hidden'], 'true');
+});
+
+test('tutorial overlay covers first-flight navigation and service basics', () => {
+  const documentRef = createDocument();
+  configureTutorialOverlay({ documentRef, isFlightActive: () => false });
+  const overlay = documentRef.getElementById('tutorial-overlay');
+  const copy = overlay.innerHTML;
+
+  assert.match(copy, /PRESS 1 FOR THE GUIDED TUTORIAL OR 2 FOR FREE ROAM/);
+  assert.match(copy, /Open waypoint actions/i);
+  assert.match(copy, /Zoom and pan the system map/i);
+  assert.match(copy, /Fast travel, autopilot, inspect, dock, land, clear route/i);
+  assert.match(copy, /Activate nearby jump gate/i);
+  assert.match(copy, /Hyperspace to nav target/i);
+  assert.match(copy, /Mission board when docked/i);
+  assert.match(copy, /Close overlay \/ exit when unlocked/i);
+  assert.doesNotMatch(copy, /dogfight mode/i);
 });

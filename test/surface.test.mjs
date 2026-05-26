@@ -58,16 +58,16 @@ const planet = {
   radius: 852
 };
 
-test('checkPlanetProximity enters approach inside planet radius times 1.6', () => {
-  const state = flightState(new Vector3(5800, 187, 1362));
+test('checkPlanetProximity enters approach inside planet radius times 3.0', () => {
+  const state = flightState(new Vector3(5800, 187, 2555));
   checkPlanetProximity(state, [planet]);
   assert.equal(state.surface.state, SURFACE_STATES.APPROACH);
   assert.equal(state.surface.planetId, 'devussy');
-  assert.equal(state.surface.approachDist, 1363.2);
+  assert.equal(state.surface.approachDist, 2556);
 });
 
-test('checkPlanetProximity does not enter approach outside planet radius times 1.6', () => {
-  const state = flightState(new Vector3(5800, 187, 1365));
+test('checkPlanetProximity does not enter approach outside planet radius times 3.0', () => {
+  const state = flightState(new Vector3(5800, 187, 2557));
   checkPlanetProximity(state, [planet]);
   assert.equal(state.surface.state, SURFACE_STATES.NONE);
 });
@@ -89,11 +89,11 @@ test('enterApproach idles route autopilot without UI dependencies', () => {
   assert.equal(state.autopilot.blockedReason, 'PLANET APPROACH');
 });
 
-test('APPROACH transitions to ORBITAL within planet radius times 1.2', () => {
-  const state = flightState(new Vector3(5800, 187, 1022));
+test('APPROACH transitions to ORBITAL within planet radius times 1.6', () => {
+  const state = flightState(new Vector3(5800, 187, 1362));
   enterApproach(state, planet);
   assert.equal(state.surface.state, SURFACE_STATES.ORBITAL);
-  assert.equal(state.surface.orbitAltitude, 1022.4);
+  assert.equal(state.surface.orbitAltitude, 1363.2);
 });
 
 test('beginLanding and updateLanding lerp progress over 3 seconds then surface', () => {

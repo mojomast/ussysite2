@@ -1,5 +1,110 @@
 # Changelog
 
+## Flight Fix — runtime stability and arrival cues
+- Runtime loading now uses single-flight import/init promises so idle preload, double clicks, or launch retries cannot initialize the flight scene twice.
+- Autopilot final arrival now stops drift and shows an explicit arrival status, while director offers stay pending if they become unsafe to accept.
+- Optional icon boot is guarded and non-interactive approach hints no longer intercept viewport clicks.
+
+## Flight Fix — gameplay priority and approach cues
+- Director/orchestrator events now land as opt-in offers in the objectives panel instead of immediately stealing the session with blocking events.
+- Station approach now shows a dedicated docking HUD prompt, route distance uses autopilot targets, and planet rendering reuses one generated surface texture across LODs to reduce startup work.
+
+## Flight Fix — reliable navigation arrival
+- Autopilot now uses rendered planet positions, gate activation ranges, and station docking ranges for route arrival. Dock/Approach and Approach/Land map actions now engage travel instead of only plotting a route.
+
+## Flight Fix — explicit session restore
+- Saved session state no longer silently overrides startup. When a prior run exists, players can resume it or clear it and start a fresh deployment, preventing stale Hub Alpha saves from trapping launch.
+
+## Flight Fix — manual station docking
+- Station proximity now shows a dock prompt instead of auto-docking every frame, and undocking pushes the ship back outside the docking bubble so Hub Alpha cannot immediately recapture control.
+
+## Flight Fix — controllable free roam start
+- Free Roam now deploys beside Hub Alpha without auto-docking, so movement and mouselook stay available instead of leaving players stuck watching the station services view.
+
+## Flight Fix — starfield streak render loop
+- Warp streak updates now read from the generated starfield positions, fixing the `positions is not defined` frame crash that could leave the flight display frozen while HUD/radar state continued updating.
+
+## Flight Fix — camera sync after launch
+- Flight mode now synchronizes the render camera immediately on launch and undock, and keeps the flight camera target refreshed even while simulation updates are paused by UI.
+
+## Flight Fix — tutorial mouselook capture
+- Closing the first-flight controls overlay now makes the overlay non-blocking before requesting pointer lock, fixing cases where the radar updated but mouselook never captured.
+
+## Flight Visuals — layered procedural planets
+- Planet surfaces now generate deterministic land, ocean, ice, and terrain textures with no external assets.
+- Flight planets now include rotating transparent cloud shells and richer atmosphere uniforms that intensify during approach, orbit, and surface phases.
+
+## Flight Fix — startup dock access
+- Fresh flight deployment now starts beside Hub Alpha's docking corridor instead of inheriting the site camera position.
+- Choosing free roam jumps directly into Hub Alpha docking range and opens station services so docking behavior is immediately reachable.
+
+## Flight Fix — docked pause and input safety
+- Escape now opens an in-flight pause menu instead of dropping docked players back to the normal site.
+- The pause menu can resume the exact flight/dock state, reopen station services, undock explicitly, or exit to the site by choice.
+- Active station/service messages now block mouselook recapture, and docked players can no longer undock implicitly by clicking the viewport.
+
+## Flight Fix — station undock and service menus
+- Main station/project services menu now uses the same dock-grid style and undock affordance as the cargo/shipyard terminal.
+- Undock is available directly from station/project services via the visible UNDOCK choice or U key.
+- Undock now handles both free-space stations and landed project surfaces consistently, including surface departure when needed.
+
+## Flight Upgrade — gate route navigation
+- Route autopilot now opens a right-side navigation itinerary with destination, ETA, hop count, and each route hop marked as current, completed, or pending.
+- Gate-network routes are visually highlighted in the nav panel.
+- Gate-network autopilot travel no longer consumes fuel.
+
+## Flight Fix — dock UI layering
+- Docked surface controls now render above the cockpit dashboard instead of underneath it.
+- Docked cockpit dashboard panels fully fade out while station/surface controls are active.
+- Surface dock panels now stop pointer events before they can bubble into flight mouselock recapture.
+
+## Flight Fix — debris beyond spawn
+- Player-local debris, dust, and ambient particle fields no longer use frustum culling, preventing the renderer from hiding recycled space debris after traveling away from the initial spawn area.
+
+## Flight Fix — docking, services, and help key
+- H and F1 now open help; direct hyperspace moved to Shift+H to avoid the help conflict.
+- Surface services button now opens the dock services menu instead of acting like a dead/exit control.
+- Planetary approach starts farther out and the approach prompt now clearly tells players to press L to begin landing.
+- Pressing L during planetary approach now starts landing immediately instead of requiring deeper orbital advance first.
+
+## Flight Upgrade — warp alignment and debris
+- Fast travel now rotates the ship toward the active route waypoint before hyperspeed, keeping the visual travel direction aligned with the destination.
+- Hyperspeed now adds bright forward star streaks for a stronger Star Trek-style warp effect.
+- Debris now uses a denser local shell around the player across the whole Ussyverse instead of sparse system-wide scatter near the origin.
+
+## Flight Fix — map layer and mouselook guard
+- System map now renders above HUD panels so clicks and wheel events reach the map canvas.
+- Mouselook capture guard now ignores the always-visible objectives HUD and only blocks for real modal/menu overlays.
+
+## Flight Fix — combat moved to final tutorial step
+- Guided tutorial now teaches map routing, navigation, landing, and services before offering the combat drill as the final step.
+
+## Flight Fix — map wheel/click and tutorial focus
+- System-map wheel events now zoom from the whole map overlay, and canvas clicks have a click-handler fallback for waypoint actions.
+- Tutorial overlay hides now blur focused controls and use `inert` before `aria-hidden`, avoiding focused hidden-dialog warnings.
+
+## Flight Fix — map close recaptures mouselook
+- Closing the system map with its close button or Escape now immediately requests mouselook again when no other flight UI is open.
+
+## Flight Fix — menu pointer capture guard
+- Flight UI panels now block mouselook capture and release pointer lock while maps, settings, help, inventory, mission, or trade menus are open.
+- System-map overlay clicks and wheel events are stopped at the overlay so map zoom/pan cannot fall through to flight controls.
+
+## Flight Fix — tutorial pacing and map travel controls
+- Guided tutorial now starts with a systems briefing and waits for the player before spawning combat targets.
+- System map now has a Fast Travel / Hyperspace action, wheel zoom, drag panning, and stronger input guards so map clicks do not fire weapons.
+
+## Flight Fix — cache-busted startup modules
+- Flight startup now cache-busts the runtime's state and audio module exports so browsers cannot reuse stale startup copy after deployment.
+
+## Flight Onboarding — startup tutorial coverage
+- First-flight startup copy now introduces the Ussyverse flight layer with clearer launch language.
+- The onboarding overlay now covers deployment choices, map waypoint actions, autopilot, docking/landing services, jump gates, hyperspace, objectives, inventory, missions, upgrades, settings, help, TTS, and close/exit behavior.
+
+## Flight Map — waypoint action menu
+- Clicking a system-map node now opens a waypoint action menu with route, append-waypoint, autopilot, inspect, dock/approach, land, and clear-route actions where applicable.
+- Route plotting can now append destinations to the existing path so pilots can build multi-stop navigation plans from the map.
+
 ## Flight Performance — lazy startup, controls close, and ambience
 - The app shell now waits until first paint before dynamically importing the shared runtime that builds the visible Ussyverse scene.
 - Three.js now uses the classic cdnjs runtime as the single global runtime, with optional ESM bloom disabled to avoid duplicate module loading and keep the live page resilient.

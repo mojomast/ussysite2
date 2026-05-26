@@ -21,6 +21,9 @@ const PLOT_DELAY_SECONDS = 0.8;
 const tempWaypoint = THREE?.Vector3 ? new THREE.Vector3() : { x: 0, y: 0, z: 0 };
 const tempDirection = THREE?.Vector3 ? new THREE.Vector3() : { x: 0, y: 0, z: 0 };
 const tempVelocityTarget = THREE?.Vector3 ? new THREE.Vector3() : { x: 0, y: 0, z: 0 };
+const tempUp = THREE?.Vector3 ? new THREE.Vector3(0, 1, 0) : null;
+const tempLookMatrix = THREE?.Matrix4 ? new THREE.Matrix4() : null;
+const tempLookQuat = THREE?.Quaternion ? new THREE.Quaternion() : null;
 
 export function createAutopilotState() {
   return {
@@ -91,6 +94,14 @@ function distance(a, b) {
   return Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0), (a.z ?? 0) - (b.z ?? 0));
 }
 
+function getWaypointArrivalThreshold(node, autopilot) {
+  if (!node) return autopilot.arrivalThreshold ?? 200;
+  if (node.type === 'gate') return Math.max(1, node.activationRange ?? 12);
+  if (node.type === 'station') return Math.max(1, node.activationRange ?? 120);
+  if (node.type === 'planet' && Number.isFinite(node.radius) && node.radius > 0) return Math.max(200, node.radius * 3);
+  return autopilot.arrivalThreshold ?? 200;
+}
+
 function nearestNodeId(navGraph, pos) {
   let bestId = null;
   let bestDist = Infinity;
@@ -137,6 +148,36 @@ export function plotCourse(flightState, navGraph, targetId) {
   autopilot.plotStartedAt = nowSeconds();
   autopilot.routeIndex = Math.min(1, route.length - 1);
   autopilot.waypointCount = Math.max(1, route.length - 1);
+  return true;
+}
+
+export function appendCourse(flightState, navGraph, targetId) {
+  const autopilot = ensureAutopilotState(flightState);
+  const currentRoute = Array.isArray(autopilot.route) ? autopilot.route : [];
+  if (!currentRoute.length || !autopilot.targetId) return plotCourse(flightState, navGraph, targetId);
+
+  const fromId = currentRoute[currentRoute.length - 1];
+  const segment = flightState?.hyperspaceUnlocked
+    ? (fromId && targetId ? [fromId, targetId] : null)
+    : (fromId && targetId ? findRoute(navGraph, fromId, targetId) : null);
+  if (!segment) {
+    autopilot.blockedReason = 'NO ROUTE FOUND';
+    return false;
+  }
+
+  const targetNode = getNavNode(navGraph, targetId);
+  const extension = segment[0] === fromId ? segment.slice(1) : segment;
+  autopilot.route = [...currentRoute, ...extension];
+  autopilot.state = AUTOPILOT_STATES.PLOTTING;
+  const usesGate = autopilot.route.some(id => getNavNode(navGraph, id)?.type === 'gate');
+  autopilot.routeType = flightState?.hyperspaceUnlocked ? 'HYPERSPACE' : (usesGate ? 'GATE' : 'LOCAL');
+  autopilot.routeModeLabel = autopilot.routeType === 'HYPERSPACE' ? 'HYPERSPACE MULTI-STOP' : (usesGate ? 'MULTI-STOP VIA GATES' : 'MULTI-STOP ROUTE');
+  autopilot.targetId = targetId;
+  autopilot.targetPos = clonePos(getNodePos(targetNode));
+  autopilot.blockedReason = null;
+  autopilot.plotStartedAt = nowSeconds();
+  autopilot.routeIndex = Math.min(Math.max(autopilot.routeIndex ?? 1, 1), autopilot.route.length - 1);
+  autopilot.waypointCount = Math.max(1, autopilot.route.length - 1);
   return true;
 }
 
@@ -229,16 +270,17 @@ export function updateAutopilot(flightState, combatState, dt, navGraph) {
   if (autopilot.state !== AUTOPILOT_STATES.ENGAGED && autopilot.state !== AUTOPILOT_STATES.DECELERATING) return autopilot;
 
   const waypointId = autopilot.route?.[autopilot.routeIndex ?? 1] || autopilot.targetId;
-  const waypoint = copyPos(getNodePos(getNavNode(navGraph, waypointId)), tempWaypoint) || autopilot.targetPos;
+  const node = getNavNode(navGraph, waypointId);
+  const waypoint = copyPos(getNodePos(node), tempWaypoint) || autopilot.targetPos;
   if (!waypoint || !flightState?.pos) return disengage(flightState, 'TARGET LOST');
 
   const dist = distance(flightState.pos, waypoint);
-  if (dist <= (autopilot.arrivalThreshold ?? 200)) {
+  const arrivalThreshold = getWaypointArrivalThreshold(node, autopilot);
+  if (dist <= arrivalThreshold) {
     flightState.newNodeArrival = { id: waypointId, nodeId: waypointId, type: getNavNode(navGraph, waypointId)?.type, at: nowSeconds() };
-    const node = getNavNode(navGraph, waypointId);
     const nextGateId = autopilot.route?.[(autopilot.routeIndex ?? 1) + 1];
     const nextGate = getNavNode(navGraph, nextGateId);
-    if (node?.type === 'gate' && nextGate?.type === 'gate' && dist <= (node.activationRange ?? 12)) {
+    if (node?.type === 'gate' && nextGate?.type === 'gate') {
       flightState.pos.copy?.(nextGate.pos) ?? Object.assign(flightState.pos, nextGate.pos);
       flightState.vel?.set?.(0, 0, 0);
       flightState.status = 'WAYPOINT REACHED - JUMPING';
@@ -255,11 +297,17 @@ export function updateAutopilot(flightState, combatState, dt, navGraph) {
       autopilot.state = AUTOPILOT_STATES.ARRIVED;
       autopilot.hyperspeedTarget = 1;
       autopilot.hyperspeedMult = 1;
+      autopilot.arrivedAt = nowSeconds();
+      autopilot.arrivalNodeId = waypointId;
+      autopilot.waypointFlash = 'ARRIVED';
+      flightState.vel?.set?.(0, 0, 0);
+      flightState.status = `ARRIVED: ${node?.name || waypointId || 'TARGET'}`;
+      flightState.statusUntil = (globalThis.performance?.now?.() ?? Date.now()) + 3500;
       return autopilot;
     }
   }
 
-  const decelDistance = Math.max((autopilot.arrivalThreshold ?? 200) * 4, 800);
+  const decelDistance = Math.max(arrivalThreshold * 4, 800);
   autopilot.state = dist <= decelDistance && waypointId === autopilot.targetId
     ? AUTOPILOT_STATES.DECELERATING
     : AUTOPILOT_STATES.ENGAGED;
@@ -271,6 +319,11 @@ export function updateAutopilot(flightState, combatState, dt, navGraph) {
   );
 
   const dir = vectorToward(flightState.pos, waypoint, tempDirection);
+  if (flightState.orientation?.slerp && tempLookMatrix && tempLookQuat && tempUp) {
+    tempLookMatrix.lookAt(flightState.pos, waypoint, tempUp);
+    tempLookQuat.setFromRotationMatrix(tempLookMatrix);
+    flightState.orientation.slerp(tempLookQuat, Math.min(1, dt * 1.8));
+  }
   const speed = (flightState.thrust ?? 14) * Math.max(1, autopilot.hyperspeedMult ?? 1);
   addScaled(flightState.pos, dir, Math.min(dist, speed * dt));
   if (flightState.vel?.lerp && THREE?.Vector3) {
@@ -285,8 +338,15 @@ export function updateStarfieldWarp(starfield, flightDir, hyperspeedMult = 1) {
   const points = starfield.points ?? starfield;
   const material = starfield.material ?? points.material;
   const scale = starfield.scale ?? points.scale;
-  if (material) material.size = 0.8 + (Math.min(mult, HYPERSPEED_MULTIPLIER_MAX) / HYPERSPEED_MULTIPLIER_MAX) * 4.0;
+  const warp = Math.min(1, (mult - 1) / Math.max(1, HYPERSPEED_MULTIPLIER_MAX - 1));
+  if (material?.uniforms?.uWarp) material.uniforms.uWarp.value = warp;
+  if (material) material.size = 0.8 + warp * 4.0;
   if (scale) scale.z = 1 + (mult - 1) * 0.04;
+  if (starfield.streaks?.material) {
+    starfield.streaks.visible = warp > 0.025;
+    starfield.streaks.material.opacity = Math.min(0.95, warp * 0.88 + (warp > 0 ? 0.06 : 0));
+  }
+  if (starfield.updateStreaks) starfield.updateStreaks(flightDir, mult);
   return starfield;
 }
 
@@ -375,25 +435,34 @@ function getMapAutopilotState(flightState) {
     : createAutopilotState();
 }
 
-function getSystemMapProjection(canvas, navGraph) {
-  const w = canvas?.width || 600;
-  const h = canvas?.height || 600;
-  const center = { x: w / 2, y: h / 2 };
-  const nodes = [...(navGraph?.values?.() ?? [])];
-  const max = Math.max(1, ...nodes.map(node => Math.max(Math.abs(getNodePos(node)?.x ?? 0), Math.abs(getNodePos(node)?.z ?? 0))));
-  const scale = (Math.min(w, h) * 0.38) / max;
-  const project = pos => ({ x: center.x + (pos?.x ?? 0) * scale, y: center.y + (pos?.z ?? 0) * scale });
-  return { w, h, nodes, project };
+function clampMapViewport(viewport = {}) {
+  return {
+    zoom: Math.max(0.45, Math.min(4, Number.isFinite(viewport.zoom) ? viewport.zoom : 1)),
+    offsetX: Number.isFinite(viewport.offsetX) ? viewport.offsetX : 0,
+    offsetY: Number.isFinite(viewport.offsetY) ? viewport.offsetY : 0
+  };
 }
 
-export function getSystemMapNodeHitTargets(canvas, navGraph) {
-  const { nodes, project } = getSystemMapProjection(canvas, navGraph);
+function getSystemMapProjection(canvas, navGraph, viewport = null) {
+  const w = canvas?.width || 600;
+  const h = canvas?.height || 600;
+  const view = clampMapViewport(viewport || {});
+  const center = { x: w / 2 + view.offsetX, y: h / 2 + view.offsetY };
+  const nodes = [...(navGraph?.values?.() ?? [])];
+  const max = Math.max(1, ...nodes.map(node => Math.max(Math.abs(getNodePos(node)?.x ?? 0), Math.abs(getNodePos(node)?.z ?? 0))));
+  const scale = ((Math.min(w, h) * 0.38) / max) * view.zoom;
+  const project = pos => ({ x: center.x + (pos?.x ?? 0) * scale, y: center.y + (pos?.z ?? 0) * scale });
+  return { w, h, nodes, project, center, max, scale, viewport: view };
+}
+
+export function getSystemMapNodeHitTargets(canvas, navGraph, viewport = null) {
+  const { nodes, project } = getSystemMapProjection(canvas, navGraph, viewport);
   return nodes
     .map(node => ({ node, x: project(getNodePos(node)).x, y: project(getNodePos(node)).y, radius: node?.type === 'planet' ? 12 : 14 }))
     .filter(target => target.node?.id);
 }
 
-export function hitTestSystemMapNode(canvas, navGraph, clientX, clientY) {
+export function hitTestSystemMapNode(canvas, navGraph, clientX, clientY, viewport = null) {
   if (!canvas?.getBoundingClientRect) return null;
   const rect = canvas.getBoundingClientRect();
   const width = rect.width || canvas.width || 1;
@@ -401,7 +470,7 @@ export function hitTestSystemMapNode(canvas, navGraph, clientX, clientY) {
   const x = ((clientX - rect.left) / width) * (canvas.width || width);
   const y = ((clientY - rect.top) / height) * (canvas.height || height);
   let best = null;
-  for (const target of getSystemMapNodeHitTargets(canvas, navGraph)) {
+  for (const target of getSystemMapNodeHitTargets(canvas, navGraph, viewport)) {
     const dist = Math.hypot(x - target.x, y - target.y);
     if (dist > target.radius) continue;
     if (!best || dist < best.dist) best = { ...target, dist };
@@ -409,13 +478,10 @@ export function hitTestSystemMapNode(canvas, navGraph, clientX, clientY) {
   return best?.node ?? null;
 }
 
-export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null, activeIntercept = null, now = globalThis.performance?.now?.() ?? Date.now(), hostiles = []) {
+export function renderSystemMap(canvas, navGraph, flightState, planets = [], stations = [], civilianContacts = null, activeIntercept = null, now = globalThis.performance?.now?.() ?? Date.now(), hostiles = [], viewport = null) {
   const ctx = canvas?.getContext?.('2d');
   if (!ctx) return false;
-  const { w, h, nodes, project } = getSystemMapProjection(canvas, navGraph);
-  const center = { x: w / 2, y: h / 2 };
-  const max = Math.max(1, ...nodes.map(node => Math.max(Math.abs(getNodePos(node)?.x ?? 0), Math.abs(getNodePos(node)?.z ?? 0))));
-  const scale = (Math.min(w, h) * 0.38) / max;
+  const { w, h, nodes, project, center, max, scale, viewport: view } = getSystemMapProjection(canvas, navGraph, viewport);
   const autopilot = getMapAutopilotState(flightState);
   const targetId = autopilot.targetId || flightState?.navNode?.userData?.project?.id || null;
   const targetNode = targetId ? getNavNode(navGraph, targetId) : null;
@@ -521,6 +587,7 @@ export function renderSystemMap(canvas, navGraph, flightState, planets = [], sta
   drawMapLabel(ctx, 'cyan: gates + planets', 22, 64, '#44ffee');
   drawMapLabel(ctx, 'yellow: stations / red: hostiles', 22, 81, '#ffcc00');
   drawMapLabel(ctx, `nearest: ${nearest.node?.name || '--'} ${formatMapDistance(nearest.dist)}`, 22, 98, 'rgba(226, 246, 255, 0.86)');
+  drawMapLabel(ctx, `wheel zoom ${view.zoom.toFixed(1)}x / drag pan`, w - 16, 30, 'rgba(226, 246, 255, 0.70)', 'right');
   const routeText = targetNode ? `${autopilot.routeModeLabel || 'TARGET'} -> ${targetNode.name || targetNode.id}` : 'no nav target';
   drawMapLabel(ctx, routeText, 16, h - 18, targetNode ? '#ffcc00' : 'rgba(226, 246, 255, 0.58)');
   return true;

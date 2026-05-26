@@ -56,8 +56,10 @@ let getVoicePersonaRef = () => ({});
 let onTradeRef = noop;
 let showFactionMissionRef = noop;
 let onUndockRef = noop;
+let onRestockRef = noop;
+let openMissionBoardRef = null;
 
-export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona, onTrade, showFactionMission, onUndock } = {}) {
+export function configureTrader({ showGameMessage, dismissGameMessage, updateFlightHud, getVoicePersona, onTrade, showFactionMission, onUndock, onRestock, openMissionBoard } = {}) {
   if (typeof showGameMessage === 'function') showGameMessageRef = showGameMessage;
   if (typeof dismissGameMessage === 'function') dismissGameMessageRef = dismissGameMessage;
   if (typeof updateFlightHud === 'function') updateFlightHudRef = updateFlightHud;
@@ -65,6 +67,8 @@ export function configureTrader({ showGameMessage, dismissGameMessage, updateFli
   if (typeof onTrade === 'function') onTradeRef = onTrade;
   if (typeof showFactionMission === 'function') showFactionMissionRef = showFactionMission;
   if (typeof onUndock === 'function') onUndockRef = onUndock;
+  if (typeof onRestock === 'function') onRestockRef = onRestock;
+  if (typeof openMissionBoard === 'function') openMissionBoardRef = openMissionBoard;
 }
 
 function getProject(projectId) {
@@ -201,8 +205,12 @@ export function openTradeMenu(projectId) {
   const marketCount = sortedMarket(projectId).length;
   const loreMissions = STATION_MISSIONS[projectId] || [];
   const missionCount = loreMissions.filter(hasMissionCargo).length;
+  const openMissionMenu = () => {
+    if (openMissionBoardRef?.(projectId)) return;
+    showFactionMissionRef(projectId);
+  };
   showGameMessageRef({
-    type: projectName.toUpperCase(),
+    type: 'STATION SERVICES',
     source: stationSource(projectId),
     text: getStationGreeting(projectId),
     ui: {
@@ -216,12 +224,13 @@ export function openTradeMenu(projectId) {
       ]
     },
     choices: [
-      { key: '1', code: 'Digit1', label: 'TRADE HUB', icon: 'package-search', hint: hasBlackMarketAccess(projectId) ? 'MARKET // SHADOW TAB' : `${marketCount} ITEMS AVAILABLE`, tone: hasBlackMarketAccess(projectId) ? 'pink' : 'cyan', action: () => showTradeHub(projectId) },
-      { key: '2', code: 'Digit2', label: 'REFUEL', icon: 'fuel', hint: `FUEL ${Math.round(traderState.fuel)}/${traderState.maxFuel}`, tone: 'cyan', action: () => refuelDialog(projectId) },
-      { key: '3', code: 'Digit3', label: 'CARGO HOLD', icon: 'boxes', hint: `${getCargoUsed()}/${traderState.maxCargo} UNITS USED`, tone: 'cyan', action: () => showCargoHold(projectId) },
-      { key: '4', code: 'Digit4', label: 'SHIPYARD', icon: 'rocket', hint: `${combatState.ownedWeapons.size} WEAPONS OWNED`, tone: 'cyan', action: () => showShipyard(projectId) },
-      { key: '5', code: 'Digit5', label: 'LOADOUT', icon: 'crosshair', hint: 'VISUAL WEAPON SLOTS', tone: 'cyan', action: () => openLoadoutPanel(projectId) },
-      { key: '6', code: 'Digit6', label: 'MISSIONS', icon: 'radar', hint: `${missionCount} MISSIONS READY`, tone: 'yellow', action: () => showFactionMissionRef(projectId) }
+      { key: '1', code: 'Digit1', label: 'RESTOCK', icon: 'wrench', hint: 'REPAIR // AMMO // FREE FUEL', tone: 'cyan', action: () => onRestockRef(projectId) },
+      { key: '2', code: 'Digit2', label: 'TRADE HUB', icon: 'package-search', hint: hasBlackMarketAccess(projectId) ? 'MARKET // SHADOW TAB' : `${marketCount} ITEMS AVAILABLE`, tone: hasBlackMarketAccess(projectId) ? 'pink' : 'cyan', action: () => showTradeHub(projectId) },
+      { key: '3', code: 'Digit3', label: 'REFUEL', icon: 'fuel', hint: `FUEL ${Math.round(traderState.fuel)}/${traderState.maxFuel}`, tone: 'cyan', action: () => refuelDialog(projectId) },
+      { key: '4', code: 'Digit4', label: 'CARGO HOLD', icon: 'boxes', hint: `${getCargoUsed()}/${traderState.maxCargo} UNITS USED`, tone: 'cyan', action: () => showCargoHold(projectId) },
+      { key: '5', code: 'Digit5', label: 'SHIPYARD', icon: 'rocket', hint: `${combatState.ownedWeapons.size} WEAPONS OWNED`, tone: 'cyan', action: () => showShipyard(projectId) },
+      { key: '6', code: 'Digit6', label: 'LOADOUT', icon: 'crosshair', hint: 'VISUAL WEAPON SLOTS', tone: 'cyan', action: () => openLoadoutPanel(projectId) },
+      { key: '7', code: 'Digit7', label: 'MISSION BOARD', icon: 'radar', hint: `${missionCount} MISSIONS READY`, tone: 'yellow', action: openMissionMenu }
     ]
   });
 }

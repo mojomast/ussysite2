@@ -10,11 +10,11 @@ Optional local server, backend TTS, and AI gameplay orchestration use `server.mj
 
 ## Easter Egg
 
-Type `ussy` anywhere outside an input field to enter dogfight mode.
+Type `ussy` anywhere outside an input field to enter the Ussyverse flight layer.
 
 ## Combat
 
-Dogfight mode now includes enemy classes, weapon loadouts, shield bleedthrough, heat/overheat, adrenaline feedback, station equipment, and a dock-only skill tree. Land at a project-backed planet or dock at a standalone station to use services; press `U` while landed to spend skill points.
+The flight layer includes enemy classes, weapon loadouts, shield bleedthrough, heat/overheat, adrenaline feedback, station equipment, and a dock-only skill tree. Land at a project-backed planet or dock at a standalone station to use services; press `U` while landed to spend skill points.
 
 ## Controls
 

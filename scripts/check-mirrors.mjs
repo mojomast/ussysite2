@@ -9,6 +9,7 @@ const mirrorPairs = [
   ['docs/GAMEPLAY.md', 'web/out/docs/GAMEPLAY.md'],
   ['index.css', 'web/out/index.css'],
   ['index.html', 'web/out/index.html'],
+  ['js/economy', 'web/out/js/economy'],
   ['js/engine', 'web/out/js/engine'],
   ['js/input.js', 'web/out/js/input.js'],
   ['js/main.js', 'web/out/js/main.js'],

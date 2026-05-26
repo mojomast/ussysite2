@@ -54,6 +54,7 @@ const {
   applyStrafe,
   canApplyThrust,
   drainFuelForThrust,
+  shouldDrainFuelForFlight,
   triggerEvasionCameraRoll,
   updateEvasionCameraRoll
 } = await import('../js/flight/physics.js');
@@ -99,6 +100,12 @@ describe('flight physics helpers', () => {
     assert.equal(fuelState.fuel, 8, 'thrusting should drain fuel by rate * dt');
     drainFuelForThrust(fuelState, 4, false);
     assert.equal(fuelState.fuel, 8, 'drifting should not drain fuel');
+  });
+
+  it('gate route autopilot does not drain fuel', () => {
+    assert.equal(shouldDrainFuelForFlight({ autopilot: { state: 'ENGAGED', routeType: 'GATE' } }, true), false);
+    assert.equal(shouldDrainFuelForFlight({ autopilot: { state: 'ENGAGED', routeType: 'LOCAL' } }, true), true);
+    assert.equal(shouldDrainFuelForFlight({ autopilot: { state: 'IDLE', routeType: 'GATE' } }, true), true);
   });
 
   it('empty fuel prevents thrust from changing velocity', () => {

@@ -88,7 +88,7 @@ function createHelpDocument() {
   };
 }
 
-test('H activates hyperspace in flight and F1 toggles help', () => {
+test('H and F1 toggle help while Shift+H activates hyperspace', () => {
   let open = false;
   let hyperspaceActivations = 0;
   const listeners = {};
@@ -144,15 +144,18 @@ test('H activates hyperspace in flight and F1 toggles help', () => {
   registerInputListeners();
 
   listeners.keydown({ code: 'KeyH', key: 'h', target: null, preventDefault() { this.prevented = true; } });
-  assert.equal(hyperspaceActivations, 1);
-  assert.equal(open, false);
-  listeners.keydown({ code: 'KeyH', key: 'h', repeat: true, target: null, preventDefault() { this.prevented = true; } });
-  assert.equal(hyperspaceActivations, 1);
-  assert.equal(open, false);
-  listeners.keydown({ code: '', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(hyperspaceActivations, 0);
   assert.equal(open, true);
-  listeners.keydown({ code: 'F1', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
+  listeners.keydown({ code: 'KeyH', key: 'h', repeat: true, target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(hyperspaceActivations, 0);
+  assert.equal(open, true);
+  listeners.keydown({ code: 'KeyH', key: 'H', shiftKey: true, target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(hyperspaceActivations, 1);
+  assert.equal(open, true);
+  listeners.keydown({ code: '', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
   assert.equal(open, false);
+  listeners.keydown({ code: 'F1', key: 'F1', target: null, preventDefault() { this.prevented = true; } });
+  assert.equal(open, true);
 });
 
 test('configureHelpMenu Escape closes open menu', () => {
@@ -221,4 +224,21 @@ test('tips tab renders at least eight tips', () => {
 
   assert.ok(HELP_TIPS.length >= 8);
   assert.ok(tips.length >= 8);
+});
+
+test('help content explains waypoint actions, jumps, and services', () => {
+  const documentRef = createHelpDocument();
+  renderHelpContent(documentRef);
+  const renderedText = JSON.stringify(documentRef.elements);
+
+  assert.match(renderedText, /Set Route/);
+  assert.match(renderedText, /Append Waypoint/);
+  assert.match(renderedText, /Fast Travel/);
+  assert.match(renderedText, /wheel to zoom, drag to pan/i);
+  assert.match(renderedText, /Engage Autopilot/);
+  assert.match(renderedText, /Clear Route/);
+  assert.match(renderedText, /public jump gates/);
+  assert.match(renderedText, /Hyperspace Drive/);
+  assert.match(renderedText, /docking unlocks repairs, cargo, contracts, loadout, and upgrades/i);
+  assert.doesNotMatch(renderedText, /H<\/kbd>\/<kbd>F1|dogfight mode/i);
 });

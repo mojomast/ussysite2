@@ -16,7 +16,7 @@ function addNode(graph, definition, type) {
   if (!definition?.id) return;
   const THREE = globalThis.THREE;
   if (!THREE?.Vector3) throw new Error('buildNavGraph requires globalThis.THREE.Vector3');
-  const sourcePos = definition.pos ?? definition.position;
+  const sourcePos = definition.position ?? definition.pos;
   const pos = (sourcePos?.isVector3 || typeof sourcePos?.distanceTo === 'function')
     ? sourcePos
     : worldToThree(sourcePos, THREE);
@@ -27,6 +27,7 @@ function addNode(graph, definition, type) {
     type,
     connectsTo: definition.connectsTo ?? [],
     activationRange: definition.activationRange,
+    radius: definition.radius,
     edges: []
   });
 }
@@ -131,7 +132,7 @@ export function findRoute(graph, fromId, toId) {
   const openSet = new Set([fromId]);
   const cameFrom = new Map();
   const gScore = new Map([[fromId, 0]]);
-  const fScore = new Map([[fromId, distanceBetweenNodes(graph, fromId, toId)]]);
+  const fScore = new Map([[fromId, 0]]);
 
   while (openSet.size > 0) {
     const currentId = lowestScoreNode(openSet, fScore);
@@ -148,7 +149,7 @@ export function findRoute(graph, fromId, toId) {
 
       cameFrom.set(edge.targetId, currentId);
       gScore.set(edge.targetId, tentativeScore);
-      fScore.set(edge.targetId, tentativeScore + distanceBetweenNodes(graph, edge.targetId, toId));
+      fScore.set(edge.targetId, tentativeScore);
       openSet.add(edge.targetId);
     }
   }

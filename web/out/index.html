@@ -425,6 +425,7 @@
     <div id="nav-distance">--</div>
     <div id="nav-eta">ETA --</div>
     <div id="nav-route-hops">--</div>
+    <pre id="nav-route-list" class="nav-route-list">--</pre>
     <div id="nav-autopilot-status">AUTOPILOT OFFLINE</div>
     <button id="nav-engage-btn" class="nav-btn" type="button">ENGAGE AUTOPILOT</button>
     <button id="nav-abort-btn" class="nav-btn nav-btn-danger hidden" type="button">ABORT</button>
@@ -433,7 +434,13 @@
   <div id="approach-hint" class="surface-hud surface-approach-hint" aria-live="polite" aria-hidden="true">
     <div class="surface-kicker">PLANETARY APPROACH</div>
     <strong id="approach-planet">--</strong>
-    <span>ALT <b id="approach-altitude">--</b> // PRESS ESC TO PULL AWAY</span>
+    <span>ALT <b id="approach-altitude">--</b> // PRESS L TO BEGIN LANDING // ESC TO PULL AWAY</span>
+  </div>
+
+  <div id="station-dock-hint" class="surface-hud station-dock-hint" aria-live="polite" aria-hidden="true">
+    <div class="surface-kicker">STATION APPROACH</div>
+    <strong id="station-dock-name">--</strong>
+    <span>RANGE <b id="station-dock-range">--</b> // PRESS L TO DOCK // M FOR MAP</span>
   </div>
 
   <div id="orbital-panel" class="hud-panel surface-hud surface-orbital-panel hud-interactive" aria-live="polite" aria-hidden="true">
@@ -449,13 +456,14 @@
     <strong id="surface-planet">--</strong>
     <span id="surface-services">NO SERVICES</span>
     <div class="surface-actions">
-      <button class="surface-btn" type="button">SERVICES ONLINE</button>
+      <button id="surface-services-btn" class="surface-btn" type="button">OPEN SERVICES</button>
       <button id="surface-depart-btn" class="surface-btn surface-btn-danger" type="button">DEPART [L]</button>
     </div>
   </div>
 
   <div id="system-map-overlay" class="system-map hud-interactive hidden" aria-hidden="true">
     <canvas id="system-map-canvas" width="600" height="600"></canvas>
+    <div id="system-map-actions" class="system-map-actions" role="menu" aria-label="Waypoint actions" hidden></div>
     <button id="system-map-close" type="button" aria-label="Close system map">x</button>
   </div>
 
@@ -514,8 +522,9 @@
         <section id="help-panel-tips" class="help-panel" role="tabpanel" aria-labelledby="help-tab-tips" hidden></section>
       </div>
       <footer class="help-menu-footer">
-        <span><kbd>H</kbd>/<kbd>F1</kbd> CLOSE HELP</span>
-        <span><kbd>ESC</kbd> BACK</span>
+        <span><kbd>F1</kbd> HELP</span>
+        <span><kbd>ESC</kbd> CLOSE / BACK</span>
+        <span><kbd>H</kbd> HYPERSPACE WHEN UNLOCKED</span>
         <span><kbd>P</kbd> PAUSE RESERVED</span>
       </footer>
     </div>
@@ -791,11 +800,11 @@
   
   <!-- App JavaScript files -->
   <script src="projects.js"></script>
-  <script type="module" src="js/main.js?v=three-classic-hotfix-20260525"></script>
+  <script type="module" src="js/main.js?v=runtime-stability-fix-20260526"></script>
 
   <!-- Lucide Icon Renderer -->
   <script>
-    lucide.createIcons();
+    window.lucide?.createIcons?.();
   </script>
   <script>
     // Mirror cockpit center panel IDs from engine-updated source IDs.

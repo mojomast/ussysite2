@@ -34,18 +34,19 @@ export const HELP_CONTROLS = {
     ['V', 'Set nav target from crosshair'],
     ['Y', 'Toggle autopilot'],
     ['J', 'Activate jump gate in range'],
-    ['H', 'Hyperspace jump (when unlocked)'],
-    ['M', 'System map; click nodes to plot routes'],
+    ['Shift+H', 'Hyperspace jump (when unlocked)'],
+    ['M', 'System map; click nodes for waypoint actions'],
     ['L', 'Surface approach / land']
   ],
   UI: [
+    ['H', 'Help overlay in flight'],
     ['F1', 'Help overlay in flight'],
     ['O', 'Objectives panel'],
     ['I', 'Inventory / manifest'],
     ['B', 'Mission board (when docked or no modal active)'],
     ['U', 'Upgrades / skills (when landed)'],
     ['Tab', 'Settings menu'],
-    ['Escape', 'Close topmost overlay / exit flight (pointer unlocked)'],
+    ['Escape', 'Close topmost overlay / pause flight'],
     ['Space', 'Dismiss message / activate focused UI'],
     ['1-6', 'Modal/menu choices']
   ],
@@ -63,7 +64,9 @@ export const HELP_TIPS = [
   'Dock often to restock ammo, missiles, shields, armor, energy, and fuel.',
   'Toggle O to review current and available objectives during free roam.',
   'Use B for the mission board only outside active modal text or messages.',
-  'Use M to open the map, release mouselook, and click planets, stations, jump points, or gates to plot routes.',
+  'Use M to open the map, release mouselook, then wheel to zoom, drag to pan, and click planets, stations, jump points, or gates for Fast Travel, Set Route, Append Waypoint, Engage Autopilot, Dock/Approach, Approach/Land, Inspect, or Clear Route.',
+  'Fast Travel engages route autopilot by default; after unlocking Hyperspace Drive it becomes a direct Hyperspace Jump. Shift+H direct-jumps to your plotted target, and J only activates nearby public jump gates.',
+  'When the planetary approach prompt appears, press L or BEGIN LANDING to dock. Stations can dock in close range or from the map Dock/Approach action.',
   'Engine skills unlock afterburner and cold jump behaviors that change escape options.',
   'Controls are keyboard/mouse oriented; no gamepad bindings are currently assigned.'
 ];
@@ -214,8 +217,9 @@ export function renderHelpContent(documentRef = deps.documentRef) {
     ['Launch', 'Type the hidden launch code from non-flight mode, then pick tutorial or free roam.'],
     ['Fly', 'Use mouse look, thrust, strafe, roll, afterburner, throttle hold, and match speed to control the ship.'],
     ['Fight', 'Fire primary and secondary weapons, manage heat and resources, and use C to evade.'],
-    ['Navigate', 'Aim at a project and press V, use M for the map, and engage autopilot once routed.'],
-    ['Land/Dock', 'Approach a project or station and press L to access services, cargo, contracts, and upgrades.'],
+    ['Navigate', 'Aim at a project and press V, or open M, click a node, and choose Set Route, Append Waypoint, Engage Autopilot, Inspect, Dock/Approach, Approach/Land, or Clear Route.'],
+    ['Land/Dock', 'Planets require approach and orbit before L begins landing. Stations dock at close range, and docking unlocks repairs, cargo, contracts, loadout, and upgrades.'],
+    ['Jump', 'Use map Fast Travel for distant waypoints. Before Hyperspace Drive, it routes through gates with autopilot; after the unlock, use H or Hyperspace Jump for direct travel. J only works at nearby public gates.'],
     ['Progress', 'Complete tutorials, contracts, distress calls, bounty waves, and trade runs for credits, XP, reputation, and skill points.'],
     ['Survive', 'Watch fuel, armor, shields, heat, and hostile contacts; use stations to refuel and recover.']
   ]);

@@ -11,7 +11,8 @@ export const SURFACE_STATES = Object.freeze({
 });
 
 const LANDING_SECONDS = 3;
-const APPROACH_RADIUS_MULT = 1.6;
+const APPROACH_RADIUS_MULT = 3.0;
+const ORBIT_RADIUS_MULT = 1.6;
 const STATION_SERVICE_TYPES = new Set(['core', 'ai', 'infra', 'creative']);
 
 function getThree() {
@@ -135,12 +136,12 @@ export function enterApproach(flightState, planet, distanceToPlanet = null) {
   surface.state = SURFACE_STATES.APPROACH;
   surface.planetId = planetId(planet);
   surface.approachDist = radius * APPROACH_RADIUS_MULT;
-  surface.orbitAltitude = radius * 1.2;
+  surface.orbitAltitude = radius * ORBIT_RADIUS_MULT;
   surface.landingProgress = 0;
   surface.surfaceY = surfaceYForPlanet(planet);
   surface.exitQueued = false;
   disengageRouteAutopilot(flightState, 'PLANET APPROACH');
-  if ((distanceToPlanet ?? distanceBetween(flightState?.pos, planet?.pos ?? planet?.position)) <= radius * 1.2) {
+  if ((distanceToPlanet ?? distanceBetween(flightState?.pos, planet?.pos ?? planet?.position)) <= radius * ORBIT_RADIUS_MULT) {
     enterOrbital(flightState, planet);
   }
   return surface;
@@ -151,7 +152,7 @@ export function enterOrbital(flightState, planet) {
   const radius = planetRadius(planet);
   surface.state = SURFACE_STATES.ORBITAL;
   surface.planetId = planetId(planet);
-  surface.orbitAltitude = radius * 1.2;
+  surface.orbitAltitude = radius * ORBIT_RADIUS_MULT;
   surface.approachDist = radius * APPROACH_RADIUS_MULT;
   surface.surfaceY = surfaceYForPlanet(planet);
   dampVelocity(flightState, 0.4);
@@ -234,7 +235,7 @@ export function updateSurface(flightState, planets = [], dt = 0) {
   const planet = planets.find(item => planetId(item) === surface.planetId) ?? null;
   if (surface.state === SURFACE_STATES.NONE || surface.state === SURFACE_STATES.APPROACH) checkPlanetProximity(flightState, planets);
   if (surface.state === SURFACE_STATES.APPROACH && planet) {
-    if (distanceBetween(flightState?.pos, planet?.pos ?? planet?.position) <= planetRadius(planet) * 1.2) enterOrbital(flightState, planet);
+    if (distanceBetween(flightState?.pos, planet?.pos ?? planet?.position) <= planetRadius(planet) * ORBIT_RADIUS_MULT) enterOrbital(flightState, planet);
   } else if (surface.state === SURFACE_STATES.LANDING) {
     updateLanding(flightState, planet, dt);
   } else if (surface.state === SURFACE_STATES.SURFACE && surface.exitQueued) {

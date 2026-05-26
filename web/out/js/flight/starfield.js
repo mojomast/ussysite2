@@ -3,6 +3,7 @@ import { PLANETS, SYSTEM_RADIUS, worldToThree } from './world.js';
 export const STARFIELD_COUNT = 8000;
 export const STARFIELD_RADIUS = SYSTEM_RADIUS * 1.8;
 export const STARFIELD_TAG = 'flight-system-starfield';
+const WARP_STREAK_COUNT = 900;
 
 const STAR_SIZE_TIERS = [
   { threshold: 0.70, size: 0.8 },
@@ -117,26 +118,33 @@ export function createStarfield(scene, Three) {
   geometry.setAttribute('size', new Three.BufferAttribute(data.sizes, 1));
 
   const material = new Three.ShaderMaterial({
+    uniforms: {
+      uWarp: { value: 0 }
+    },
     vertexColors: true,
     transparent: true,
     depthWrite: false,
     fog: false,
     vertexShader: `
       attribute float size;
+      uniform float uWarp;
       varying vec3 vColor;
       void main() {
         vColor = color;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = size;
+        gl_PointSize = size * (1.0 + uWarp * 2.8);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
     fragmentShader: `
+      uniform float uWarp;
       varying vec3 vColor;
       void main() {
         vec2 centered = gl_PointCoord - vec2(0.5);
         if (dot(centered, centered) > 0.25) discard;
-        gl_FragColor = vec4(vColor, 1.0);
+        float core = 1.0 - smoothstep(0.0, 0.25, dot(centered, centered));
+        vec3 warpGlow = vec3(0.62, 0.82, 1.0) * uWarp * (0.35 + core * 0.9);
+        gl_FragColor = vec4(vColor * (1.0 + uWarp * 1.4) + warpGlow, 1.0);
       }
     `
   });
@@ -147,6 +155,45 @@ export function createStarfield(scene, Three) {
   points.frustumCulled = false;
   scene.add(points);
 
+  const streakGeometry = new Three.BufferGeometry();
+  const streakPositions = new Float32Array(WARP_STREAK_COUNT * 6);
+  streakGeometry.setAttribute('position', new Three.BufferAttribute(streakPositions, 3));
+  const streakMaterial = new Three.LineBasicMaterial({
+    color: 0xdce7ff,
+    transparent: true,
+    opacity: 0,
+    blending: Three.AdditiveBlending,
+    depthWrite: false
+  });
+  const streaks = new Three.LineSegments(streakGeometry, streakMaterial);
+  streaks.name = `${STARFIELD_TAG}-warp-streaks`;
+  streaks.userData.starfieldTag = STARFIELD_TAG;
+  streaks.frustumCulled = false;
+  streaks.visible = false;
+  scene.add(streaks);
+
+  function updateStreaks(flightDir, hyperspeedMult = 1) {
+    if (!flightDir) return;
+    const warp = Math.min(1, Math.max(0, (hyperspeedMult - 1) / 79));
+    const length = 18 + warp * 220;
+    const stride = Math.max(1, Math.floor(data.count / WARP_STREAK_COUNT));
+    for (let i = 0; i < WARP_STREAK_COUNT; i += 1) {
+      const starIndex = (i * stride) % data.count;
+      const source = starIndex * 3;
+      const target = i * 6;
+      const x = data.positions[source];
+      const y = data.positions[source + 1];
+      const z = data.positions[source + 2];
+      streakPositions[target] = x;
+      streakPositions[target + 1] = y;
+      streakPositions[target + 2] = z;
+      streakPositions[target + 3] = x - flightDir.x * length;
+      streakPositions[target + 4] = y - flightDir.y * length;
+      streakPositions[target + 5] = z - flightDir.z * length;
+    }
+    streakGeometry.attributes.position.needsUpdate = true;
+  }
+
   let disposed = false;
   return {
     points,
@@ -155,14 +202,19 @@ export function createStarfield(scene, Three) {
     positions: data.positions,
     colors: data.colors,
     sizes: data.sizes,
+    streaks,
+    updateStreaks,
     count: data.count,
     radius: data.radius,
     dispose() {
       if (disposed) return;
       disposed = true;
       scene.remove(points);
+      scene.remove(streaks);
       geometry.dispose?.();
       material.dispose?.();
+      streakGeometry.dispose?.();
+      streakMaterial.dispose?.();
     }
   };
 }

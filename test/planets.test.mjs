@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import { createPlanet, getNearestBody, updatePlanetLOD } from '../js/flight/planets.js';
 
@@ -21,10 +22,21 @@ class TestVector3 {
   }
 }
 
+class TestScale extends TestVector3 {
+  constructor() {
+    super(1, 1, 1);
+  }
+  setScalar(value) {
+    return this.set(value, value, value);
+  }
+}
+
 class TestObject3D {
   constructor() {
     this.children = [];
     this.position = new TestVector3();
+    this.rotation = { x: 0, y: 0, z: 0 };
+    this.scale = new TestScale();
     this.userData = {};
     this.name = '';
   }
@@ -112,9 +124,24 @@ describe('flight planets', () => {
 
     assert.ok(atmosphere);
     assert.equal(atmosphere.material.uniforms.uOpacity.value, 0.16);
+    assert.equal(atmosphere.material.uniforms.uGlowStrength.value, 1.15);
+    assert.equal(atmosphere.material.uniforms.uHorizonBoost.value, 0.28);
+    assert.equal(atmosphere.material.uniforms.uTime.value, 0);
     assert.equal(atmosphere.material.side, TestTHREE.FrontSide);
     assert.equal(atmosphere.material.transparent, true);
     assert.equal(atmosphere.material.depthWrite, false);
+  });
+
+  it('creates a transparent cloud shell tagged with planet id', () => {
+    const planet = createPlanet(planetDef, TestTHREE);
+    const clouds = planet.children.find(child => child.userData?.isPlanetClouds);
+
+    assert.ok(clouds);
+    assert.equal(clouds.userData.planetId, planetDef.id);
+    assert.equal(clouds.material.transparent, true);
+    assert.equal(clouds.material.depthWrite, false);
+    assert.equal(clouds.material.opacity, 0.18);
+    assert.equal(clouds.geometry.radius, planetDef.radius * 1.012);
   });
 
   it('supports flight-only position scaling without changing radius', () => {
@@ -147,5 +174,27 @@ describe('flight planets', () => {
 
     assert.deepEqual(planets[0].updateCalls, [camera]);
     assert.deepEqual(planets[1].updateCalls, [camera]);
+  });
+
+  it('updatePlanetLOD rotates planets, clouds, and advances atmosphere time', () => {
+    const camera = { id: 'camera' };
+    const planet = createPlanet(planetDef, TestTHREE);
+    const clouds = planet.children.find(child => child.userData?.isPlanetClouds);
+    const atmosphere = planet.children.find(child => child.userData?.isPlanetAtmosphere);
+
+    updatePlanetLOD([planet], camera, 0.5);
+
+    assert.ok(planet.rotation.y > 0);
+    assert.ok(clouds.rotation.y > 0);
+    assert.equal(atmosphere.material.uniforms.uTime.value, 0.2);
+  });
+
+  it('creates one expensive surface texture per planet and shares it across LODs', async () => {
+    const source = await readFile(new URL('../js/flight/planets.js', import.meta.url), 'utf8');
+
+    assert.match(source, /const surfaceTexture = createPlanetSurfaceTexture\(planetDef, THREE\);/);
+    assert.match(source, /createPlanetMesh\(planetDef, THREE, 48, 32, surfaceTexture\)/);
+    const meshBody = source.match(/function createPlanetMesh[\s\S]*?\n\}/)?.[0] || '';
+    assert.doesNotMatch(meshBody, /createPlanetSurfaceTexture\(planetDef, THREE\)/);
   });
 });

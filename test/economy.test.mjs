@@ -13,11 +13,15 @@ const trader = await import('../js/economy/trader.js');
 
 function resetTraderState() {
   trader.traderState.credits = 1000;
+  trader.traderState.fuel = 100;
+  trader.traderState.maxFuel = 100;
   trader.traderState.cargo = {};
   trader.traderState.maxCargo = 20;
   trader.traderState.cargoUsed = 0;
   trader.traderState.lastTrade = null;
   trader.traderState.tradeLog = [];
+  trader.traderState.docked = false;
+  trader.traderState.dockedStation = null;
   for (const faction of reputation.FACTIONS) reputation.reputationState.scores[faction] = 0;
 }
 
@@ -94,5 +98,63 @@ describe('economy transactions', () => {
     trader.applyTradePressure('devussy', 'devplans', 'buy');
     const after = trader.getMarketPrice('devussy', 'devplans', 'buy');
     assert.ok(after >= before, 'buy pressure should not reduce the buy price');
+  });
+});
+
+describe('docked services menu', () => {
+  beforeEach(resetTraderState);
+
+  it('renders one icon dock-grid with all docked services', () => {
+    let message = null;
+    trader.configureTrader({ showGameMessage: value => { message = value; } });
+
+    trader.openTradeMenu('devussy');
+
+    assert.equal(message.type, 'STATION SERVICES');
+    assert.equal(message.ui.layout, 'dock-grid');
+    assert.deepEqual(
+      message.choices.map(choice => [choice.key, choice.label, choice.icon]),
+      [
+        ['1', 'RESTOCK', 'wrench'],
+        ['2', 'TRADE HUB', 'package-search'],
+        ['3', 'REFUEL', 'fuel'],
+        ['4', 'CARGO HOLD', 'boxes'],
+        ['5', 'SHIPYARD', 'rocket'],
+        ['6', 'LOADOUT', 'crosshair'],
+        ['7', 'MISSION BOARD', 'radar']
+      ]
+    );
+    assert.deepEqual(message.ui.footerChoices.map(choice => [choice.key, choice.label]), [['u', 'UNDOCK']]);
+    assert.equal(trader.traderState.docked, true);
+    assert.equal(trader.traderState.dockedStation, 'devussy');
+  });
+
+  it('routes restock, mission board, and undock through configured dock callbacks', () => {
+    let message = null;
+    const calls = [];
+    trader.configureTrader({
+      showGameMessage: value => { message = value; },
+      dismissGameMessage: () => calls.push(['dismiss']),
+      onRestock: stationId => calls.push(['restock', stationId]),
+      openMissionBoard: stationId => {
+        calls.push(['missionBoard', stationId]);
+        return true;
+      },
+      onUndock: stationId => calls.push(['undock', stationId])
+    });
+
+    trader.openTradeMenu('devussy');
+    message.choices.find(choice => choice.label === 'RESTOCK').action();
+    message.choices.find(choice => choice.label === 'MISSION BOARD').action();
+    message.ui.footerChoices.find(choice => choice.label === 'UNDOCK').action();
+
+    assert.deepEqual(calls, [
+      ['restock', 'devussy'],
+      ['missionBoard', 'devussy'],
+      ['dismiss'],
+      ['undock', 'devussy']
+    ]);
+    assert.equal(trader.traderState.docked, false);
+    assert.equal(trader.traderState.dockedStation, null);
   });
 });

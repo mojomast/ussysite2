@@ -38,14 +38,42 @@ const combatNavRows = [
   ['RMB', 'Secondary fire'],
   ['C', 'Evasion roll'],
   ['V', 'Set nav target'],
-  ['Y', 'Toggle autopilot'],
-  ['M', 'System map'],
-  ['L', 'Land / dock'],
-  ['H', 'Hyperspace jump'],
-  ['F1', 'Help overlay'],
-  ['TAB', 'Settings'],
-  ['ESC', 'Exit flight'],
+  ['Y', 'Toggle plotted-route autopilot'],
+  ['M', 'Open map actions'],
+  ['J', 'Activate nearby jump gate'],
+  ['H', 'Hyperspace to nav target'],
+  ['L', 'Land / dock when prompted'],
+  ['F', 'Cold jump escape'],
+  ['Z / X', 'Throttle hold level'],
   ['Space', 'Dismiss message']
+];
+
+const quickStartRows = [
+  ['1', 'Start guided tutorial'],
+  ['2', 'Enter free roam'],
+  ['M + Click', 'Open waypoint actions'],
+  ['Map Wheel / Drag', 'Zoom and pan the system map'],
+  ['Map Menu', 'Fast travel, autopilot, inspect, dock, land, clear route'],
+  ['Y', 'Engage or abort plotted route'],
+  ['ESC', 'Close overlay / exit when unlocked']
+];
+
+const servicesRows = [
+  ['Dock / Land', 'Access repair, cargo, loadout, missions'],
+  ['B', 'Mission board when docked'],
+  ['I', 'Inventory / cargo manifest'],
+  ['U', 'Upgrades when landed'],
+  ['O', 'Objectives panel'],
+  ['TAB', 'Settings']
+];
+
+const supportRows = [
+  ['F1', 'Help overlay'],
+  ['Shift+M', 'Toggle flight TTS'],
+  ['G', 'Match speed / brake'],
+  ['H', 'Hyperspace jump'],
+  ['J', 'Gate travel in range'],
+  ['Mouse Click', 'Recapture mouselook']
 ];
 
 function renderRows(rows) {
@@ -66,11 +94,16 @@ function buildOverlay(documentRef) {
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-hidden', 'true');
+  overlay.inert = true;
   overlay.innerHTML = `
     <section class="tutorial-overlay-panel" aria-labelledby="tutorial-overlay-title">
       <h2 id="tutorial-overlay-title">[USSYVERSE &mdash; CONTROLS REFERENCE]</h2>
-      <p class="tutorial-overlay-subtitle">REVIEW YOUR CONTROLS BEFORE ENGAGING, OPERATOR.</p>
+      <p class="tutorial-overlay-subtitle">DISMISS THIS PANEL, THEN PRESS 1 FOR THE GUIDED TUTORIAL OR 2 FOR FREE ROAM.</p>
       <div class="tutorial-controls-grid">
+        <section>
+          <h3>QUICK START</h3>
+          ${renderRows(quickStartRows)}
+        </section>
         <section>
           <h3>FLIGHT &amp; MOVEMENT</h3>
           ${renderRows(getFlightRows())}
@@ -78,6 +111,14 @@ function buildOverlay(documentRef) {
         <section>
           <h3>COMBAT &amp; NAV</h3>
           ${renderRows(combatNavRows)}
+        </section>
+        <section>
+          <h3>DOCKING &amp; SERVICES</h3>
+          ${renderRows(servicesRows)}
+        </section>
+        <section>
+          <h3>SUPPORT</h3>
+          ${renderRows(supportRows)}
         </section>
       </div>
       <footer class="tutorial-overlay-footer">
@@ -124,6 +165,7 @@ export function showTutorialOverlay() {
   }
   _visible = true;
   overlay.hidden = false;
+  overlay.inert = false;
   overlay.setAttribute('aria-hidden', 'false');
   overlay.style.opacity = '1';
   animateOverlay(overlay, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
@@ -143,13 +185,13 @@ export function hideTutorialOverlay() {
     autoDismissTimer = null;
   }
   _visible = false;
+  const active = documentRef.activeElement;
+  if (active && typeof overlay.contains === 'function' && overlay.contains(active)) active.blur?.();
+  overlay.hidden = true;
+  overlay.inert = true;
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.style.opacity = '';
   if (deps.isFlightActive?.()) deps.requestPointerLock?.();
-  const finish = () => {
-    overlay.hidden = true;
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay.style.opacity = '';
-  };
-  animateOverlay(overlay, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in' }, finish) || finish();
   return true;
 }
 

@@ -243,10 +243,10 @@ export function randomizeDebrisInstance({
   debrisSpinRates
 } = {}) {
   const offset = index * 3;
-  const spread = flightBounds * 0.78;
-  const forwardDistance = ahead ? 35 + Math.random() * 95 : (Math.random() - 0.5) * flightBounds * 1.55;
-  const lateral = (Math.random() - 0.5) * spread;
-  const vertical = (Math.random() - 0.5) * spread;
+  const localShell = Math.max(1600, Math.min(4200, (flightBounds || 50000) * 0.055));
+  const forwardDistance = ahead ? 180 + Math.random() * 2600 : (Math.random() - 0.36) * localShell * 1.55;
+  const lateral = (Math.random() - 0.5) * localShell * 1.35;
+  const vertical = (Math.random() - 0.5) * localShell * 0.72;
   debrisPositions[offset] = flightState.pos.x + flightForward.x * forwardDistance + flightRight.x * lateral + flightUp.x * vertical;
   debrisPositions[offset + 1] = flightState.pos.y + flightForward.y * forwardDistance + flightRight.y * lateral + flightUp.y * vertical;
   debrisPositions[offset + 2] = flightState.pos.z + flightForward.z * forwardDistance + flightRight.z * lateral + flightUp.z * vertical;
@@ -289,9 +289,10 @@ export function createDebrisField({
   randomizeDebris,
   updateDebris
 } = {}) {
-  const debrisGeo = new Three.IcosahedronGeometry(0.18, 0);
-  const debrisMat = new Three.MeshBasicMaterial({ color: 0x6f7f94, wireframe: true, transparent: true, opacity: 0.32, fog: true });
+  const debrisGeo = new Three.IcosahedronGeometry(0.32, 0);
+  const debrisMat = new Three.MeshBasicMaterial({ color: 0x8fa3bd, wireframe: true, transparent: true, opacity: 0.44, fog: true });
   const debrisField = new Three.InstancedMesh(debrisGeo, debrisMat, debrisCount);
+  debrisField.frustumCulled = false;
   debrisField.visible = false;
   scene.add(debrisField);
   updateFlightBasis();
@@ -358,6 +359,7 @@ export function createDustField({
     depthWrite: false,
     fog: false
   }));
+  dustField.frustumCulled = false;
   dustField.visible = false;
   scene.add(dustField);
   return { dustField, dustPositions: targetDustPositions, dustSpeeds: targetDustSpeeds };
@@ -443,6 +445,7 @@ export function createAmbientParticleField({
     vertexColors: true,
     fog: true
   }));
+  ambientField.frustumCulled = false;
   ambientField.visible = false;
   scene.add(ambientField);
   return { ambientField, ambientPositions: targetPositions, ambientColors: targetColors, ambientSpeeds: targetSpeeds };
@@ -461,7 +464,8 @@ export function updateDebrisField({
 } = {}) {
   if (!debrisField) return;
   debrisField.visible = true;
-  const recycleDistanceSq = flightBounds * flightBounds * 1.35;
+  const recycleDistance = Math.max(2200, Math.min(5200, (flightBounds || 50000) * 0.07));
+  const recycleDistanceSq = recycleDistance * recycleDistance;
   for (let i = 0; i < debrisCount; i += 1) {
     const offset = i * 3;
     const dx = debrisPositions[offset] - flightState.pos.x;

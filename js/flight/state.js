@@ -67,6 +67,7 @@ import {
   updateFlightCamera as updateFlightCameraModule,
   updateFlightHud as updateFlightHudModule,
   updateNavHUD as updateNavHUDModule,
+  updateStationDockHUD as updateStationDockHUDModule,
   updateTtsStatusIndicator as updateTtsStatusIndicatorModule,
   updateSurfaceHUD as updateSurfaceHUDModule
 } from './hud.js';
@@ -80,7 +81,7 @@ import {
   updateGameMessage as updateGameMessageModule
 } from './messages.js';
 import { showDebrief } from './debrief.js';
-import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, toggleHelpMenu } from './help.js';
+import { closeHelpMenu, configureHelpMenu, isHelpMenuOpen, openHelpMenu, toggleHelpMenu } from './help.js';
 import { applyRunState, clearRunState, loadRunState, saveRunState } from './persist.js';
 import { applySettings, loadSettings, saveSettings, settingsState } from './settings.js';
 import { configureTutorialOverlay, hideTutorialOverlay, isTutorialOverlayVisible, showTutorialOverlay } from './tutorial-overlay.js';
@@ -155,7 +156,7 @@ import { createAllPlanets, getNearestBody, updatePlanetLOD } from './planets.js'
 import { createAllStations, DOCK_PROXIMITY, updateStationRotations } from './stations.js';
 import { createAllJumpGates, isInJumpRange, updateJumpGateRotations } from './jumpgates.js';
 import { buildNavGraph, getNavNode } from './navgraph.js';
-import { disengage, ensureAutopilotState, hitTestSystemMapNode, isAutopilotActive, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
+import { appendCourse, disengage, ensureAutopilotState, hitTestSystemMapNode, isAutopilotActive, plotCourse, renderSystemMap, updateAutopilot as updateRouteAutopilot, updateStarfieldWarp } from './autopilot.js';
 import { spawnCivilianFleet, updateCivilians } from './civilians.js';
 import { checkHunterDestroyed, checkHunterFlee, shouldTriggerIntercept, triggerIntercept } from './hunters.js';
 import { checkMissionProgress, completeMission as completeBoardMission } from './missions.js';
@@ -205,6 +206,7 @@ let systemJumpGates = [];
 let navGraph = null;
 let systemMapKeyWasDown = false;
 let lastSystemMapRenderAt = 0;
+let systemMapViewport = { zoom: 1, offsetX: 0, offsetY: 0, dragging: false, pointerId: null, startX: 0, startY: 0, lastX: 0, lastY: 0, moved: false };
 let navigationPanelControlsRegistered = false;
 let surfacePanelControlsRegistered = false;
 let missionBoardControlsRegistered = false;
@@ -214,6 +216,8 @@ let gameRoot, playerShip, flightNavLine;
 let flightAssistKeyCaptureRegistered = false;
 let lastMissionAutopilotState = 'IDLE';
 let _saveIntervalId = null;
+let hyperspacePulseStartedAt = 0;
+let hyperspacePulseUntil = 0;
 
 const projectHitTargets = engineProjectHitTargets;
 const projectNodeById = engineProjectNodeById;
@@ -269,9 +273,11 @@ const planetDistantHaloScale = isCoarsePointer ? 14 : 18;
 const planetNodeHitRadius = isCoarsePointer ? planetNodeRadius * 1.18 : planetNodeRadius * 1.06;
 const planetLabelRadius = planetNodeRadius * 1.35;
 const landingRange = 7.2;
+const STARTUP_DOCK_STATION_ID = 'hub-alpha';
+const STARTUP_DOCK_STANDOFF = DOCK_PROXIMITY + 35;
 const flightBounds = SYSTEM_RADIUS * FLIGHT_WORLD_DISTANCE_SCALE;
 const radarRange = 140;
-const debrisCount = prefersReducedMotion ? 72 : (isCoarsePointer ? 210 : 300);
+const debrisCount = prefersReducedMotion ? 110 : (isCoarsePointer ? 320 : 520);
 const dustParticleCount = prefersReducedMotion ? 180 : (isCoarsePointer ? 420 : 600);
 const ambientParticleCount = prefersReducedMotion ? 180 : (isCoarsePointer ? 520 : 900);
 const debrisPositions = new Float32Array(debrisCount * 3);
@@ -616,6 +622,26 @@ function applySavedRunState(data) {
   return true;
 }
 
+function resumePendingRunState() {
+  const data = pendingRunState;
+  pendingRunState = null;
+  if (!data || !applySavedRunState(data)) {
+    clearRunState();
+    showFlightStartupChoice();
+    return;
+  }
+  syncFlightCameraNow();
+  flightState.status = 'SESSION STATE RESTORED';
+  flightState.statusUntil = performance.now() + 3500;
+  showGameMessage({ type: 'SESSION RESTORED', source: 'SESSION STORAGE', text: 'SESSION STATE RESTORED. CONTINUE YOUR RUN OR OPEN THE MAP TO SET A NEW ROUTE.', choices: [{ key: 'space', code: 'Space', label: 'CONTINUE', action: () => dismissGameMessage() }], ttsPriority: 'normal' });
+}
+
+function discardPendingRunState() {
+  pendingRunState = null;
+  clearRunState();
+  showFlightStartupChoice();
+}
+
 function restoreMissionProgress(encoded) {
   try {
     const data = JSON.parse(atob(encoded));
@@ -657,7 +683,9 @@ export function init() {
     getVoicePersona,
     onTrade: handleTradeCompleted,
     showFactionMission,
-    onUndock: undockFromTradeMenu
+    onUndock: undockFromTradeMenu,
+    onRestock: restockAndReturnToStationMenu,
+    openMissionBoard
   });
   restoreCombatStateFromHash();
   if (objectivesPanel) objectivesPanel.addEventListener('click', handleObjectivesPanelClick);
@@ -692,6 +720,8 @@ export function init() {
     flightState,
     flightUp,
     getProjectNodeName,
+    getNavNodeLabel: id => getNavNode(navGraph, id)?.name || stationName(id),
+    getNavNodeType: id => getNavNode(navGraph, id)?.type || 'unknown',
     isCoarsePointer,
     isFlightActive: () => isFlightActive,
     missionState,
@@ -891,6 +921,7 @@ export function init() {
     isFlightActive: () => isFlightActive,
     landingRange,
     missionState,
+    navGraph: () => navGraph,
     projectNodeById,
     projectNodes,
     selectProject,
@@ -951,6 +982,7 @@ export function init() {
     mouse,
     openAudioSettingsMenu,
     openMissionBoard,
+    openPauseMenu,
     openSettingsMenu,
     openSkillTree,
     openStationMenu,
@@ -959,7 +991,7 @@ export function init() {
     radioChain,
     raycaster,
     renderer,
-    onUndock: handleFlightUndock,
+    onUndock: undockFromTradeMenu,
     resetCameraView,
     sectionCamPositions,
     selectProject,
@@ -1507,6 +1539,41 @@ function resetCategoryFilterForFlight() {
   return resetCategoryFilterForFlightModule();
 }
 
+function getStartupDockStation() {
+  return systemStations.find(station => station?.userData?.stationId === STARTUP_DOCK_STATION_ID) || null;
+}
+
+function orientFlightToward(targetPos) {
+  flightTempVec.copy(targetPos).sub(flightState.pos).normalize();
+  if (flightTempVec.lengthSq() > 0) {
+    flightState.yaw = Math.atan2(-flightTempVec.x, -flightTempVec.z);
+    flightState.pitch = THREE.MathUtils.clamp(Math.asin(flightTempVec.y), -1.2, 1.2);
+  }
+  flightState.roll = 0;
+  flightEuler.set(flightState.pitch, flightState.yaw, 0, 'YXZ');
+  flightState.orientation.setFromEuler(flightEuler);
+}
+
+function placePlayerNearStartupDock({ insideDockRange = false } = {}) {
+  const station = getStartupDockStation();
+  if (!station?.position) return false;
+  const standoff = insideDockRange ? DOCK_PROXIMITY * 0.55 : STARTUP_DOCK_STANDOFF;
+  flightState.pos.set(station.position.x, station.position.y, station.position.z + standoff);
+  flightState.vel.set(0, 0, 0);
+  orientFlightToward(station.position);
+  flightState.status = insideDockRange
+    ? 'JUMPED TO HUB ALPHA DOCKING CORRIDOR'
+    : 'DEPLOYED NEAR HUB ALPHA DOCKING CORRIDOR';
+  flightState.statusUntil = performance.now() + 3500;
+  return true;
+}
+
+function dockAtStartupStation() {
+  if (!placePlayerNearStartupDock({ insideDockRange: true })) return false;
+  const station = getStartupDockStation();
+  return station ? dockAtSystemStation(station) : false;
+}
+
 export function enterFlightMode() {
   if (!renderer || !renderer.domElement) return;
   sfxEngine.init();
@@ -1593,31 +1660,29 @@ export function enterFlightMode() {
   flightState.finalApproachSpoken = false;
   flightState.statusUntil = 0;
   flightState.status = isCoarsePointer ? 'KEYBOARD FLIGHT READY' : 'REQUESTING MOUSELOOK LOCK';
-  flightState.pos.copy(camCurrent.pos.lengthSq() ? camCurrent.pos : camTarget.pos);
-
-  flightTempVec.copy(camCurrent.lookAt).sub(flightState.pos).normalize();
-  if (flightTempVec.lengthSq() > 0) {
-    flightState.yaw = Math.atan2(-flightTempVec.x, -flightTempVec.z);
-    flightState.pitch = THREE.MathUtils.clamp(Math.asin(flightTempVec.y), -1.2, 1.2);
+  if (!placePlayerNearStartupDock()) {
+    flightState.pos.copy(camCurrent.pos.lengthSq() ? camCurrent.pos : camTarget.pos);
+    orientFlightToward(camCurrent.lookAt);
   }
-  flightState.roll = 0;
-  flightEuler.set(flightState.pitch, flightState.yaw, 0, 'YXZ');
-  flightState.orientation.setFromEuler(flightEuler);
 
+  syncFlightCameraNow();
   enemies.forEach(enemy => deactivateCombatObject(enemy));
   playerBullets.forEach(bullet => deactivateCombatObject(bullet));
   enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
   playerMissiles.forEach(missile => deactivateCombatObject(missile));
 
-  ttsEngine.speak('USSYVERSE DOGFIGHT MODE ACTIVATED. WELCOME, OPERATOR.', { rate: 1.0, pitch: 0.72, priority: 'high' });
+  ttsEngine.speak('USSYVERSE FLIGHT SYSTEMS ONLINE. WELCOME, OPERATOR.', { rate: 1.0, pitch: 0.72, priority: 'high' });
   if (pendingRunState) {
-    if (applySavedRunState(pendingRunState)) {
-      showGameMessage({ type: 'PREVIOUS RUN DETECTED', source: 'SESSION STORAGE', text: 'PREVIOUS RUN DETECTED. SESSION STATE RESTORED.', choices: [{ key: 'space', code: 'Space', label: 'CONTINUE', action: () => dismissGameMessage() }], ttsPriority: 'normal' });
-    } else {
-      clearRunState();
-      showFlightStartupChoice();
-    }
-    pendingRunState = null;
+    showGameMessage({
+      type: 'PREVIOUS RUN DETECTED',
+      source: 'SESSION STORAGE',
+      text: 'A SAVED SESSION WAS FOUND. RESUME IT, OR CLEAR IT AND START A NEW DEPLOYMENT.',
+      choices: [
+        { key: '1', code: 'Digit1', label: 'RESUME SESSION', action: () => resumePendingRunState() },
+        { key: '2', code: 'Digit2', label: 'NEW DEPLOYMENT', action: () => discardPendingRunState() }
+      ],
+      ttsPriority: 'normal'
+    });
   } else {
     clearRunState();
     showFlightStartupChoice();
@@ -1631,6 +1696,8 @@ export function enterFlightMode() {
 }
 
 function requestFlightPointerLock() {
+  if (flightState.landed || traderState.docked) return;
+  if (flightUiBlocksPointerLock()) return;
   if (isCoarsePointer || !renderer?.domElement?.requestPointerLock) return;
   const lockRequest = renderer.domElement.requestPointerLock();
   if (lockRequest && typeof lockRequest.catch === 'function') {
@@ -1803,6 +1870,61 @@ function dismissGameMessage() {
   return dismissed;
 }
 
+function setFlightPauseReason(reason, active) {
+  if (!flightState.pauseReasons) flightState.pauseReasons = new Set();
+  if (active) flightState.pauseReasons.add(reason);
+  else flightState.pauseReasons.delete(reason);
+  flightState.paused = flightState.pauseReasons.size > 0;
+  if (active) {
+    flightState.keys.clear();
+    flightState.mouseButtons.clear();
+  }
+}
+
+function resumeFlightFromPauseMenu() {
+  setFlightPauseReason('pause-menu', false);
+  flightState.status = flightState.landed
+    ? 'DOCKED. STATION SERVICES STANDING BY.'
+    : 'FLIGHT RESUMED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
+  flightState.statusUntil = performance.now() + 2200;
+  updateFlightHud(true);
+  if (!flightState.landed && !traderState.docked) requestFlightPointerLock();
+}
+
+function openPauseMenu() {
+  if (!isFlightActive) return false;
+  setFlightPauseReason('pause-menu', true);
+  const choices = [
+    { key: '1', code: 'Digit1', label: 'RESUME', icon: 'play', hint: flightState.landed ? 'RETURN TO DOCK SERVICES' : 'RETURN TO FLIGHT', tone: 'confirm', action: resumeFlightFromPauseMenu },
+    { key: '2', code: 'Digit2', label: 'HELP', icon: 'circle-help', hint: 'OPEN OPERATOR REFERENCE', tone: 'cyan', action: () => { resumeFlightFromPauseMenu(); openHelpMenu(); } },
+    { key: '3', code: 'Digit3', label: 'SETTINGS', icon: 'settings', hint: 'AUDIO // INPUT // ACCESSIBILITY', tone: 'cyan', action: () => { resumeFlightFromPauseMenu(); openSettingsMenu(); } }
+  ];
+  if (flightState.landed && traderState.dockedStation) {
+    choices.push({ key: '4', code: 'Digit4', label: 'STATION SERVICES', icon: 'panel-top', hint: stationName(traderState.dockedStation).toUpperCase(), tone: 'yellow', action: () => { resumeFlightFromPauseMenu(); openStationMenu(traderState.dockedStation); } });
+    choices.push({ key: 'u', code: 'KeyU', label: 'UNDOCK', icon: 'log-out', hint: 'RETURN TO FLIGHT', tone: 'deny', action: () => { resumeFlightFromPauseMenu(); undockFromTradeMenu(); } });
+  }
+  choices.push({ key: 'x', code: 'KeyX', label: 'EXIT TO SITE', icon: 'door-open', hint: 'LEAVE FLIGHT MODE', tone: 'deny', action: () => exitFlightMode() });
+  showGameMessage({
+    type: 'PAUSE MENU',
+    source: 'USSYVERSE CONTROL',
+    text: flightState.landed
+      ? `PAUSED WHILE DOCKED AT ${stationName(traderState.dockedStation).toUpperCase()}. RESUME TO KEEP YOUR CURRENT DOCK STATE.`
+      : 'PAUSED. RESUME RETURNS TO THE CURRENT FLIGHT STATE.',
+    ui: {
+      layout: 'dock-grid',
+      headerTitle: 'PAUSE MENU',
+      headerBadge: flightState.landed ? 'DOCKED' : 'IN FLIGHT',
+      colorClass: flightState.landed ? 'yellow' : 'cyan',
+      footerStats: [flightState.landed ? `DOCK ${stationName(traderState.dockedStation).toUpperCase()}` : 'FLIGHT PAUSED'],
+      footerChoices: [{ key: 'Esc', code: 'Escape', aliases: ['Backspace'], label: 'RESUME', action: resumeFlightFromPauseMenu }]
+    },
+    choices,
+    ttsPriority: 'low'
+  });
+  updateFlightHud(true);
+  return true;
+}
+
 function handleGameMessageChoice(event) {
   const handled = handleGameMessageChoiceModule(event);
   if (handled) sfxEngine.playFlat('ui_confirm', { volume: 0.55 });
@@ -1876,6 +1998,17 @@ function getJumpGateDefinitions() {
   }));
 }
 
+function setPlanetShellScale(shell, scale) {
+  if (!shell?.scale || !Number.isFinite(scale)) return;
+  if (typeof shell.scale.setScalar === 'function') shell.scale.setScalar(scale);
+  else if (typeof shell.scale.set === 'function') shell.scale.set(scale, scale, scale);
+  else {
+    shell.scale.x = scale;
+    shell.scale.y = scale;
+    shell.scale.z = scale;
+  }
+}
+
 function updateSurfaceVisuals() {
   const surface = flightState.surface;
   const activePlanet = getCurrentSurfacePlanet();
@@ -1891,12 +2024,26 @@ function updateSurfaceVisuals() {
   const holdSurfaceVisuals = surfaceState === SURFACE_STATES.ORBITAL || surfaceState === SURFACE_STATES.LANDING || surfaceState === SURFACE_STATES.SURFACE;
   for (const planet of systemPlanets) {
     const atmosphere = planet.children?.find(child => child.userData?.isPlanetAtmosphere);
-    if (!atmosphere?.material) continue;
+    const clouds = planet.children?.find(child => child.userData?.isPlanetClouds);
     const isApproach = activePlanet === planet && surfaceState === SURFACE_STATES.APPROACH;
     const isHeld = activePlanet === planet && holdSurfaceVisuals;
-    const opacity = isApproach ? THREE.MathUtils.lerp(0.16, 0.34, approachT) : (isHeld ? 0.34 : 0.16);
-    if (atmosphere.material.uniforms?.uOpacity) atmosphere.material.uniforms.uOpacity.value = opacity;
-    else atmosphere.material.opacity = opacity;
+    const visualT = isApproach ? approachT : (isHeld ? 1 : 0);
+    const atmosphereOpacity = THREE.MathUtils.lerp(0.16, 0.38, visualT);
+    const atmosphereScale = THREE.MathUtils.lerp(1, 1.032, visualT);
+    const cloudOpacity = THREE.MathUtils.lerp(clouds?.userData?.baseOpacity ?? 0.18, clouds?.userData?.approachOpacity ?? 0.36, visualT);
+    const cloudScale = THREE.MathUtils.lerp(clouds?.userData?.baseScale ?? 1, clouds?.userData?.approachScale ?? 1.02, visualT);
+
+    if (atmosphere?.material) {
+      if (atmosphere.material.uniforms?.uOpacity) atmosphere.material.uniforms.uOpacity.value = atmosphereOpacity;
+      else atmosphere.material.opacity = atmosphereOpacity;
+      if (atmosphere.material.uniforms?.uGlowStrength) atmosphere.material.uniforms.uGlowStrength.value = THREE.MathUtils.lerp(1.15, 1.5, visualT);
+      if (atmosphere.material.uniforms?.uHorizonBoost) atmosphere.material.uniforms.uHorizonBoost.value = THREE.MathUtils.lerp(0.28, 0.46, visualT);
+      setPlanetShellScale(atmosphere, atmosphereScale);
+    }
+    if (clouds?.material) {
+      clouds.material.opacity = cloudOpacity;
+      setPlanetShellScale(clouds, cloudScale);
+    }
   }
   const targetFov = surfaceState === SURFACE_STATES.APPROACH ? THREE.MathUtils.lerp(75, 55, approachT) : (holdSurfaceVisuals ? 55 : 75);
   if (camera && Math.abs(camera.fov - targetFov) > 0.01) {
@@ -1919,14 +2066,32 @@ function createSystemWorldObjects() {
 function getSystemMapElements() {
   const overlay = document.getElementById('system-map-overlay');
   const canvas = document.getElementById('system-map-canvas');
-  return { overlay, canvas };
+  const actions = document.getElementById('system-map-actions');
+  return { overlay, canvas, actions };
+}
+
+function flightUiBlocksPointerLock() {
+  if (gameMessageSystem?.classList?.contains?.('active')) return true;
+  const ids = ['system-map-overlay', 'help-menu', 'settings-menu', 'inventory-panel', 'loadout-panel', 'mission-board-overlay', 'trade-panel', 'station-menu', 'tutorial-overlay'];
+  return ids.some(id => {
+    const element = document.getElementById(id);
+    return element && !element.hidden && !element.classList?.contains?.('hidden');
+  });
+}
+
+function hideSystemMapActions() {
+  const { actions } = getSystemMapElements();
+  if (!actions) return;
+  actions.hidden = true;
+  actions.innerHTML = '';
+  actions.removeAttribute('data-node-id');
 }
 
 function renderActiveSystemMap(now = performance.now()) {
   const { overlay, canvas } = getSystemMapElements();
   if (!canvas || overlay?.classList.contains('hidden')) return false;
   lastSystemMapRenderAt = now;
-  return renderSystemMap(canvas, navGraph, flightState, undefined, undefined, flightState.civilianTraffic?.mapContacts, combatState.activeIntercept, now, enemies);
+  return renderSystemMap(canvas, navGraph, flightState, undefined, undefined, flightState.civilianTraffic?.mapContacts, combatState.activeIntercept, now, enemies, systemMapViewport);
 }
 
 function setSystemMapVisible(visible) {
@@ -1937,12 +2102,161 @@ function setSystemMapVisible(visible) {
   if (visible) {
     flightState.keys.clear();
     flightState.mouseButtons.clear();
+    flightState.pointerLocked = false;
+    document.body.classList.add('pointer-unlocked');
     if (document.pointerLockElement === renderer?.domElement && document.exitPointerLock) document.exitPointerLock();
     renderActiveSystemMap(performance.now());
   } else {
+    hideSystemMapActions();
     lastSystemMapRenderAt = 0;
   }
   return true;
+}
+
+function updateSystemMapRouteStatus(node, plotted, prefix = null) {
+  const autopilot = ensureAutopilotState(flightState);
+  const nodeName = node?.name || node?.id || 'waypoint';
+  flightState.status = plotted
+    ? `${prefix || autopilot.routeModeLabel || 'ROUTE PLOTTED'}: ${nodeName.toUpperCase()}`
+    : `${autopilot.blockedReason || 'NO ROUTE FOUND'}: ${nodeName.toUpperCase()}`;
+  flightState.statusUntil = performance.now() + 2600;
+  updateFlightHud(true);
+  renderActiveSystemMap(performance.now());
+}
+
+function syncMapProjectTarget(node) {
+  const projectNode = node?.type === 'planet' ? projectNodeById.get(node.id) : null;
+  if (projectNode?.position && projectNode?.userData?.project) setNavigationTarget(projectNode, 'map');
+  return projectNode;
+}
+
+function plotSystemMapNodeCourse(node, append = false, prefix = null) {
+  if (!node) return false;
+  flightState.hyperspaceUnlocked = skillTree.unlocked.has('hyperspace');
+  const plotted = append ? appendCourse(flightState, navGraph, node.id) : plotCourse(flightState, navGraph, node.id);
+  syncMapProjectTarget(node);
+  updateSystemMapRouteStatus(node, plotted, prefix);
+  return plotted;
+}
+
+function closeSystemMapForTravel() {
+  setSystemMapVisible(false);
+  hideSystemMapActions();
+}
+
+function fastTravelToSystemMapNode(node) {
+  if (!node) return false;
+  const hyperspaceReady = skillTree.unlocked.has('hyperspace');
+  const plotted = plotSystemMapNodeCourse(node, false, hyperspaceReady ? 'HYPERSPACE TARGET' : 'FAST ROUTE');
+  if (!plotted) return false;
+  if (hyperspaceReady) {
+    closeSystemMapForTravel();
+    return activateHyperspaceTravel();
+  }
+  engageRouteAutopilot();
+  flightState.status = `FAST ROUTE ENGAGED: ${(node.name || node.id).toUpperCase()} // DIRECT JUMP REQUIRES HYPERSPACE DRIVE`;
+  flightState.statusUntil = performance.now() + 3200;
+  updateFlightHud(true);
+  closeSystemMapForTravel();
+  return true;
+}
+
+function engageMapAutopilotToNode(node, prefix = 'ROUTE') {
+  if (!plotSystemMapNodeCourse(node, false, prefix)) return false;
+  engageRouteAutopilot();
+  closeSystemMapForTravel();
+  return true;
+}
+
+function getMapNodeDistance(node) {
+  return node?.pos?.distanceTo?.(flightState.pos) ?? Infinity;
+}
+
+function createSystemMapActionButton(label, title, onClick) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.title = title;
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClick();
+    hideSystemMapActions();
+  });
+  return button;
+}
+
+function openSystemMapActionMenu(event, node) {
+  const { overlay, actions } = getSystemMapElements();
+  if (!overlay || !actions || !node) return;
+  actions.innerHTML = '';
+  actions.hidden = false;
+  actions.dataset.nodeId = node.id;
+
+  const title = document.createElement('strong');
+  title.textContent = node.name || node.id;
+  const distance = getMapNodeDistance(node);
+  const tip = document.createElement('span');
+  tip.className = 'map-action-tip';
+  tip.textContent = `${(node.type || 'waypoint').toUpperCase()} // ${Number.isFinite(distance) ? Math.round(distance).toLocaleString() : '--'}u // choose a nav action`;
+  actions.append(title, tip);
+
+  const fastLabel = skillTree.unlocked.has('hyperspace') ? 'Hyperspace Jump' : 'Fast Travel / Autopilot';
+  const fastTitle = skillTree.unlocked.has('hyperspace')
+    ? 'Charge the Hyperspace Drive and jump directly to this waypoint.'
+    : 'Plot the quickest route and engage autopilot; direct jumping unlocks with Hyperspace Drive.';
+  actions.append(createSystemMapActionButton(fastLabel, fastTitle, () => fastTravelToSystemMapNode(node)));
+
+  actions.append(createSystemMapActionButton('Set Route', 'Replace the current navigation route with this waypoint.', () => plotSystemMapNodeCourse(node, false)));
+  actions.append(createSystemMapActionButton('Append Waypoint', 'Add this waypoint to the end of the current plotted route.', () => plotSystemMapNodeCourse(node, true)));
+  actions.append(createSystemMapActionButton('Engage Autopilot', 'Plot this destination and let the route autopilot begin travel.', () => {
+    plotSystemMapNodeCourse(node, false);
+    engageRouteAutopilot();
+    closeSystemMapForTravel();
+  }));
+
+  if (node.type === 'planet') {
+    actions.append(createSystemMapActionButton('Focus / Inspect', 'Open this project in the Ussyverse inspector and set it as the nav focus.', () => {
+      syncMapProjectTarget(node);
+      selectProject(node.id, false);
+      flightState.status = `INSPECTING: ${(node.name || node.id).toUpperCase()}`;
+      flightState.statusUntil = performance.now() + 2000;
+      updateFlightHud(true);
+    }));
+    actions.append(createSystemMapActionButton('Approach / Land', 'Route to this world, or begin landing if already in orbit.', () => {
+      const planet = systemPlanets.find(item => item?.userData?.planetId === node.id || item?.id === node.id);
+      if (planet && flightState.surface?.state === SURFACE_STATES.ORBITAL && flightState.surface?.planetId === node.id) {
+        beginLanding(flightState, planet);
+        flightState.status = `LANDING: ${(node.name || node.id).toUpperCase()}`;
+        flightState.statusUntil = performance.now() + 2400;
+        updateFlightHud(true);
+        return;
+      }
+      engageMapAutopilotToNode(node, 'APPROACH ROUTE');
+    }));
+  }
+
+  if (node.type === 'station') {
+    actions.append(createSystemMapActionButton('Dock / Approach', 'Dock if in range, otherwise plot a docking approach route.', () => {
+      const station = systemStations.find(item => item?.userData?.stationId === node.id);
+      if (station && getMapNodeDistance(node) <= DOCK_PROXIMITY) dockAtSystemStation(station);
+      else engageMapAutopilotToNode(node, 'DOCKING ROUTE');
+    }));
+  }
+
+  actions.append(createSystemMapActionButton('Clear Route', 'Abort the current plotted route and clear waypoints.', () => {
+    disengage(flightState, 'ROUTE CLEARED');
+    flightState.status = 'ROUTE CLEARED';
+    flightState.statusUntil = performance.now() + 1800;
+    updateFlightHud(true);
+    renderActiveSystemMap(performance.now());
+  }));
+
+  const rect = overlay.getBoundingClientRect();
+  const left = Math.max(12, Math.min(event.clientX - rect.left + 12, rect.width - 236));
+  const top = Math.max(12, Math.min(event.clientY - rect.top + 12, rect.height - 280));
+  actions.style.left = `${left}px`;
+  actions.style.top = `${top}px`;
 }
 
 function handleSystemMapNodeClick(event) {
@@ -1951,19 +2265,78 @@ function handleSystemMapNodeClick(event) {
   flightState.keys.clear();
   flightState.mouseButtons.clear();
   const { canvas } = getSystemMapElements();
-  const node = hitTestSystemMapNode(canvas, navGraph, event.clientX, event.clientY);
-  if (!node) return;
-  flightState.hyperspaceUnlocked = skillTree.unlocked.has('hyperspace');
-  const autopilot = ensureAutopilotState(flightState);
-  const plotted = plotCourse(flightState, navGraph, node.id);
-  const projectNode = node.type === 'planet' ? projectNodeById.get(node.id) : null;
-  if (projectNode?.position && projectNode?.userData?.project) setNavigationTarget(projectNode, 'map');
-  const nodeName = node.name || node.id;
-  flightState.status = plotted
-    ? `${autopilot.routeModeLabel || 'ROUTE PLOTTED'}: ${nodeName.toUpperCase()}`
-    : `${autopilot.blockedReason || 'NO ROUTE FOUND'}: ${nodeName.toUpperCase()}`;
-  flightState.statusUntil = performance.now() + 2600;
-  updateFlightHud(true);
+  const node = hitTestSystemMapNode(canvas, navGraph, event.clientX, event.clientY, systemMapViewport);
+  if (!node) {
+    hideSystemMapActions();
+    return;
+  }
+  openSystemMapActionMenu(event, node);
+}
+
+function handleSystemMapPointerDown(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  flightState.keys.clear();
+  flightState.mouseButtons.clear();
+  hideSystemMapActions();
+  systemMapViewport = {
+    ...systemMapViewport,
+    dragging: true,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    moved: false
+  };
+  event.currentTarget?.setPointerCapture?.(event.pointerId);
+  event.currentTarget?.classList?.add?.('is-panning');
+}
+
+function handleSystemMapPointerMove(event) {
+  if (!systemMapViewport.dragging || systemMapViewport.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const rect = event.currentTarget?.getBoundingClientRect?.();
+  const scaleX = rect?.width ? (event.currentTarget.width || rect.width) / rect.width : 1;
+  const scaleY = rect?.height ? (event.currentTarget.height || rect.height) / rect.height : 1;
+  const dx = (event.clientX - systemMapViewport.lastX) * scaleX;
+  const dy = (event.clientY - systemMapViewport.lastY) * scaleY;
+  const total = Math.hypot(event.clientX - systemMapViewport.startX, event.clientY - systemMapViewport.startY);
+  systemMapViewport = {
+    ...systemMapViewport,
+    offsetX: systemMapViewport.offsetX + dx,
+    offsetY: systemMapViewport.offsetY + dy,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    moved: systemMapViewport.moved || total > 6
+  };
+  renderActiveSystemMap(performance.now());
+}
+
+function handleSystemMapPointerUp(event) {
+  if (!systemMapViewport.dragging || systemMapViewport.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget?.releasePointerCapture?.(event.pointerId);
+  event.currentTarget?.classList?.remove?.('is-panning');
+  const wasDrag = systemMapViewport.moved;
+  systemMapViewport = { ...systemMapViewport, dragging: false, pointerId: null, moved: false };
+  if (!wasDrag) handleSystemMapNodeClick(event);
+}
+
+function handleSystemMapCanvasClick(event) {
+  if (systemMapViewport.dragging || systemMapViewport.moved) return;
+  handleSystemMapNodeClick(event);
+}
+
+function handleSystemMapWheel(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  flightState.keys.clear();
+  flightState.mouseButtons.clear();
+  const zoom = Math.max(0.45, Math.min(4, systemMapViewport.zoom * (event.deltaY < 0 ? 1.12 : 0.88)));
+  systemMapViewport = { ...systemMapViewport, zoom };
   renderActiveSystemMap(performance.now());
 }
 
@@ -1987,6 +2360,8 @@ function findNearestGraphNodeId(types = null) {
 }
 
 function selectAutopilotTargetId() {
+  const plottedTargetId = ensureAutopilotState(flightState).targetId;
+  if (plottedTargetId && getNavNode(navGraph, plottedTargetId)) return plottedTargetId;
   const currentProjectId = flightState.navNode?.userData?.project?.id;
   if (currentProjectId && getNavNode(navGraph, currentProjectId)) return currentProjectId;
   const nearestId = findNearestGraphNodeId(new Set(['station', 'planet']));
@@ -2034,6 +2409,22 @@ function triggerWarpFlash() {
   window.setTimeout(() => { flash.style.opacity = '0'; }, 120);
 }
 
+function triggerHyperspaceVisualPulse(durationMs = 2400) {
+  const now = performance.now();
+  hyperspacePulseStartedAt = now;
+  hyperspacePulseUntil = now + durationMs;
+}
+
+function getHyperspacePulseMultiplier(time = performance.now()) {
+  if (time >= hyperspacePulseUntil || hyperspacePulseUntil <= hyperspacePulseStartedAt) return 1;
+  const duration = hyperspacePulseUntil - hyperspacePulseStartedAt;
+  const progress = THREE.MathUtils.clamp((time - hyperspacePulseStartedAt) / duration, 0, 1);
+  // Charge hard, then taper, purely as a render multiplier. Position/timing
+  // changes remain owned by activateHyperspaceTravel's existing timeout.
+  const envelope = Math.sin(progress * Math.PI);
+  return 1 + envelope * 72;
+}
+
 function activateJumpGate(manual = true) {
   const gate = isInJumpRange(flightState.pos, systemJumpGates);
   if (!gate) {
@@ -2064,7 +2455,11 @@ function activateHyperspaceTravel() {
     updateFlightHud(true);
     return false;
   }
-  if (!flightState.navNode) {
+  const autopilot = ensureAutopilotState(flightState);
+  const targetNode = getNavNode(navGraph, autopilot.targetId);
+  const targetPos = targetNode?.pos || autopilot.targetPos || flightState.navNode?.position;
+  const targetLabel = targetNode?.name || flightState.navNode?.userData?.project?.name || autopilot.targetId || 'WAYPOINT';
+  if (!targetPos) {
     flightState.status = 'SET NAV TARGET BEFORE HYPERSPACE';
     flightState.statusUntil = performance.now() + 1800;
     updateFlightHud(true);
@@ -2080,13 +2475,15 @@ function activateHyperspaceTravel() {
   flightState.status = 'HYPERSPACE CHARGING';
   flightState.statusUntil = now + 2200;
   flightState.energy = Math.max(0, flightState.energy - 35);
+  triggerHyperspaceVisualPulse(2600);
   updateFlightHud(true);
   window.setTimeout(() => {
     triggerWarpFlash();
-    flightState.pos.copy(flightState.navNode.position);
+    triggerHyperspaceVisualPulse(900);
+    flightState.pos.copy(targetPos);
     flightState.vel.set(0, 0, 0);
     flightState.hyperspaceCooldownUntil = performance.now() + 60000;
-    flightState.status = 'HYPERSPACE ARRIVAL COMPLETE';
+    flightState.status = `HYPERSPACE ARRIVAL: ${String(targetLabel).toUpperCase()}`;
     flightState.statusUntil = performance.now() + 2200;
     updateFlightHud(true);
   }, 2000);
@@ -2101,6 +2498,7 @@ function registerNavigationPanelControls() {
   const mapCloseBtn = document.getElementById('system-map-close');
   const mapOverlay = document.getElementById('system-map-overlay');
   const mapCanvas = document.getElementById('system-map-canvas');
+  const mapActions = document.getElementById('system-map-actions');
   engageBtn?.addEventListener('click', engageRouteAutopilot);
   abortBtn?.addEventListener('click', () => {
     disengage(flightState, 'MANUAL');
@@ -2111,24 +2509,75 @@ function registerNavigationPanelControls() {
     event.stopPropagation();
     flightState.keys.clear();
     flightState.mouseButtons.clear();
+    if (event.target === mapOverlay) hideSystemMapActions();
   });
-  mapCanvas?.addEventListener('pointerdown', handleSystemMapNodeClick);
+  mapOverlay?.addEventListener('pointerup', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    flightState.keys.clear();
+    flightState.mouseButtons.clear();
+  });
+  mapOverlay?.addEventListener('click', event => {
+    if (event.target !== mapOverlay) return;
+    event.preventDefault();
+    event.stopPropagation();
+    flightState.keys.clear();
+    flightState.mouseButtons.clear();
+  });
+  mapOverlay?.addEventListener('wheel', event => {
+    handleSystemMapWheel(event);
+  }, { passive: false });
+  mapCanvas?.addEventListener('pointerdown', handleSystemMapPointerDown);
+  mapCanvas?.addEventListener('pointermove', handleSystemMapPointerMove);
+  mapCanvas?.addEventListener('pointerup', handleSystemMapPointerUp);
+  mapCanvas?.addEventListener('pointercancel', handleSystemMapPointerUp);
+  mapCanvas?.addEventListener('click', handleSystemMapCanvasClick);
+  mapCanvas?.addEventListener('wheel', handleSystemMapWheel, { passive: false });
+  mapCanvas?.addEventListener('contextmenu', event => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  mapActions?.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
   mapCloseBtn?.addEventListener('pointerdown', event => {
     event.preventDefault();
     event.stopPropagation();
     setSystemMapVisible(false);
+    requestFlightPointerLock();
+  });
+  mapCloseBtn?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    requestFlightPointerLock();
   });
 }
 
 function registerSurfacePanelControls() {
   if (surfacePanelControlsRegistered) return;
   surfacePanelControlsRegistered = true;
-  document.getElementById('surface-land-btn')?.addEventListener('click', landOnNearestProject);
-  document.getElementById('surface-depart-btn')?.addEventListener('click', () => {
-    beginDeparture(flightState);
-    flightState.status = 'SURFACE DEPARTURE INITIATED';
-    flightState.statusUntil = performance.now() + 1800;
+  ['approach-hint', 'orbital-panel', 'surface-panel'].forEach(id => {
+    document.getElementById(id)?.addEventListener('pointerdown', event => {
+      event.stopPropagation();
+    });
+  });
+  document.getElementById('surface-land-btn')?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    landOnNearestProject();
+  });
+  document.getElementById('surface-services-btn')?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (traderState.dockedStation) openStationMenu(traderState.dockedStation);
+    else if (flightState.currentDockedProject?.id) openStationMenu(flightState.currentDockedProject.id);
     updateFlightHud(true);
+  });
+  document.getElementById('surface-depart-btn')?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    undockFromTradeMenu();
   });
 }
 
@@ -2240,7 +2689,10 @@ function updateSystemDocking() {
   if (flightState.landed) return;
   if (flightState.surface?.state && flightState.surface.state !== SURFACE_STATES.NONE) return;
   const nearest = getNearestBody(flightState.pos, systemStations, DOCK_PROXIMITY);
-  if (nearest?.body) dockAtSystemStation(nearest.body);
+  if (nearest?.body && performance.now() > flightState.statusUntil) {
+    const stationName = nearest.body.userData?.name || nearest.body.userData?.stationId || 'STATION';
+    flightState.status = `[ DOCK AVAILABLE: L ] ${String(stationName).toUpperCase()}`;
+  }
 }
 
 function getCurrentSurfacePlanet() {
@@ -2284,12 +2736,29 @@ function registerFlightAssistKeyCapture() {
 }
 
 function undockFromTradeMenu() {
-  flightState.landed = false;
-  flightState.currentDockedProject = null;
   closeMissionBoard({ flightState, documentRef: document });
   resetFlightAssistState();
+  if (flightState.surface?.state === SURFACE_STATES.SURFACE) {
+    beginDeparture(flightState);
+    flightState.status = 'SURFACE DEPARTURE INITIATED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
+  } else {
+    const station = traderState.dockedStation
+      ? systemStations.find(item => item?.userData?.stationId === traderState.dockedStation)
+      : null;
+    flightState.landed = false;
+    flightState.currentDockedProject = null;
+    if (station?.position && flightState.pos.distanceTo(station.position) < DOCK_PROXIMITY + 20) {
+      flightTempVec.copy(flightState.pos).sub(station.position);
+      if (flightTempVec.lengthSq() < 0.001) flightTempVec.set(0, 0, 1);
+      flightTempVec.normalize();
+      flightState.pos.copy(station.position).addScaledVector(flightTempVec, DOCK_PROXIMITY + 35);
+      flightState.vel.set(0, 0, 0);
+      orientFlightToward(station.position);
+    }
+    flightState.status = 'UNDOCKED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
+  }
   handleFlightUndock();
-  flightState.status = 'UNDOCKED. CLICK VIEWPORT TO RECAPTURE MOUSELOOK.';
+  syncFlightCameraNow();
   flightState.statusUntil = performance.now() + 3000;
   updateFlightHud(true);
   saveCurrentRunState({ manual: true });
@@ -2395,7 +2864,7 @@ function showFlightStartupChoice() {
   showGameMessage({
     type: 'DEPLOYMENT CHOICE',
     source: 'USSYVERSE CONTROL',
-    text: 'DOGFIGHT MODE ONLINE. CHOOSE A GUIDED TUTORIAL WITH COMBAT, LANDING, AND TRADING, OR DROP STRAIGHT INTO FREE ROAM WITH THE DIRECTOR ENABLED.',
+    text: 'USSYVERSE FLIGHT SYSTEMS ONLINE. DISMISS THE CONTROLS REFERENCE, THEN CHOOSE A GUIDED TUTORIAL WITH COMBAT, LANDING, MAP ROUTING, AND SERVICES, OR DROP STRAIGHT INTO FREE ROAM WITH THE DIRECTOR ENABLED.',
     choices: [
       { key: '1', code: 'Digit1', label: 'START TUTORIAL', action: () => startTutorialMission() },
       { key: '2', code: 'Digit2', label: 'FREE ROAM WITH DIRECTOR', action: () => startFreeRoam() }
@@ -2421,7 +2890,15 @@ function startFreeRoam(message = 'FREE ROAM ENABLED. THE DIRECTOR WILL OFFER COM
     detail: 'Accept available objectives from the HUD, land at project stations, trade cargo, or wait for the director to inject events.',
     source: 'director'
   });
-  showGameMessage({ type: 'SYSTEM UPDATE', source: 'USSYVERSE CONTROL', text: message, ttsPriority: 'normal' });
+  placePlayerNearStartupDock();
+  flightState.landed = false;
+  traderState.docked = false;
+  traderState.dockedStation = null;
+  flightState.status = 'FREE ROAM ACTIVE - HUB ALPHA NEARBY';
+  flightState.statusUntil = performance.now() + 4500;
+  syncFlightCameraNow();
+  ttsEngine.speak(message, { ...getVoicePersona('USSYVERSE CONTROL'), priority: 'normal' });
+  if (!isTutorialOverlayVisible()) requestFlightPointerLock();
   updateFlightHud(true);
 }
 
@@ -2986,6 +3463,10 @@ function getMissionLandingProjectName() {
 }
 
 function landOnNearestProject() {
+  if (!flightState.landed && flightState.surface?.state === SURFACE_STATES.NONE) {
+    const nearestStation = getNearestBody(flightState.pos, systemStations, DOCK_PROXIMITY);
+    if (nearestStation?.body && dockAtSystemStation(nearestStation.body)) return;
+  }
   if (flightState.surface?.state === SURFACE_STATES.SURFACE) {
     beginDeparture(flightState);
     flightState.status = 'SURFACE DEPARTURE INITIATED';
@@ -2994,6 +3475,16 @@ function landOnNearestProject() {
     return;
   }
   if (flightState.surface?.state === SURFACE_STATES.ORBITAL) {
+    const planet = getCurrentSurfacePlanet();
+    if (planet) {
+      beginLanding(flightState, planet);
+      flightState.status = `LANDING ON ${flightState.surface.planetId.toUpperCase()}`;
+      flightState.statusUntil = performance.now() + 1800;
+      updateFlightHud(true);
+      return;
+    }
+  }
+  if (flightState.surface?.state === SURFACE_STATES.APPROACH) {
     const planet = getCurrentSurfacePlanet();
     if (planet) {
       beginLanding(flightState, planet);
@@ -3107,29 +3598,15 @@ function getEnemyFireCooldown(pos, cls) {
   return cls.fireRate / aggression;
 }
 
+function restockAndReturnToStationMenu(projectId) {
+  const project = USSY_PROJECTS.find(item => item.id === projectId) || { id: projectId, name: stationName(projectId) };
+  restockAtProject(project);
+  openTradeMenu(projectId);
+}
+
 function openStationMenu(projectId) {
   if (!projectId) return;
-  syncCombatCreditsFromTrader();
-  const lore = getStationLore(projectId);
-  const loreMissions = getStationMissions(projectId);
-  showGameMessage({
-    type: 'STATION SERVICES',
-    source: lore.merchantName,
-    text: `DOCKED AT ${stationName(projectId).toUpperCase()}. CREDITS: ${traderState.credits}CR. SELECT SERVICE:`,
-    ui: {
-      headerTitle: lore.merchantName,
-      headerBadge: stationName(projectId).toUpperCase(),
-      colorClass: lore.colorClass || 'green'
-    },
-    choices: [
-      { key: '1', code: 'Digit1', label: 'RESTOCK', action: () => restockAtProject(USSY_PROJECTS.find(project => project.id === projectId) || { id: projectId, name: stationName(projectId) }) },
-      { key: '2', code: 'Digit2', label: 'EQUIPMENT', action: () => openEquipmentMarket(projectId) },
-      { key: '3', code: 'Digit3', label: 'CARGO MARKET', action: () => openTradeMenu(projectId) },
-      { key: '4', code: 'Digit4', label: 'MISSION BOARD', hint: getMissionBoardStationDef(projectId)?.hasMissions ? 'CONTRACT FEED' : `${loreMissions.length} LORE CONTRACTS`, action: () => (getMissionBoardStationDef(projectId)?.hasMissions ? openMissionBoard(projectId) : showFactionMission(projectId)) },
-      { key: 'space', code: 'Space', label: 'DISMISS', action: () => dismissGameMessage() }
-    ],
-    ttsPriority: 'normal'
-  });
+  openTradeMenu(projectId);
 }
 
 function openEquipmentMarket(projectId) {
@@ -3278,6 +3755,7 @@ function buildOrchestratorPayload() {
 async function pollOrchestrator() {
   if (!gameOrchestrator.enabled || gameOrchestrator.polling || !isFlightActive) return;
   if (performance.now() < gameOrchestrator.nextPollAt) return;
+  if (gameOrchestrator.pendingEvent) return;
   if (gameMessageState.active) return;
   if (!gameOrchestrator.tutorialComplete) return;
 
@@ -3291,8 +3769,7 @@ async function pollOrchestrator() {
     if (!res.ok) return;
     const data = await res.json();
     if (data.fire && data.event) {
-      gameOrchestrator.pendingEvent = data.event;
-      fireOrchestratedEvent(data.event);
+      offerOrchestratedEvent(data.event);
     }
   } catch {
     // Orchestration is opportunistic and must never interrupt the local game loop.
@@ -3302,6 +3779,60 @@ async function pollOrchestrator() {
     const maxInterval = Math.max(gameOrchestrator.minInterval, gameOrchestrator.maxInterval);
     gameOrchestrator.nextPollAt = performance.now() + minInterval + Math.random() * (maxInterval - minInterval);
   }
+}
+
+function normalizeOrchestratedEvent(event) {
+  return {
+    id: event.id || `event_${Date.now()}`,
+    type: String(event.type || 'COMMS').toUpperCase(),
+    source: event.source || 'DEEP SPACE',
+    title: event.title || event.type || 'COMMS',
+    text: event.text || 'UNRESOLVED TRANSMISSION.',
+    choices: Array.isArray(event.choices) ? event.choices : [],
+    spawnEnemies: Math.max(0, Math.min(5, Number(event.spawnEnemies) || 0)),
+    creditReward: Math.max(0, Number(event.creditReward) || 0),
+    fuelReward: Math.max(0, Number(event.fuelReward) || 0),
+    urgency: event.urgency || 'normal',
+    objectiveText: event.objectiveText || '',
+    objectiveTarget: event.objectiveTarget || null
+  };
+}
+
+function offerOrchestratedEvent(event) {
+  const normalizedEvent = normalizeOrchestratedEvent(event);
+  if (!shouldFireEvent(buildOrchestratorPayload(), normalizedEvent.type)) return false;
+  gameOrchestrator.pendingEvent = normalizedEvent;
+  flightState.status = `DIRECTOR OFFER: ${normalizedEvent.title} // OBJECTIVES PANEL`;
+  flightState.statusUntil = performance.now() + 4500;
+  missionState.objectiveView = 'available';
+  renderObjectivesPanel();
+  updateFlightHud(true);
+  return true;
+}
+
+function acceptOrchestratorOffer() {
+  const event = gameOrchestrator.pendingEvent;
+  if (!event) return false;
+  if (!fireOrchestratedEvent(event)) {
+    flightState.status = 'DIRECTOR OFFER UNAVAILABLE';
+    flightState.statusUntil = performance.now() + 2500;
+    updateFlightHud(true);
+    return false;
+  }
+  gameOrchestrator.pendingEvent = null;
+  renderObjectivesPanel();
+  return true;
+}
+
+function declineOrchestratorOffer() {
+  if (!gameOrchestrator.pendingEvent) return false;
+  gameOrchestrator.pendingEvent = null;
+  gameOrchestrator.nextPollAt = performance.now() + Math.max(gameOrchestrator.minInterval, 30000);
+  flightState.status = 'DIRECTOR OFFER DECLINED';
+  flightState.statusUntil = performance.now() + 1800;
+  renderObjectivesPanel();
+  updateFlightHud(true);
+  return true;
 }
 
 function spawnOrchestratedEnemies(event, count = event.spawnEnemies) {
@@ -3335,21 +3866,8 @@ function showOrchestratorMessage(event, choices, overrides = {}) {
 }
 
 function fireOrchestratedEvent(event) {
-  const normalizedEvent = {
-    id: event.id || `event_${Date.now()}`,
-    type: String(event.type || 'COMMS').toUpperCase(),
-    source: event.source || 'DEEP SPACE',
-    title: event.title || event.type || 'COMMS',
-    text: event.text || 'UNRESOLVED TRANSMISSION.',
-    choices: Array.isArray(event.choices) ? event.choices : [],
-    spawnEnemies: Math.max(0, Math.min(5, Number(event.spawnEnemies) || 0)),
-    creditReward: Math.max(0, Number(event.creditReward) || 0),
-    fuelReward: Math.max(0, Number(event.fuelReward) || 0),
-    urgency: event.urgency || 'normal',
-    objectiveText: event.objectiveText || '',
-    objectiveTarget: event.objectiveTarget || null
-  };
-  if (!shouldFireEvent(buildOrchestratorPayload(), normalizedEvent.type)) return;
+  const normalizedEvent = normalizeOrchestratedEvent(event);
+  if (!shouldFireEvent(buildOrchestratorPayload(), normalizedEvent.type)) return false;
   gameOrchestrator.lastEventTime = performance.now();
   gameOrchestrator.lastEventId = normalizedEvent.id;
 
@@ -3363,7 +3881,7 @@ function fireOrchestratedEvent(event) {
   });
   if (missionDispatched) {
     showOrchestratorMessage(normalizedEvent, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }], { ttsPriority: normalizedEvent.urgency === 'low' ? 'low' : 'normal' });
-    return;
+    return true;
   }
 
   if (normalizedEvent.type === 'COMBAT') {
@@ -3416,14 +3934,14 @@ function fireOrchestratedEvent(event) {
       },
       { key: '2', code: 'Digit2', label: 'IGNORE', action: () => resolveOrchestratedChoice(normalizedEvent, { key: '2', outcome: 'DISTRESS SIGNAL IGNORED. THE CHANNEL FADES INTO STATIC.' }) }
     ]);
-    return;
+    return true;
   }
 
   if (normalizedEvent.type === 'CONTRABAND') {
     const cargoIds = Object.keys(traderState.cargo).filter(id => traderState.cargo[id] > 0);
     if (!cargoIds.length) {
       showOrchestratorMessage({ ...normalizedEvent, text: normalizedEvent.text || 'INSPECTION SWEEP PASSES. NO CONTRABAND SIGNATURE FOUND.' }, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }]);
-      return;
+      return true;
     }
     showOrchestratorMessage(normalizedEvent, [
       {
@@ -3450,7 +3968,7 @@ function fireOrchestratedEvent(event) {
         }
       }
     ]);
-    return;
+    return true;
   }
 
   if (normalizedEvent.type === 'ANOMALY') {
@@ -3458,7 +3976,7 @@ function fireOrchestratedEvent(event) {
     traderState.fuel = Math.min(traderState.maxFuel, traderState.fuel + fuelReward);
     updateFlightHud(true);
     showOrchestratorMessage(normalizedEvent, [{ key: 'space', code: 'Space', label: 'ACKNOWLEDGE', action: () => dismissGameMessage() }], { typeSpeed: 24, ttsPriority: 'low' });
-    return;
+    return true;
   }
 
   const choices = normalizedEvent.choices.map(choice => ({
@@ -3475,6 +3993,7 @@ function fireOrchestratedEvent(event) {
   const typeSpeed = normalizedEvent.type === 'SILENCE' ? 28 : undefined;
   const ttsPriority = normalizedEvent.type === 'SILENCE' ? 'low' : undefined;
   showOrchestratorMessage(normalizedEvent, choices, { typeSpeed, ttsPriority });
+  return true;
 }
 
 function resolveOrchestratedChoice(event, choice) {
@@ -3522,6 +4041,16 @@ function resetCameraView() {
 
 function updateFlightCamera() {
   return updateFlightCameraModule();
+}
+
+function syncFlightCameraNow() {
+  updateFlightCamera();
+  camCurrent.pos.copy(camTarget.pos);
+  camCurrent.lookAt.copy(camTarget.lookAt);
+  camera.position.copy(camCurrent.pos);
+  if (isFlightActive) camera.up.copy(flightUp);
+  else camera.up.set(0, 1, 0);
+  camera.lookAt(camCurrent.lookAt);
 }
 
 function mapRadarPoint(targetPos, radius) {
@@ -3750,11 +4279,12 @@ export function tick(time = 0) {
     const simulationPaused = Boolean(flightState.paused);
     if (!simulationPaused) updateFlight(time);
     updateSystemMapInput();
-    updatePlanetLOD(systemPlanets, camera);
+    updatePlanetLOD(systemPlanets, camera, frameDt);
     updateStationRotations(systemStations, frameDt);
     updateJumpGateRotations(systemJumpGates, frameDt);
       if (!simulationPaused) {
         updateRouteAutopilot(flightState, combatState, frameDt, navGraph);
+        updateFlightBasis();
         const gate = isInJumpRange(flightState.pos, systemJumpGates);
         if (gate && performance.now() > flightState.statusUntil) flightState.status = `[ ACTIVATE JUMP GATE: J ] ${gate.userData.name}`;
         // Hunter cooldowns are wall-clock based; do not pass the frame/performance clock.
@@ -3773,7 +4303,12 @@ export function tick(time = 0) {
       if (previousSurfaceState !== SURFACE_STATES.SURFACE && flightState.surface?.state === SURFACE_STATES.SURFACE) dockAtSurfaceProject();
     }
     updateSurfaceVisuals();
-    updateStarfieldWarp(systemStarfield, flightForward, ensureAutopilotState(flightState).hyperspeedMult ?? 1);
+    updateStarfieldWarp(
+      systemStarfield,
+      flightForward,
+      Math.max(ensureAutopilotState(flightState).hyperspeedMult ?? 1, getHyperspacePulseMultiplier(time))
+    );
+    updateFlightCamera();
     updateNavHUDModule(flightState, combatState);
     updateSurfaceHUDModule(flightState, getSurfacePlanetsForHUD());
     if (!simulationPaused) updateSystemDocking();
@@ -3867,7 +4402,7 @@ export function tick(time = 0) {
   const endTime = performance.now();
   if (endTime - telemetryLastUpdate > 250) {
     telemetryTimer.innerText = isFlightActive
-      ? `DOGFIGHT_LOAD: ${(endTime - startTime).toFixed(2)}ms // VIEW: ${flightState.view.toUpperCase()} // DRAW_CALLS: ${renderer.info.render.calls}`
+      ? `FLIGHT_LOAD: ${(endTime - startTime).toFixed(2)}ms // VIEW: ${flightState.view.toUpperCase()} // DRAW_CALLS: ${renderer.info.render.calls}`
       : `TELEMETRY_LOAD: ${(endTime - startTime).toFixed(2)}ms // DRAW_CALLS: ${renderer.info.render.calls}`;
     if (isFlightActive) {
       telemetryCoord.innerText = `X: ${flightState.pos.x.toFixed(2)} Y: ${flightState.pos.y.toFixed(2)} Z: ${flightState.pos.z.toFixed(2)}`;

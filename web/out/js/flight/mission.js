@@ -275,7 +275,7 @@ export function startTutorialMission() {
   const state = missionState();
   if (!state) return false;
   state.active = true;
-  state.step = 'killTutorialBogeys';
+  state.step = 'tutorialBasics';
   state.killGoal = 5;
   state.kills = 0;
   state.contractId = null;
@@ -285,17 +285,23 @@ export function startTutorialMission() {
   state.contractStartStationId = null;
   state.landingProjectId = state.landingProjectId || 'devussy';
   setCurrentObjective({
-    id: 'tutorial-bogeys',
-    kicker: 'TUTORIAL 1/2',
-    title: 'Splash Tutorial Bogeys',
-    detail: 'Destroy 5 teleporting tutorial targets using lasers or missiles.',
-    progress: 0,
-    target: state.killGoal
+    id: 'tutorial-basics',
+    kicker: 'TUTORIAL 1/4',
+    title: 'Learn Flight Systems',
+    detail: 'Open the system map with M, click a node for waypoint actions, use Fast Travel/Autopilot for long routes, then begin navigation training.'
   });
-  spawnTutorialBogeys();
-  bark('TUTORIAL BOGEYS INBOUND', 'normal');
-  showMissionMessage({ type: 'MISSION OBJECTIVE', source: 'USSYVERSE CONTROL', text: `OBJECTIVE: SPLASH TUTORIAL BOGEYS 0/${state.killGoal}. USE RADAR CONTACTS TO ACQUIRE THEM, THEN FIRE LASERS OR MISSILES.`, typeSpeed: 30 });
-  setStatus('TUTORIAL BOGEYS TELEPORTING IN');
+  showMissionMessage({
+    type: 'TUTORIAL BRIEFING',
+    source: 'USSYVERSE CONTROL',
+    text: 'FIRST, LEARN THE SHIP. M OPENS THE SYSTEM MAP. CLICK A NODE FOR FAST TRAVEL, AUTOPILOT, DOCK, LAND, INSPECT, AND ROUTE ACTIONS. MOUSE WHEEL ZOOMS THE MAP; DRAG PANS IT. WHEN YOU ARE READY, START NAVIGATION TRAINING. COMBAT COMES LAST.',
+    choices: [
+      { key: '1', code: 'Digit1', label: 'START NAV TRAINING', action: () => setMissionStep('goLandAtProject') },
+      { key: '2', code: 'Digit2', label: 'KEEP PRACTICING', action: () => {} }
+    ],
+    typeSpeed: 22,
+    ttsPriority: 'normal'
+  });
+  setStatus('TUTORIAL BASICS ONLINE');
   return true;
 }
 
@@ -308,13 +314,16 @@ export function setMissionStep(stepId, data = {}) {
     state.kills = data.kills ?? state.kills ?? 0;
     setCurrentObjective({
       id: 'tutorial-bogeys',
-      kicker: 'TUTORIAL 1/2',
-      title: 'Splash Tutorial Bogeys',
+      kicker: 'TUTORIAL 4/4',
+      title: 'Final Combat Drill',
       detail: 'Destroy 5 teleporting tutorial targets using lasers or missiles.',
       progress: state.kills,
       target: state.killGoal
     });
     spawnTutorialBogeys();
+    bark('TUTORIAL BOGEYS INBOUND', 'normal');
+    showMissionMessage({ type: 'MISSION OBJECTIVE', source: 'USSYVERSE CONTROL', text: `OBJECTIVE: SPLASH TUTORIAL BOGEYS 0/${state.killGoal}. USE RADAR CONTACTS TO ACQUIRE THEM, THEN FIRE LASERS OR MISSILES.`, typeSpeed: 30 });
+    setStatus('TUTORIAL BOGEYS TELEPORTING IN');
     return true;
   }
 
@@ -326,9 +335,9 @@ export function setMissionStep(stepId, data = {}) {
     if (targetNode) missionDeps.setNavigationTarget(targetNode, 'mission');
     setCurrentObjective({
       id: 'tutorial-land',
-      kicker: 'TUTORIAL 2/2',
+      kicker: 'TUTORIAL 2/4',
       title: `Land At ${getMissionLandingProjectName()}`,
-      detail: 'Follow the nav marker to the project node and press L inside landing range.',
+      detail: 'Use the map, Fast Travel/Autopilot, or manual flight to reach the project node, then press L inside landing range.',
       targetProjectId: targetId
     });
     bark('NAV MARKER SET', 'normal');
@@ -376,7 +385,7 @@ export function updateMission(dt) {
     resetMissionToIdle(`${contract.title} expired. Pick another objective or keep flying.`);
     return;
   }
-  if (state.step === 'killTutorialBogeys' && state.kills >= state.killGoal) setMissionStep('goLandAtProject');
+  if (state.step === 'killTutorialBogeys' && state.kills >= state.killGoal) completeTutorialMission();
   const step = getActiveContractStep();
   if (step && Number.isFinite(step.target) && state.contractProgress >= step.target) advanceContractStep();
 }
@@ -388,13 +397,13 @@ export function registerMissionKill(enemy) {
     state.kills = Math.min(state.killGoal, state.kills + 1);
     setCurrentObjective({
       id: 'tutorial-bogeys',
-      kicker: 'TUTORIAL 1/2',
-      title: 'Splash Tutorial Bogeys',
+      kicker: 'TUTORIAL 4/4',
+      title: 'Final Combat Drill',
       detail: 'Destroy 5 teleporting tutorial targets using lasers or missiles.',
       progress: state.kills,
       target: state.killGoal
     });
-    if (state.kills >= state.killGoal) setMissionStep('goLandAtProject');
+    if (state.kills >= state.killGoal) completeTutorialMission();
     return true;
   }
 
@@ -424,6 +433,13 @@ export function registerMissionTrade(trade = {}) {
   return true;
 }
 
+function completeTutorialMission() {
+  resetMissionToIdle('Tutorial complete. Pick an available objective, trade, or wait for director traffic.');
+  missionDeps.gameOrchestrator && (missionDeps.gameOrchestrator.tutorialComplete = true);
+  showMissionMessage({ type: 'TUTORIAL COMPLETE', source: 'USSYVERSE CONTROL', text: 'TUTORIAL COMPLETE. CONTRACTS AND THE DIRECTOR ARE ONLINE.', ttsPriority: 'normal' });
+  return true;
+}
+
 export function handleMissionLanding(stationId) {
   const state = missionState();
   if (!state?.active) return false;
@@ -433,9 +449,23 @@ export function handleMissionLanding(stationId) {
       setStatus(`WRONG DOCK // LAND AT ${getMissionLandingProjectName().toUpperCase()}`);
       return false;
     }
-    resetMissionToIdle('Tutorial landing complete. Pick an available objective, trade, or wait for director traffic.');
-    missionDeps.gameOrchestrator && (missionDeps.gameOrchestrator.tutorialComplete = true);
-    showMissionMessage({ type: 'TUTORIAL COMPLETE', source: 'USSYVERSE CONTROL', text: 'TUTORIAL COMPLETE. CONTRACTS AND THE DIRECTOR ARE ONLINE.', ttsPriority: 'normal' });
+    state.step = 'tutorialServices';
+    setCurrentObjective({
+      id: 'tutorial-services',
+      kicker: 'TUTORIAL 3/4',
+      title: 'Review Landing Services',
+      detail: 'Use station services, inventory, loadout, mission board, objectives, and settings. Start the final combat drill when ready.'
+    });
+    showMissionMessage({
+      type: 'TUTORIAL CHECKPOINT',
+      source: 'USSYVERSE CONTROL',
+      text: 'NAVIGATION AND LANDING COMPLETE. REVIEW SERVICES, INVENTORY, LOADOUT, MISSION BOARD, OBJECTIVES, AND SETTINGS. COMBAT IS THE FINAL DRILL AND WILL ONLY START WHEN YOU CHOOSE IT.',
+      choices: [
+        { key: '1', code: 'Digit1', label: 'START FINAL COMBAT DRILL', action: () => setMissionStep('killTutorialBogeys') },
+        { key: '2', code: 'Digit2', label: 'KEEP EXPLORING SERVICES', action: () => {} }
+      ],
+      ttsPriority: 'normal'
+    });
     return true;
   }
 

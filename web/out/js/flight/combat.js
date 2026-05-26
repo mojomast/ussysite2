@@ -135,7 +135,9 @@ export function createFlightGameObjects(options = {}) {
   });
 
   const navLineGeo = new THREE.BufferGeometry();
-  navLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  // Keep enough vertices for a multi-stop autopilot corridor instead of a
+  // single two-point tether; navigation.js narrows drawRange per frame.
+  navLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(64 * 3), 3));
   const flightNavLine = new THREE.Line(
     navLineGeo,
     new THREE.LineBasicMaterial({

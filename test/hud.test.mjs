@@ -9,9 +9,11 @@ const {
   capRadarTrajectory,
   getRadarTrajectoryDelta,
   shouldDrawEnemyRadarContact,
+  updateNavHUD,
   updateBossHealthBar,
   updateBountyHUD,
   updateKillFeed,
+  updateStationDockHUD,
   updateSurfaceHUD,
   worldToRadar
 } = await import('../js/flight/hud.js');
@@ -195,6 +197,77 @@ test('updateBountyHUD hides at zero and blinks above critical bounty', () => {
   assert.equal(elements['bounty-indicator'].classList.contains('active'), true);
   assert.equal(elements['bounty-indicator'].classList.contains('bounty-critical'), true);
   assert.equal(elements['bounty-amount'].textContent, '1750CR');
+});
+
+test('updateNavHUD shows route target distance when no project nav node is selected', () => {
+  const elements = {
+    'nav-target-name': createElement(),
+    'nav-distance': createElement(),
+    'nav-eta': createElement(),
+    'nav-route-hops': createElement(),
+    'nav-autopilot-status': createElement(),
+    'nav-panel-state': createElement(),
+    'nav-panel-target': createElement(),
+    'nav-panel-route': createElement(),
+    'nav-route-list': createElement(),
+    'nav-panel-speed': createElement(),
+    'nav-panel-blocked': createElement(),
+    'nav-panel': createElement(),
+    'nav-engage-btn': createElement(),
+    'nav-abort-btn': createElement()
+  };
+  const flightState = {
+    navDistance: NaN,
+    navEta: '--',
+    pos: { distanceTo: other => Math.hypot(other.x - 0, other.y - 0, other.z - 0) },
+    thrust: 10,
+    autopilot: {
+      state: 'ENGAGED',
+      targetId: 'hub-alpha',
+      targetPos: { x: 30, y: 40, z: 0 },
+      route: ['start', 'hub-alpha'],
+      routeIndex: 1,
+      hyperspeedMult: 1
+    }
+  };
+
+  updateNavHUD(flightState, {}, true, createDocument(elements));
+
+  assert.equal(elements['nav-distance'].textContent, '50u');
+  assert.equal(elements['nav-eta'].textContent, 'ETA 5s');
+});
+
+test('updateStationDockHUD exposes a visible docking prompt', () => {
+  const elements = {
+    'station-dock-hint': createElement(),
+    'station-dock-name': createElement(),
+    'station-dock-range': createElement()
+  };
+  const station = { userData: { name: 'Hub Alpha' } };
+
+  const result = updateStationDockHUD({ landed: false }, station, 118, createDocument(elements));
+
+  assert.equal(result.active, true);
+  assert.equal(elements['station-dock-hint'].classList.contains('active'), true);
+  assert.equal(elements['station-dock-name'].textContent, 'HUB ALPHA');
+  assert.equal(elements['station-dock-range'].textContent, '118u');
+});
+
+test('updateStationDockHUD hides while landed or without a station', () => {
+  const elements = {
+    'station-dock-hint': createElement(),
+    'station-dock-name': createElement(),
+    'station-dock-range': createElement()
+  };
+  const doc = createDocument(elements);
+  const station = { userData: { name: 'Hub Alpha' } };
+
+  assert.equal(updateStationDockHUD({ landed: true }, station, 30, doc).active, false);
+  assert.equal(elements['station-dock-hint'].classList.contains('active'), false);
+  assert.equal(elements['station-dock-hint'].attributes['aria-hidden'], 'true');
+
+  assert.equal(updateStationDockHUD({ landed: false }, null, Infinity, doc).active, false);
+  assert.equal(elements['station-dock-hint'].classList.contains('active'), false);
 });
 
 test('updateSurfaceHUD shows approach hint with planet name and altitude', () => {

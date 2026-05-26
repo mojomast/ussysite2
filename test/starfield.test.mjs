@@ -40,6 +40,7 @@ const TestTHREE = {
     }
   },
   ShaderMaterial: TestMaterial,
+  LineBasicMaterial: TestMaterial,
   Points: class {
     constructor(geometry, material) {
       this.geometry = geometry;
@@ -48,6 +49,16 @@ const TestTHREE = {
       this.name = '';
     }
   },
+  LineSegments: class {
+    constructor(geometry, material) {
+      this.geometry = geometry;
+      this.material = material;
+      this.userData = {};
+      this.name = '';
+      this.visible = true;
+    }
+  },
+  AdditiveBlending: 'additive',
   Color: class {
     constructor(value = 0xffffff) { this.set(value); }
     set(value) {
@@ -65,7 +76,11 @@ describe('flight starfield', () => {
     const starfield = createStarfield(scene, TestTHREE);
 
     assert.equal(typeof starfield.dispose, 'function');
-    assert.equal(scene.children.length, 1);
+    assert.equal(scene.children.length, 2);
+    assert.equal(typeof starfield.updateStreaks, 'function');
+    assert.equal(starfield.material.uniforms.uWarp.value, 0);
+    assert.match(starfield.material.vertexShader, /uniform float uWarp/);
+    assert.match(starfield.material.fragmentShader, /uWarp/);
 
     starfield.dispose();
     assert.equal(scene.children.length, 0);
@@ -79,6 +94,15 @@ describe('flight starfield', () => {
     assert.equal(starfield.count, 8000);
     assert.equal(starfield.positions.length / 3, 8000);
     assert.equal(starfield.points.geometry.attributes.position.count, 8000);
+  });
+
+  it('updates warp streaks from generated star positions', () => {
+    const starfield = createStarfield(new TestScene(), TestTHREE);
+
+    assert.doesNotThrow(() => {
+      starfield.updateStreaks({ x: 0, y: 0, z: -1 }, 80);
+    });
+    assert.equal(starfield.streaks.geometry.attributes.position.needsUpdate, true);
   });
 
   it('does not place stars within planet exclusion zones', () => {

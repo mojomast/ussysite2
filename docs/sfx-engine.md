@@ -1,6 +1,6 @@
 # SFX Engine
 
-`js/flight/sfx.js` exports `sfxEngine`, a procedural Web Audio and Three.js positional sound engine for dogfight mode.
+`js/flight/sfx.js` exports `sfxEngine`, a procedural Web Audio and Three.js positional sound engine for the Ussyverse flight layer.
 
 ## Audio Context
 

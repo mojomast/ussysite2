@@ -64,7 +64,7 @@ Place the help overlay near the other flight overlays, after `#system-map-overla
     </div>
 
     <footer class="help-menu-footer">
-      <span><kbd>H</kbd>/<kbd>F1</kbd> CLOSE HELP</span>
+      <span><kbd>F1</kbd> HELP</span>
       <span><kbd>ESC</kbd> BACK</span>
       <span><kbd>P</kbd> PAUSE</span>
     </footer>
@@ -317,7 +317,7 @@ Suggested sections:
 
 | Section | Content |
 |---|---|
-| Launch | Type the hidden launch code from non-flight mode to enter dogfight mode. Pick tutorial or free roam from deployment choice. |
+| Launch | Type the hidden launch code from non-flight mode to enter the Ussyverse flight layer. Pick tutorial or free roam from deployment choice. |
 | Fly | Use mouse look, thrust/strafe, roll, afterburner, throttle hold, and match speed to control ship movement. |
 | Fight | Left mouse fires primary, right mouse fires secondary, watch shields/armor/energy/heat/ammo/missiles, use `C` to evade. |
 | Navigate | Aim at a project and press `V` to set a nav target. Use `M` for the system map. Use autopilot once routed. |
@@ -331,7 +331,7 @@ Suggested sections:
 
 | Section | Content |
 |---|---|
-| What This Is | The Ussyverse maps real projects as an explorable 3D constellation and dogfight/trade layer. |
+| What This Is | The Ussyverse maps real projects as an explorable 3D constellation with flight, combat, and trade systems. |
 | Project Nodes | Each node represents a project with source/runtime links, technical specs, implementation notes, and relationship edges. |
 | Factions | Station/faction identity follows project categories via reputation normalization. |
 | Stations | Project nodes and system stations are service hubs for restock, equipment, cargo, contracts, and upgrades. |

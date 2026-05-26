@@ -45,7 +45,7 @@ const SETTINGS_CONTROLS = {
     ['B', 'Mission board (when docked or no modal active)'],
     ['U', 'Upgrades / skills (when landed)'],
     ['Tab', 'Settings menu'],
-    ['Escape', 'Close topmost overlay / exit flight (pointer unlocked)'],
+    ['Escape', 'Close topmost overlay / pause flight'],
     ['Space', 'Dismiss message / activate focused UI'],
     ['1-6', 'Modal / menu choices']
   ],

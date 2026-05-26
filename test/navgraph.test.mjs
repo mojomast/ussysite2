@@ -94,4 +94,23 @@ describe('flight navgraph', () => {
 
     assert.equal(distanceBetweenNodes(graph, 'devussy', 'unknown'), Infinity);
   });
+
+  it('prefers rendered position over raw world position for navigation nodes', () => {
+    const rendered = new TestVector3(135, 0, 0);
+    const graph = buildNavGraph([{ id: 'planet', name: 'Planet', pos: [100, 0, 0], position: rendered }], [], []);
+
+    assert.equal(graph.get('planet').pos, rendered);
+  });
+
+  it('findRoute chooses low-cost gate path even when physical heuristic would mislead', () => {
+    const graph = new Map([
+      ['start', { id: 'start', pos: new TestVector3(0, 0, 0), edges: [{ targetId: 'direct', dist: 10 }, { targetId: 'gate-a', dist: 1 }] }],
+      ['direct', { id: 'direct', pos: new TestVector3(1, 0, 0), edges: [{ targetId: 'end', dist: 100 }] }],
+      ['gate-a', { id: 'gate-a', pos: new TestVector3(1000, 0, 0), edges: [{ targetId: 'gate-b', dist: 1 }] }],
+      ['gate-b', { id: 'gate-b', pos: new TestVector3(2000, 0, 0), edges: [{ targetId: 'end', dist: 1 }] }],
+      ['end', { id: 'end', pos: new TestVector3(2, 0, 0), edges: [] }]
+    ]);
+
+    assert.deepEqual(findRoute(graph, 'start', 'end'), ['start', 'gate-a', 'gate-b', 'end']);
+  });
 });
