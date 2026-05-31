@@ -168,6 +168,20 @@ test('final station arrival stops velocity and shows arrival status', () => {
   assert.equal(flightState.autopilot.arrivalNodeId, 'c');
 });
 
+test('planet destinations continue past approach boundary toward orbit range', () => {
+  const navGraph = new Map([
+    ['start', { id: 'start', type: 'station', pos: new Vector3(0, 0, 0), edges: [] }],
+    ['planet', { id: 'planet', type: 'planet', pos: new Vector3(1000, 0, 0), radius: 100, edges: [] }]
+  ]);
+  const flightState = state(new Vector3(720, 0, 0));
+  flightState.autopilot = { ...createAutopilotState(), state: 'ENGAGED', targetId: 'planet', route: ['start', 'planet'], routeIndex: 1 };
+
+  updateAutopilot(flightState, {}, 0.1, navGraph);
+
+  assert.notEqual(flightState.autopilot.state, AUTOPILOT_STATES.ARRIVED);
+  assert.ok(flightState.pos.x > 720);
+});
+
 test('updateStarfieldWarp drives shader uniform and streak opacity', () => {
   const starfield = {
     material: { uniforms: { uWarp: { value: 0 } } },

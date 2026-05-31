@@ -365,6 +365,14 @@ const skillTree = {
   }
 };
 
+const DOGFIGHT_UPGRADE_SEQUENCE = ['weap_1', 'shield_1', 'eng_1', 'weap_2', 'hull_1', 'weap_3', 'shield_2', 'eng_2', 'hull_2', 'eng_3', 'weap_4'];
+const dogfightArena = {
+  active: false,
+  wave: 0,
+  pendingNextWave: false,
+  upgradeIndex: 0
+};
+
 setCombatFlightState(flightState);
 configureCombat({
   onEnemyKill: ({ classId, pos, xpReward } = {}) => {
@@ -2146,6 +2154,9 @@ function closeSystemMapForTravel() {
 
 function fastTravelToSystemMapNode(node) {
   if (!node) return false;
+  if (missionState.active && missionState.step === 'tutorialBasics' && node.type === 'planet') {
+    setMissionStep('goLandAtProject', { targetProjectId: node.id });
+  }
   const hyperspaceReady = skillTree.unlocked.has('hyperspace');
   const plotted = plotSystemMapNodeCourse(node, false, hyperspaceReady ? 'HYPERSPACE TARGET' : 'FAST ROUTE');
   if (!plotted) return false;
@@ -2867,7 +2878,8 @@ function showFlightStartupChoice() {
     text: 'USSYVERSE FLIGHT SYSTEMS ONLINE. DISMISS THE CONTROLS REFERENCE, THEN CHOOSE A GUIDED TUTORIAL WITH COMBAT, LANDING, MAP ROUTING, AND SERVICES, OR DROP STRAIGHT INTO FREE ROAM WITH THE DIRECTOR ENABLED.',
     choices: [
       { key: '1', code: 'Digit1', label: 'START TUTORIAL', action: () => startTutorialMission() },
-      { key: '2', code: 'Digit2', label: 'FREE ROAM WITH DIRECTOR', action: () => startFreeRoam() }
+      { key: '2', code: 'Digit2', label: 'FREE ROAM WITH DIRECTOR', action: () => startFreeRoam() },
+      { key: '3', code: 'Digit3', label: 'DOGFIGHT ARENA', action: () => startDogfightArena() }
     ],
     onDismiss: () => startTutorialMission(),
     typeSpeed: 18
@@ -2877,6 +2889,8 @@ function showFlightStartupChoice() {
 }
 
 function startFreeRoam(message = 'FREE ROAM ENABLED. THE DIRECTOR WILL OFFER COMMS, BOUNTIES, DISTRESS CALLS, AND ROUTE PRESSURE AS YOU EXPLORE.') {
+  dogfightArena.active = false;
+  dogfightArena.pendingNextWave = false;
   missionState.active = false;
   missionState.step = 'idle';
   missionState.kills = 0;
@@ -2900,6 +2914,125 @@ function startFreeRoam(message = 'FREE ROAM ENABLED. THE DIRECTOR WILL OFFER COM
   ttsEngine.speak(message, { ...getVoicePersona('USSYVERSE CONTROL'), priority: 'normal' });
   if (!isTutorialOverlayVisible()) requestFlightPointerLock();
   updateFlightHud(true);
+}
+
+function refillDogfightResources() {
+  flightState.shield = skillTree.getMaxShield();
+  flightState.armor = skillTree.getMaxArmor();
+  flightState.energy = skillTree.getMaxEnergy();
+  flightState.ammo = maxPlayerAmmo;
+  flightState.missiles = maxPlayerMissilesStored;
+  flightState.fuel = flightState.maxFuel;
+  combatState.heat = 0;
+  combatState.overheated = false;
+  combatState.overchargeUsed = false;
+  flightState.shieldCriticalSpoken = false;
+  flightState.hullCriticalLogged = false;
+}
+
+function getDogfightEnemyClass(wave, index) {
+  if (wave >= 8 && index === 0) return 'elite';
+  if (wave >= 5 && index % 3 === 0) return 'gunboat';
+  if (wave >= 3 && index % 2 === 0) return 'interceptor';
+  return 'scout';
+}
+
+function grantDogfightAutoUpgrade() {
+  while (dogfightArena.upgradeIndex < DOGFIGHT_UPGRADE_SEQUENCE.length) {
+    const nodeId = DOGFIGHT_UPGRADE_SEQUENCE[dogfightArena.upgradeIndex++];
+    if (skillTree.unlocked.has(nodeId)) continue;
+    const node = SKILL_TREE_NODES.find(item => item.id === nodeId);
+    if (!node) continue;
+    combatState.skillPoints += node.cost;
+    if (skillTree.unlock(nodeId)) {
+      skillTree.applyAll();
+      return node.name || nodeId.toUpperCase();
+    }
+  }
+  const credits = 125 + dogfightArena.wave * 25;
+  addCombatCredits(credits);
+  return `${credits}CR ARENA BONUS`;
+}
+
+function spawnDogfightWave() {
+  dogfightArena.pendingNextWave = false;
+  dogfightArena.wave += 1;
+  resetCombatSessionStats(combatState);
+  const waveEnemies = [];
+  const count = Math.min(maxEnemies, 2 + Math.floor(dogfightArena.wave * 0.8));
+  activateEnemyWave(enemies, count, (enemy, offset, delay) => {
+    const classId = getDogfightEnemyClass(dogfightArena.wave, waveEnemies.length);
+    spawnEnemy(enemy, offset, delay, classId);
+    enemy.userData.dogfightArena = true;
+    enemy.userData.xpReward = (getEnemyClass(classId).xpReward || 25) + dogfightArena.wave * 4;
+    enemy.userData.creditReward = (getEnemyClass(classId).creditReward || 50) + dogfightArena.wave * 12;
+    waveEnemies.push(enemy);
+  });
+  announceEnemyWave(waveEnemies);
+  setCurrentObjective({
+    id: 'dogfight-arena',
+    kicker: `ARENA WAVE ${dogfightArena.wave}`,
+    title: 'Dogfight Arena',
+    detail: `Clear ${count} hostile ships. Winning the wave automatically installs your next upgrade.`,
+    progress: 0,
+    target: count,
+    source: 'arena'
+  });
+  flightState.status = `DOGFIGHT WAVE ${dogfightArena.wave} INBOUND`;
+  flightState.statusUntil = performance.now() + 2600;
+  updateFlightHud(true);
+}
+
+function completeDogfightWave() {
+  if (!dogfightArena.active || dogfightArena.pendingNextWave) return;
+  dogfightArena.pendingNextWave = true;
+  const upgrade = grantDogfightAutoUpgrade();
+  refillDogfightResources();
+  setCurrentObjective({
+    id: 'dogfight-arena-cleared',
+    kicker: `ARENA WAVE ${dogfightArena.wave} CLEARED`,
+    title: 'Automatic Upgrade Installed',
+    detail: `${upgrade} installed. Next wave is deploying with stronger opposition.`,
+    source: 'arena'
+  });
+  showGameMessage({
+    type: 'ARENA WAVE CLEARED',
+    source: 'DOGFIGHT ARENA',
+    text: `WAVE ${dogfightArena.wave} CLEARED. AUTO-UPGRADE INSTALLED: ${upgrade}. SHIELDS, ARMOR, ENERGY, AMMO, MISSILES, AND FUEL RESTORED. NEXT WAVE INCOMING.`,
+    ttsPriority: 'normal'
+  });
+  window.setTimeout(() => {
+    if (dogfightArena.active && isFlightActive) spawnDogfightWave();
+  }, 3200);
+  updateFlightHud(true);
+}
+
+function startDogfightArena() {
+  missionState.active = false;
+  missionState.step = 'idle';
+  missionState.kills = 0;
+  resetContractState();
+  gameOrchestrator.tutorialComplete = true;
+  gameOrchestrator.pendingEvent = null;
+  gameOrchestrator.bountyPendingReward = 0;
+  gameOrchestrator.nextPollAt = performance.now() + 600000;
+  dogfightArena.active = true;
+  dogfightArena.wave = 0;
+  dogfightArena.pendingNextWave = false;
+  dogfightArena.upgradeIndex = 0;
+  placePlayerNearStartupDock();
+  flightState.landed = false;
+  traderState.docked = false;
+  traderState.dockedStation = null;
+  enemies.forEach(enemy => deactivateCombatObject(enemy));
+  playerBullets.forEach(bullet => deactivateCombatObject(bullet));
+  enemyBullets.forEach(bullet => deactivateCombatObject(bullet));
+  playerMissiles.forEach(missile => deactivateCombatObject(missile));
+  refillDogfightResources();
+  hideTutorialOverlay();
+  ttsEngine.speak('DOGFIGHT ARENA ONLINE. CLEAR WAVES TO INSTALL AUTOMATIC UPGRADES.', { ...getVoicePersona('COMBAT SYSTEM'), priority: 'high' });
+  if (!isTutorialOverlayVisible()) requestFlightPointerLock();
+  spawnDogfightWave();
 }
 
 function startTutorialMission() {
@@ -3455,6 +3588,7 @@ function handleEnemyDestroyed(enemy) {
   } else {
     deactivateCombatObject(enemy);
   }
+  if (dogfightArena.active && !dogfightArena.pendingNextWave && enemies.every(item => !item.userData.active || item.userData.isFriendly)) completeDogfightWave();
 }
 
 function getMissionLandingProjectName() {

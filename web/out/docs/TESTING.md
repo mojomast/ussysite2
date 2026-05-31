@@ -29,7 +29,11 @@ npm run test:tts:contract
 
 `combat-state.test.mjs` covers pure combat phase transitions, death detection, respawn restoration, and orchestrator client-side event gating.
 
-`flight-startup-contract.test.mjs` covers the dynamic runtime import contract and the single ESM Three bootstrap markup.
+`flight-startup-contract.test.mjs` covers the dynamic runtime import contract, the single ESM Three bootstrap markup, startup deployment choices, dogfight arena source contracts, and tutorial map-route advancement contracts.
+
+`autopilot.test.mjs` covers route plotting, gate jumps, station arrival, starfield warp uniforms, system-map hit testing, and planet route behavior that continues past the outer approach boundary toward orbital range.
+
+`surface.test.mjs` covers approach/orbit/landing/departure transitions plus the rule that target-planet approach preserves active route autopilot while unrelated approaches can still cancel it.
 
 `tutorial-overlay.test.mjs` covers pointer-lock relock ordering when the first-flight controls overlay closes.
 

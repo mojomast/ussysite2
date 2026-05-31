@@ -162,7 +162,12 @@ function requireDeps() {
 }
 
 function isTypingTarget(target) {
-  return Boolean(target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]'));
+  const tag = target?.tagName?.toLowerCase?.();
+  return tag === 'input'
+    || tag === 'textarea'
+    || tag === 'select'
+    || Boolean(target?.isContentEditable)
+    || Boolean(target?.closest?.('input, textarea, select, [contenteditable="true"]'));
 }
 
 function isVisibleElement(element) {
@@ -312,6 +317,7 @@ function onGlobalKeyDown(event) {
   } = requireDeps();
 
   if (radioChain.ctx && radioChain.ctx.state === 'suspended') radioChain.resume();
+  if (event.defaultPrevented) return;
   if (event.code === 'Escape' && isSettingsMenuOpen?.()) {
     event.preventDefault();
     closeSettingsMenu?.();

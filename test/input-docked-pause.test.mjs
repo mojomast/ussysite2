@@ -38,7 +38,7 @@ function createElement(id, classes = []) {
   };
 }
 
-function configureHarness({ messageActive = false, onExitFlight = () => {}, onOpenPause = () => {}, requestPointerLock = () => {} } = {}) {
+function configureHarness({ flightActive = true, messageActive = false, onEnterFlight = () => {}, onExitFlight = () => {}, onOpenPause = () => {}, requestPointerLock = () => {}, unlockAudio = () => {} } = {}) {
   const listeners = {};
   const elements = {
     'game-message-system': createElement('game-message-system', messageActive ? ['active'] : [])
@@ -64,14 +64,14 @@ function configureHarness({ messageActive = false, onExitFlight = () => {}, onOp
     disableAutopilot() {},
     dismissGameMessage() {},
     documentRef,
-    enterFlightMode() {},
+    enterFlightMode: onEnterFlight,
     exitFlightMode: onExitFlight,
     gameMessageState: { active: messageActive },
     handleGameMessageChoice: () => false,
     handleSurfaceEscape: () => false,
     heroContainer: null,
     isConsoleActive: () => false,
-    isFlightActive: () => true,
+    isFlightActive: () => flightActive,
     isSettingsMenuOpen: () => false,
     isTutorialOverlayVisible: () => false,
     landOnNearestProject() {},
@@ -96,12 +96,23 @@ function configureHarness({ messageActive = false, onExitFlight = () => {}, onOp
     toggleHelpMenu() {},
     toggleObjectivesView() {},
     traderState: { dockedStation: 'devussy' },
-    unlockAudio() {},
+    unlockAudio,
     updateFlightHud() {},
     windowRef: { addEventListener() {} }
   });
   registerInputListeners();
   return { documentRef, elements, listeners, renderer };
+}
+
+function createKeyEvent(key, options = {}) {
+  return {
+    key,
+    code: `Key${String(key).toUpperCase()}`,
+    target: null,
+    defaultPrevented: false,
+    preventDefault() { this.prevented = true; this.defaultPrevented = true; },
+    ...options
+  };
 }
 
 test('Escape with unlocked pointer opens pause menu instead of exiting flight', () => {
@@ -135,4 +146,34 @@ test('active game messages block pointer recapture while docked', () => {
   assert.equal(event.prevented, true);
   assert.equal(lockRequests, 0);
   assert.equal(flightState.pointerLocked, false);
+});
+
+test('typing ussy while inactive unlocks audio and enters flight once', () => {
+  let entered = 0;
+  let unlocked = 0;
+  const { listeners } = configureHarness({
+    flightActive: false,
+    onEnterFlight: () => { entered += 1; },
+    unlockAudio: () => { unlocked += 1; }
+  });
+
+  for (const key of ['u', 's', 's']) listeners.keydown(createKeyEvent(key));
+  const finalEvent = createKeyEvent('y');
+  listeners.keydown(finalEvent);
+
+  assert.equal(finalEvent.prevented, true);
+  assert.equal(unlocked, 1);
+  assert.equal(entered, 1);
+});
+
+test('secret launch ignores input fields and already handled events', () => {
+  let entered = 0;
+  const { listeners } = configureHarness({ flightActive: false, onEnterFlight: () => { entered += 1; } });
+
+  for (const key of ['u', 's', 's', 'y']) listeners.keydown(createKeyEvent(key, { target: { tagName: 'INPUT' } }));
+  assert.equal(entered, 0);
+
+  for (const key of ['u', 's', 's']) listeners.keydown(createKeyEvent(key));
+  listeners.keydown(createKeyEvent('y', { defaultPrevented: true }));
+  assert.equal(entered, 0);
 });

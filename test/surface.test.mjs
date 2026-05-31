@@ -80,13 +80,23 @@ test('checkPlanetProximity does not retrigger when surface state is not NONE', (
   assert.equal(state.surface.planetId, null);
 });
 
-test('enterApproach idles route autopilot without UI dependencies', () => {
+test('enterApproach idles non-target route autopilot without UI dependencies', () => {
   const state = flightState();
   enterApproach(state, planet);
   assert.equal(state.autopilot.state, 'IDLE');
   assert.deepEqual(state.autopilot.route, []);
   assert.equal(state.autopilot.hyperspeedMult, 1);
   assert.equal(state.autopilot.blockedReason, 'PLANET APPROACH');
+});
+
+test('enterApproach preserves route autopilot targeting that planet', () => {
+  const state = flightState();
+  state.autopilot.targetId = 'devussy';
+  enterApproach(state, planet);
+  assert.equal(state.autopilot.state, 'ENGAGED');
+  assert.deepEqual(state.autopilot.route, ['a', 'b']);
+  assert.equal(state.autopilot.hyperspeedMult, 80);
+  assert.equal(state.autopilot.blockedReason, null);
 });
 
 test('APPROACH transitions to ORBITAL within planet radius times 1.6', () => {

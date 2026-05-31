@@ -1,5 +1,10 @@
 # Changelog
 
+## Flight Upgrade — navigation and dogfight arena
+- Map fast travel to planets now continues to orbital range instead of stopping at the outer approach shell, and matching surface approach no longer cancels the active route autopilot.
+- Tutorial map routing now advances navigation training automatically when the player chooses a planet fast-travel route from the opening tutorial step.
+- Startup now includes a Dogfight Arena deployment with escalating enemy waves, automatic post-wave skill upgrades, resource refills, and director events suppressed during arena play.
+
 ## Flight Fix — runtime stability and arrival cues
 - Runtime loading now uses single-flight import/init promises so idle preload, double clicks, or launch retries cannot initialize the flight scene twice.
 - Autopilot final arrival now stops drift and shows an explicit arrival status, while director offers stay pending if they become unsafe to accept.

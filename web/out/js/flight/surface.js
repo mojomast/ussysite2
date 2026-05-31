@@ -111,6 +111,15 @@ function disengageRouteAutopilot(flightState, reason) {
   flightState.autopilot.blockedReason = reason;
 }
 
+function shouldPreserveApproachAutopilot(flightState, planet) {
+  const autopilot = flightState?.autopilot;
+  const id = planetId(planet);
+  if (!autopilot || !id) return false;
+  if (autopilot.targetId === id) return true;
+  const waypointId = autopilot.route?.[autopilot.routeIndex ?? 1];
+  return waypointId === id;
+}
+
 export function checkPlanetProximity(flightState, planets = []) {
   const surface = ensureSurface(flightState);
   if (surface.state !== SURFACE_STATES.NONE && surface.state !== SURFACE_STATES.APPROACH) return surface;
@@ -140,7 +149,7 @@ export function enterApproach(flightState, planet, distanceToPlanet = null) {
   surface.landingProgress = 0;
   surface.surfaceY = surfaceYForPlanet(planet);
   surface.exitQueued = false;
-  disengageRouteAutopilot(flightState, 'PLANET APPROACH');
+  if (!shouldPreserveApproachAutopilot(flightState, planet)) disengageRouteAutopilot(flightState, 'PLANET APPROACH');
   if ((distanceToPlanet ?? distanceBetween(flightState?.pos, planet?.pos ?? planet?.position)) <= radius * ORBIT_RADIUS_MULT) {
     enterOrbital(flightState, planet);
   }

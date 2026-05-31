@@ -23,6 +23,8 @@ function createHarness(options = {}) {
   const frames = [];
   const timers = [];
   const idleCallbacks = [];
+  const listeners = {};
+  let currentTime = 0;
   const overlay = createOverlay();
   const runtime = {
     initCalls: 0,
@@ -37,7 +39,10 @@ function createHarness(options = {}) {
   const errors = [];
   const globals = {};
   const main = createFlightMain({
-    documentRef: { getElementById: id => (id === 'flight-loading-overlay' ? overlay : null) },
+    documentRef: {
+      addEventListener(type, listener) { listeners[type] = listener; },
+      getElementById: id => (id === 'flight-loading-overlay' ? overlay : null)
+    },
     windowRef: { requestIdleCallback: cb => idleCallbacks.push(cb) },
     requestAnimationFrame: cb => frames.push(cb),
     setTimeout: cb => timers.push(cb),
@@ -47,7 +52,8 @@ function createHarness(options = {}) {
       return runtime;
     },
     console: { error: (...args) => errors.push(args) },
-    globalThis: globals
+    globalThis: globals,
+    now: () => currentTime
   });
   const runFrame = (time = 0) => {
     const cb = frames.shift();
@@ -59,19 +65,25 @@ function createHarness(options = {}) {
     await Promise.resolve();
     await Promise.resolve();
   };
-  return { errors, flush, frames, globals, idleCallbacks, imports, main, overlay, runFrame, runtime, timers };
+  const keyEvent = (key, options = {}) => ({
+    key,
+    code: `Key${String(key).toUpperCase()}`,
+    defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true; },
+    ...options
+  });
+  const pressLaunchKey = (key, options = {}) => listeners.keydown(keyEvent(key, options));
+  return { errors, flush, frames, globals, idleCallbacks, imports, keyEvent, listeners, main, overlay, pressLaunchKey, runFrame, runtime, setNow: value => { currentTime = value; }, timers };
 }
 
-test('bootstrap defers runtime initialization until idle timeout', async () => {
+test('bootstrap initializes universe runtime without entering flight', async () => {
   const harness = createHarness();
 
   harness.main.bootstrap();
   assert.equal(harness.imports.length, 0);
   assert.equal(harness.runtime.initCalls, 0);
+  assert.equal(typeof harness.listeners.keydown, 'function');
 
-  harness.idleCallbacks.shift()();
-  assert.equal(harness.timers.length, 1);
-  harness.timers.shift()();
   harness.runFrame(1);
   await harness.flush();
   harness.runFrame(2);
@@ -148,21 +160,42 @@ test('launch retries after failed import and succeeds', async () => {
   assert.equal(harness.overlay.hidden, true);
 });
 
-test('idle preload failure logs without showing blocking overlay', async () => {
-  const harness = createHarness({ rejectImportOnce: true });
+test('bootstrap launch code imports runtime on demand', async () => {
+  const harness = createHarness();
 
   harness.main.bootstrap();
-  harness.idleCallbacks.shift()();
-  harness.timers.shift()();
+  for (const key of ['u', 's', 's']) harness.pressLaunchKey(key);
+  const finalEvent = harness.keyEvent('y');
+  harness.listeners.keydown(finalEvent);
+
+  assert.equal(finalEvent.defaultPrevented, true);
+  assert.equal(harness.overlay.hidden, false);
+  assert.equal(harness.overlay.text.textContent, 'Initializing flight systems...');
+  assert.equal(harness.imports.length, 0);
+
   harness.runFrame(10);
   await harness.flush();
+  harness.runFrame(20);
   await harness.flush();
 
   assert.deepEqual(harness.imports, [FLIGHT_RUNTIME_URL]);
-  assert.equal(harness.runtime.initCalls, 0);
-  assert.equal(harness.runtime.enterCalls, 0);
+  assert.equal(harness.runtime.initCalls, 1);
+  assert.equal(harness.runtime.enterCalls, 1);
   assert.equal(harness.overlay.hidden, true);
-  assert.equal(harness.overlay.classList.contains('failed'), false);
-  assert.equal(harness.errors.length, 1);
-  assert.equal(harness.errors[0][0], 'Ussyverse idle preload failed');
+});
+
+test('bootstrap launch code ignores typing targets and stale sequences', async () => {
+  const harness = createHarness();
+
+  harness.main.bootstrap();
+  for (const key of ['u', 's', 's', 'y']) {
+    harness.pressLaunchKey(key, { target: { tagName: 'INPUT' } });
+  }
+  assert.equal(harness.imports.length, 0);
+
+  harness.setNow(0);
+  harness.pressLaunchKey('u');
+  harness.setNow(1600);
+  for (const key of ['s', 's', 'y']) harness.pressLaunchKey(key);
+  assert.equal(harness.imports.length, 0);
 });

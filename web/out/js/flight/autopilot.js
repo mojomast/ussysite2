@@ -98,7 +98,7 @@ function getWaypointArrivalThreshold(node, autopilot) {
   if (!node) return autopilot.arrivalThreshold ?? 200;
   if (node.type === 'gate') return Math.max(1, node.activationRange ?? 12);
   if (node.type === 'station') return Math.max(1, node.activationRange ?? 120);
-  if (node.type === 'planet' && Number.isFinite(node.radius) && node.radius > 0) return Math.max(200, node.radius * 3);
+  if (node.type === 'planet' && Number.isFinite(node.radius) && node.radius > 0) return Math.max(200, node.radius * 1.6);
   return autopilot.arrivalThreshold ?? 200;
 }
 

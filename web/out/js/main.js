@@ -1,21 +1,23 @@
-globalThis.__USSY_BUILD__ = 'runtime-stability-fix-20260526';
+globalThis.__USSY_BUILD__ = 'nav-arena-20260531';
 
-export const FLIGHT_RUNTIME_URL = './flight/runtime.js?v=runtime-stability-fix-20260526';
+export const FLIGHT_RUNTIME_URL = './flight/runtime.js?v=nav-arena-20260531';
 
 export function createFlightMain(deps = {}) {
   const doc = deps.documentRef ?? deps.document ?? globalThis.document;
-  const win = deps.windowRef ?? deps.window ?? globalThis.window;
   const raf = deps.requestAnimationFrame ?? globalThis.requestAnimationFrame;
-  const timeout = deps.setTimeout ?? globalThis.setTimeout;
   const importRuntime = deps.importRuntime ?? (specifier => import(specifier));
   const log = deps.console ?? globalThis.console ?? console;
   const globals = deps.globalThis ?? globalThis;
+  const now = deps.now ?? (() => globalThis.performance?.now?.() ?? Date.now());
 
   let runtimePromise = null;
   let initPromise = null;
   let runtime = null;
   let animationStarted = false;
   let launchPromise = null;
+  let launchCodeBuffer = '';
+  let launchCodeStarted = false;
+  let launchCodeLastKeyAt = 0;
 
   function animationLoop(time) {
     raf(animationLoop);
@@ -44,6 +46,28 @@ export function createFlightMain(deps = {}) {
 
   function nextPaint() {
     return new Promise(resolve => raf(resolve));
+  }
+
+  function isTypingTarget(target) {
+    const tag = target?.tagName?.toLowerCase?.();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || Boolean(target?.isContentEditable);
+  }
+
+  function handleLaunchCodeKey(event) {
+    if (!event || event.defaultPrevented || isTypingTarget(event.target) || event.metaKey || event.altKey || event.ctrlKey) return;
+    if (typeof event.key !== 'string' || event.key.length !== 1) return;
+    const keyTime = now();
+    if (keyTime - launchCodeLastKeyAt > 1500) launchCodeBuffer = '';
+    launchCodeLastKeyAt = keyTime;
+    launchCodeBuffer = (launchCodeBuffer + event.key.toLowerCase()).slice(-4);
+    if (launchCodeBuffer !== 'ussy') return;
+    event.preventDefault?.();
+    launchCodeBuffer = '';
+    if (launchCodeStarted) return;
+    launchCodeStarted = true;
+    launchFlight().then(loadedRuntime => {
+      if (!loadedRuntime) launchCodeStarted = false;
+    });
   }
 
   function importFlightRuntime({ showLoading = false } = {}) {
@@ -87,6 +111,7 @@ export function createFlightMain(deps = {}) {
     if (!launchPromise) {
       launchPromise = (async () => {
         try {
+          setFlightLoading('Initializing flight systems...');
           const loadedRuntime = await initializeFlightRuntime({ showLoading: true });
           hideFlightLoading();
           loadedRuntime.enterFlightMode();
@@ -104,12 +129,10 @@ export function createFlightMain(deps = {}) {
   }
 
   function bootstrap() {
-    const preload = () => initializeFlightRuntime({ showLoading: false }).catch(error => {
-      log.error?.('Ussyverse idle preload failed', error);
+    doc?.addEventListener?.('keydown', handleLaunchCodeKey);
+    initializeFlightRuntime({ showLoading: false }).catch(error => {
+      log.error?.('Ussyverse failed to initialize', error);
     });
-    const idlePreload = () => timeout(preload, 3500);
-    if (typeof win?.requestIdleCallback === 'function') win.requestIdleCallback(idlePreload, { timeout: 5000 });
-    else idlePreload();
   }
 
   return { bootstrap, importFlightRuntime, initializeFlightRuntime, launchFlight };

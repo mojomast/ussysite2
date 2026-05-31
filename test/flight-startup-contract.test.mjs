@@ -7,15 +7,15 @@ test('main lazily imports flight runtime after launch code', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
   assert.doesNotMatch(source, /^import\s+.*['"]\.\/flight\/runtime\.js['"]/m);
-  assert.match(html, /js\/main\.js\?v=runtime-stability-fix-20260526/);
-  assert.match(source, /FLIGHT_RUNTIME_URL = '\.\/flight\/runtime\.js\?v=runtime-stability-fix-20260526'/);
+  assert.match(html, /js\/main\.js\?v=nav-arena-20260531/);
+  assert.match(source, /FLIGHT_RUNTIME_URL = '\.\/flight\/runtime\.js\?v=nav-arena-20260531'/);
   assert.match(source, /DOMContentLoaded/);
 });
 
 test('flight runtime cache-busts state and audio module re-exports', async () => {
   const source = await readFile(new URL('../js/flight/runtime.js', import.meta.url), 'utf8');
 
-  assert.match(source, /\.\/state\.js\?v=runtime-stability-fix-20260526/);
+  assert.match(source, /\.\/state\.js\?v=nav-arena-20260531/);
   assert.match(source, /\.\/sfx\.js\?v=runtime-stability-fix-20260526/);
 });
 
@@ -90,6 +90,18 @@ test('free roam starts controllable instead of auto-docking', async () => {
   assert.doesNotMatch(body, /openStationMenu\(/);
 });
 
+test('startup exposes dogfight arena with automatic wave upgrades', async () => {
+  const source = await readFile(new URL('../js/flight/state.js', import.meta.url), 'utf8');
+
+  assert.match(source, /label: 'DOGFIGHT ARENA'/);
+  assert.match(source, /code: 'Digit3'/);
+  assert.match(source, /function startDogfightArena\(\)/);
+  assert.match(source, /function spawnDogfightWave\(\)/);
+  assert.match(source, /function grantDogfightAutoUpgrade\(\)/);
+  assert.match(source, /DOGFIGHT_UPGRADE_SEQUENCE/);
+  assert.match(source, /activateEnemyWave\(enemies, count/);
+});
+
 test('station proximity prompts instead of auto-docking', async () => {
   const source = await readFile(new URL('../js/flight/state.js', import.meta.url), 'utf8');
   const dockingBody = source.match(/function updateSystemDocking\(\) \{[\s\S]*?\n\}/)?.[0] || '';
@@ -123,6 +135,8 @@ test('map approach actions engage travel and hyperspace uses plotted node target
   assert.match(source, /engageMapAutopilotToNode\(node, 'DOCKING ROUTE'\)/);
   assert.match(source, /const targetNode = getNavNode\(navGraph, autopilot\.targetId\)/);
   assert.match(source, /const targetPos = targetNode\?\.pos \|\| autopilot\.targetPos \|\| flightState\.navNode\?\.position/);
+  assert.match(source, /missionState\.step === 'tutorialBasics'/);
+  assert.match(source, /setMissionStep\('goLandAtProject', \{ targetProjectId: node\.id \}\)/);
 });
 
 test('index uses classic Three runtime without addon imports', async () => {

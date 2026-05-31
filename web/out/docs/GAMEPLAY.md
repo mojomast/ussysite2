@@ -2,7 +2,7 @@
 
 ## Flight Loop
 
-Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust and strafing. Dock at project nodes to refuel, trade, manage inventory, and accept contracts.
+Type `ussy` to enter flight mode. The ship uses mouse look plus keyboard thrust and strafing. Startup offers tutorial, free roam, or Dogfight Arena deployment. Dock at project nodes to refuel, trade, manage inventory, and accept contracts.
 
 ## Controls Reference
 
@@ -112,15 +112,21 @@ Six physical jump gates form the public transit network for long-distance flight
 
 Press `M` in flight to toggle the system map overlay. Opening the map releases mouselook and clears held inputs so thrust/fire do not continue while the pointer is on the HUD. The overlay draws the navigation graph, planets, stations, jump points, gates, route edges, and the player's current position. Click any rendered node to plot a route to it; project-backed planets also become the normal nav target when their scene node is available. The navigation panel controls still work: `ENGAGE` plots a route to the current nav target when available, otherwise to the nearest planet/station fallback, and `ABORT` disengages autopilot.
 
-Autopilot uses the route state machine `IDLE -> PLOTTING -> ENGAGED -> DECELERATING -> ARRIVED`. A successful route plot shows the route mode (`VIA GATE NETWORK`, `HYPERSPACE DIRECT`, or `LOCAL ROUTE`) while `PLOTTING` resolves the course, then the ship moves through graph waypoints under autopilot control. Long segments can spool hyperspeed from normal cruise up toward an 80x multiplier; final approach drops back to normal speed before arrival.
+Autopilot uses the route state machine `IDLE -> PLOTTING -> ENGAGED -> DECELERATING -> ARRIVED`. A successful route plot shows the route mode (`VIA GATE NETWORK`, `HYPERSPACE DIRECT`, or `LOCAL ROUTE`) while `PLOTTING` resolves the course, then the ship moves through graph waypoints under autopilot control. Long segments can spool hyperspeed from normal cruise up toward an 80x multiplier; final approach drops back to normal speed before arrival. For planets, autopilot now targets orbital range instead of stopping at the outer approach boundary, so map fast travel can carry the tutorial player all the way to the landing prompt.
 
 If plotting fails, the HUD reports `NO NAV ROUTE AVAILABLE` or the autopilot `blockedReason` such as `NO ROUTE FOUND`. Manual override, landing/docking, boss activity, nearby hostiles, hull-critical state, target loss, or hostile interdiction can interrupt travel and set messages such as `AUTOPILOT DISENGAGED: HOSTILE INTERDICTION`.
 
 ## Surface Approach
 
-Planet proximity uses the surface state machine in `js/flight/surface.js`. Flying inside `planet.radius * 1.6` enters approach, inside `planet.radius * 1.2` enters orbital state, and `L` begins a short landing sequence. Landed planets show a surface services panel; hostile and anomaly worlds can surface unique actions, while departure reverses the landing progress and returns to normal flight.
+Planet proximity uses the surface state machine in `js/flight/surface.js`. Flying inside `planet.radius * 3.0` enters approach, inside `planet.radius * 1.6` enters orbital state, and `L` begins a short landing sequence. Landed planets show a surface services panel; hostile and anomaly worlds can surface unique actions, while departure reverses the landing progress and returns to normal flight.
 
-Approach and landing temporarily pause or constrain route travel, update the surface HUD with altitude/status, and add close-atmosphere camera/FOV treatment from the flight loop.
+Approach and landing temporarily pause or constrain route travel, update the surface HUD with altitude/status, and add close-atmosphere camera/FOV treatment from the flight loop. Surface approach no longer cancels route autopilot when the active route is targeting that same planet; unrelated planet approaches still disengage for safety.
+
+## Dogfight Arena
+
+Choose `DOGFIGHT ARENA` from the startup deployment menu to skip onboarding and enter a wave survival mode. Each wave spawns a capped enemy group through the existing orchestrator wave helper, then scales enemy class mix from scouts to interceptors, gunboats, and elites as the wave number rises.
+
+Clearing a wave automatically installs the next curated skill upgrade, reapplies combat stats, and refills shields, armor, energy, ammo, missiles, and fuel before the next wave. After the curated skill sequence is exhausted, wave clears pay an arena credit bonus instead.
 
 ## Missions
 

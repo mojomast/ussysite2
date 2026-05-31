@@ -18,7 +18,7 @@ index.html
                   -> js/tts/engine.js
 
 js/flight/state.js
-  -> flight integration, mission/director wave spawns, camera roll application
+  -> flight integration, mission/director/dogfight wave spawns, startup deployment choices, camera roll application
 
 js/data/projectCopy.js
   -> project inspector HOW_IT_WORKS copy keyed by project id
@@ -114,7 +114,9 @@ Keyboard and mouse events mutate `flightState`. The animation loop applies physi
 
 Combat kills update `combatState.killStreakCount`, `killStreakTimer`, `killStreakMultiplier`, `lastKillTime`, and `peakKillStreak`. The cockpit combat log uses `combatState.killFeed` as a four-entry runtime ring buffer and `killFeedDirty` to throttle DOM rerenders in `js/flight/hud.js`. Runtime sortie counters track `sessionKills`, `sessionCredits`, `sessionXp`, `shotsFired`, and `shotsHit`; when a wave clears, `debriefPending` and `debriefData` hand a snapshot to `js/flight/debrief.js`. Boss runtime fields live on `combatState.bossActive`, `bossEnemyRef`, and `bossThresholdIdx`, with `BOSS_SCORE_THRESHOLDS` defining the one-time score gates. `combatState.activeBountyHunter` and `activeFriendlyEscort` prevent duplicate security reputation consequence spawns, while `combatState.activeIntercept` stores the current expansion bounty hunter group. `combatState.activeTurrets` tracks gunboat turret pool entries and is cleared by reset/deactivation.
 
-`flightState.surface` is owned by `surface.js` and uses `NONE`, `APPROACH`, `ORBITAL`, `LANDING`, `SURFACE`, and `DEPARTURE`. `flightState.civilianTraffic` stores the runtime civilian fleet. `flightState.pauseReasons` is the shared pause-source collection used by overlays such as help and the mission board; code should add/remove reasons rather than directly clobbering `flightState.paused`.
+`flightState.surface` is owned by `surface.js` and uses `NONE`, `APPROACH`, `ORBITAL`, `LANDING`, `SURFACE`, and `DEPARTURE`. Route autopilot remains active through `APPROACH` when its active destination or waypoint is that same planet, then arrives at orbital range instead of at the outer approach shell. `flightState.civilianTraffic` stores the runtime civilian fleet. `flightState.pauseReasons` is the shared pause-source collection used by overlays such as help and the mission board; code should add/remove reasons rather than directly clobbering `flightState.paused`.
+
+`state.js` also owns the Dogfight Arena runtime because it already coordinates startup choices, combat pools, wave spawning, skill application, resources, messages, HUD objectives, and director gating. Arena mode sets tutorial complete, suppresses director polling, spawns waves with `activateEnemyWave()`, and grants automatic skill upgrades through the normal `combat-state.js` unlock/reapply path.
 
 ## Space Visuals
 
